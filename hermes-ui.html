@@ -4078,7 +4078,7 @@ function App() {
 
         {/* Navigation */}
         <div className="sidebar-nav">
-          <div className="nav-section-label">MAIN</div>
+          {/* section labels removed for density */}
           <div className={"nav-item " + (currentView === 'dashboard' ? 'active' : '')} onClick={function() { setCurrentView('dashboard'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon">{'📊'}</span>
             <span className="nav-item-label">Dashboard</span>
@@ -4100,7 +4100,7 @@ function App() {
             <span className="nav-item-label">Jobs</span>
           </div>
 
-          <div className="nav-section-label" style={{marginTop:'6px'}}>KNOWLEDGE</div>
+          <div style={{borderTop:'1px solid var(--border)',margin:'4px 8px'}} />
           <div className={"nav-item " + (currentView === 'memory' ? 'active' : '')} onClick={function() { setCurrentView('memory'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon">{'🧠'}</span>
             <span className="nav-item-label">Memory</span>
@@ -4110,7 +4110,7 @@ function App() {
             <span className="nav-item-label">Skills</span>
           </div>
 
-          <div className="nav-section-label" style={{marginTop:'6px'}}>SESSIONS</div>
+          <div style={{borderTop:'1px solid var(--border)',margin:'4px 8px'}} />
         </div>
 
         <div className="sidebar-search" style={{display: currentView === 'chat' ? 'block' : 'none'}}>
