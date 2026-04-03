@@ -79,9 +79,9 @@
   }
   .sidebar.collapsed { margin-left: -280px; }
   .sidebar-header {
-    padding: 16px 20px;
+    padding: 10px 14px;
     border-bottom: 1px solid var(--glass-border);
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
   }
   .sidebar-header h1 {
     font-size: 18px; font-weight: 800; letter-spacing: -0.5px;
@@ -107,7 +107,7 @@
     box-shadow: 0 4px 20px rgba(124,111,224,0.4);
     transform: translateY(-1px);
   }
-  .sidebar-search { padding: 12px 16px; }
+  .sidebar-search { padding: 6px 10px; }
   .sidebar-search input {
     width: 100%; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
     border-radius: 10px; padding: 8px 12px; color: var(--text-primary);
@@ -115,19 +115,19 @@
   }
   .sidebar-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim), 0 0 20px rgba(124,111,224,0.1); }
   .sidebar-search input::placeholder { color: var(--text-muted); }
-  .conversation-list { flex: 1; overflow-y: auto; padding: 4px 8px; }
+  .conversation-list { flex: 1; overflow-y: auto; padding: 2px 6px; }
   .conversation-list::-webkit-scrollbar { width: 4px; }
   .conversation-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
   .conv-item {
-    padding: 6px 14px; border-radius: 8px; cursor: pointer; margin-bottom: 0px;
-    transition: background 0.1s; display: flex; align-items: center; gap: 10px;
+    padding: 5px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 0px;
+    transition: background 0.1s; display: flex; align-items: center; gap: 8px;
   }
   .conv-item:hover { background: var(--bg-hover); }
   .conv-item.active { background: var(--bg-active); }
-  .conv-item-icon { font-size: 16px; opacity: 0.6; flex-shrink: 0; }
+  .conv-item-icon { font-size: 14px; opacity: 0.6; flex-shrink: 0; }
   .conv-item-text { flex: 1; min-width: 0; }
-  .conv-item-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .conv-item-date { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+  .conv-item-title { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv-item-date { font-size: 9px; color: var(--text-muted); margin-top: 0px; }
   .conv-rename-input {
     font-size: 13px; font-weight: 500; background: var(--bg-primary);
     border: 1px solid var(--accent); border-radius: 4px; color: var(--text-primary);
@@ -141,7 +141,7 @@
   .conv-item-delete:hover { color: var(--danger); background: rgba(224,85,85,0.1); }
   .conv-item-rename:hover { color: var(--accent); background: rgba(124,111,224,0.1); }
 
-  .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .sidebar-footer { padding: 8px 10px; border-top: 1px solid var(--border); }
   .personality-select {
     width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border);
     border-radius: 8px; padding: 8px 12px; color: var(--text-primary);
@@ -843,17 +843,18 @@
 
   /* Navigation Section */
   .sidebar-nav {
-    padding: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border);
+    padding: 4px 6px; margin-bottom: 2px; border-bottom: 1px solid var(--border);
   }
   .nav-section-label {
-    font-size: 10px; font-weight: 700; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 12px 2px 12px;
-    margin-bottom: 1px;
+    font-size: 9px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 10px 1px 10px;
+    margin-bottom: 0px;
   }
   .nav-item {
-    padding: 6px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 1px;
-    display: flex; align-items: center; gap: 10px; transition: all 0.2s ease;
+    padding: 4px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 0px;
+    display: flex; align-items: center; gap: 8px; transition: all 0.2s ease;
     color: var(--text-secondary); border-left: 2px solid transparent;
+    font-size: 13px;
   }
   .nav-item:hover { background: var(--glass-hover); color: var(--text-primary); }
   .nav-item.active {
@@ -861,7 +862,7 @@
     border-left-color: var(--accent);
     box-shadow: inset 0 0 20px rgba(124,111,224,0.06);
   }
-  .nav-item-icon { font-size: 16px; flex-shrink: 0; }
+  .nav-item-icon { font-size: 14px; flex-shrink: 0; }
   .nav-item-label { font-size: 13px; font-weight: 500; }
 
   /* Dashboard View */
@@ -3422,6 +3423,12 @@ function App() {
       return data.items || data.sessions || [];
     },
 
+    async deleteSession(sessionId) {
+      try {
+        await fetch(API_BASE + '/api/sessions/' + sessionId, { method: 'DELETE' });
+      } catch (e) { /* ignore - still remove from UI */ }
+    },
+
     async getSessionMessages(sessionId) {
       const r = await fetch(API_BASE + '/api/sessions/' + sessionId + '/messages');
       if (!r.ok) {
@@ -3678,6 +3685,7 @@ function App() {
   };
 
   const deleteConversation = (convId) => {
+    api.deleteSession(convId);
     setConversations(prev => prev.filter(c => c.id !== convId));
     if (activeConvId === convId) {
       setActiveConvId(null);
@@ -4125,7 +4133,7 @@ function App() {
                 )}
                 <div className="conv-item-date">{conv.created}</div>
               </div>
-              <button className="conv-item-rename" onClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }} title="Rename" style={{background:'none',border:'none',color:'var(--text-muted)',cursor:'pointer',padding:'4px',fontSize:'11px',opacity:0,transition:'opacity 0.2s',flexShrink:0}}>{'✏'}</button>
+              <button className="conv-item-rename" onClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }} title="Rename">{'✏'}</button>
               <button className="conv-item-delete" onClick={e => { e.stopPropagation(); deleteConversation(conv.id); }}>{'×'}</button>
             </div>
           ))}
