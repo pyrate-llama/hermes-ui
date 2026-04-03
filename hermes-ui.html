@@ -4134,7 +4134,7 @@ function App() {
                   <div className="conv-item-title" onDoubleClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }}>{conv.title}</div>
                 )}
                 <div className="conv-item-date">
-                  {conv.message_count > 0 && <span style={{color:'var(--accent)',fontWeight:'600',marginRight:'4px'}}>{conv.message_count}</span>}
+                  {conv.message_count > 0 && <span style={{color:'var(--accent)',fontWeight:'600',marginRight:'4px'}} title={conv.message_count + ' messages, ' + (conv.tool_call_count || 0) + ' tool calls'}>{Math.max(1, Math.round((conv.message_count - (conv.tool_call_count || 0)) / 2))} turns</span>}
                   {conv.created}
                 </div>
               </div>
