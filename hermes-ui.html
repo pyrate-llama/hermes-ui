@@ -727,6 +727,24 @@
   }
   .message-edit-icon:hover { color: var(--accent); }
 
+  /* Compaction marker */
+  .compaction-marker {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 20px; margin: 8px 0;
+  }
+  .compaction-line {
+    flex: 1; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.4;
+  }
+  .compaction-label {
+    font-size: 11px; color: var(--text-secondary);
+    white-space: nowrap; font-style: italic;
+    background: var(--bg-secondary);
+    padding: 4px 12px; border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+
   /* Export button */
   .export-btn {
     background: none; border: none; color: var(--text-secondary);
@@ -3670,13 +3688,35 @@ function App() {
     try {
       setActiveConvId(convId);
       const msgs = await api.getSessionMessages(convId);
-      const uiMessages = msgs.filter(msg => (msg.role === 'user' || msg.role === 'assistant') && (msg.role === 'user' || (msg.content && msg.content.trim()))).map(msg => ({
-        id: String(msg.id),
-        role: msg.role,
-        content: msg.content || '',
-        images: [],
-        toolCalls: [],
-      }));
+
+      // Count actual user prompts and detect compaction
+      const userPromptCount = msgs.filter(m => m.role === 'user').length;
+      const hasCompaction = msgs.some(m => (m.role === 'system' && m.content && /compaction|compacted|summary of prior|conversation summary|context.{0,20}(compacted|compressed|trimmed)/i.test(m.content)) || (m.type && /compaction/i.test(m.type)));
+
+      // Update the conversation with real user prompt count
+      setConversations(prev => prev.map(c => c.id === convId ? { ...c, user_prompt_count: userPromptCount, has_compaction: hasCompaction } : c));
+
+      // Build UI messages, inserting compaction markers for system compaction messages
+      const uiMessages = [];
+      msgs.forEach(function(msg) {
+        if ((msg.role === 'system' && msg.content && /compaction|compacted|summary of prior|conversation summary|context.{0,20}(compacted|compressed|trimmed)/i.test(msg.content)) || (msg.type && /compaction/i.test(msg.type))) {
+          uiMessages.push({
+            id: 'compaction-' + msg.id,
+            role: 'compaction',
+            content: 'Context compacted — earlier messages were summarized',
+            images: [],
+            toolCalls: [],
+          });
+        } else if ((msg.role === 'user' || msg.role === 'assistant') && (msg.role === 'user' || (msg.content && msg.content.trim()))) {
+          uiMessages.push({
+            id: String(msg.id),
+            role: msg.role,
+            content: msg.content || '',
+            images: [],
+            toolCalls: [],
+          });
+        }
+      });
       setMessages(uiMessages);
       setInput('');
     } catch (err) {
@@ -3721,7 +3761,7 @@ function App() {
     setEditingTitle('');
   };
 
-  // Load sessions on mount
+  // Load sessions on mount, then fetch real prompt counts
   useEffect(() => {
     const loadSessions = async () => {
       try {
@@ -3737,6 +3777,22 @@ function App() {
           tool_call_count: sess.tool_call_count || 0,
         }));
         setConversations(convs);
+
+        // Fetch real user prompt counts for all visible sessions in parallel
+        const countPromises = convs.map(async (conv) => {
+          try {
+            const msgs = await api.getSessionMessages(conv.id);
+            const userPromptCount = msgs.filter(m => m.role === 'user').length;
+            const compactionRegex = /compaction|compacted|summary of prior|conversation summary|context.{0,20}(compacted|compressed|trimmed)/i;
+            const hasCompaction = msgs.some(m => (m.role === 'system' && m.content && compactionRegex.test(m.content)) || (m.type && /compaction/i.test(m.type)));
+            return { id: conv.id, user_prompt_count: userPromptCount, has_compaction: hasCompaction };
+          } catch (e) { return null; }
+        });
+        const counts = await Promise.all(countPromises);
+        setConversations(prev => prev.map(c => {
+          const found = counts.find(x => x && x.id === c.id);
+          return found ? { ...c, user_prompt_count: found.user_prompt_count, has_compaction: found.has_compaction } : c;
+        }));
       } catch (err) {
         console.error('Failed to load sessions:', err);
       }
@@ -4144,7 +4200,8 @@ function App() {
                   <div className="conv-item-title" onDoubleClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }}>{conv.title}</div>
                 )}
                 <div className="conv-item-date">
-                  {conv.message_count > 0 && <span style={{color:'var(--accent)',fontWeight:'600',marginRight:'4px'}} title={conv.message_count + ' messages, ' + (conv.tool_call_count || 0) + ' tool calls'}>{Math.max(1, Math.round((conv.message_count - (conv.tool_call_count || 0)) / 2))} turns</span>}
+                  {conv.message_count > 0 && <span style={{color:'var(--accent)',fontWeight:'600',marginRight:'4px'}} title={conv.message_count + ' messages, ' + (conv.tool_call_count || 0) + ' tool calls'}>{conv.user_prompt_count != null ? (conv.user_prompt_count + (conv.user_prompt_count === 1 ? ' prompt' : ' prompts')) : (conv.message_count + ' msgs')}</span>}
+                  {conv.has_compaction && <span style={{color:'var(--text-secondary)',fontSize:'9px',marginRight:'4px'}} title="This chat was compacted">{'🔄'}</span>}
                   {conv.created}
                 </div>
               </div>
@@ -4200,7 +4257,13 @@ function App() {
               ) : (
                 <div className="messages-container">
                   {messages.map(msg => (
-                    editingMessageId === msg.id ? (
+                    msg.role === 'compaction' ? (
+                      <div key={msg.id} className="compaction-marker">
+                        <div className="compaction-line" />
+                        <span className="compaction-label">{'🔄'} {msg.content}</span>
+                        <div className="compaction-line" />
+                      </div>
+                    ) : editingMessageId === msg.id ? (
                       <div key={msg.id} className="message user">
                         <div className="message-header">
                           <div className="message-avatar user">U</div>
