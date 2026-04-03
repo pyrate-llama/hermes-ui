@@ -3587,6 +3587,9 @@ function App() {
               onToolEvent({ type: 'completed', toolName: data.tool_name, result: data.result_preview || data.result, failed: eventType === 'tool.failed' });
             } else if (eventType === 'artifact.created') {
               onToolEvent({ type: 'artifact', toolName: data.tool_name, path: data.path });
+            } else if (eventType === 'error') {
+              var errMsg = data.message || data.error || 'Unknown error from Hermes';
+              onDone('⚠️ **Error:** ' + errMsg);
             }
           } catch (e) { /* ignore parse errors */ }
         }
@@ -3775,6 +3778,7 @@ function App() {
           output_tokens: sess.output_tokens,
           message_count: sess.message_count || 0,
           tool_call_count: sess.tool_call_count || 0,
+          source: sess.source || 'webui',
         }));
         setConversations(convs);
 
@@ -4187,7 +4191,7 @@ function App() {
         <div className="conversation-list" style={{display: currentView === 'chat' ? 'block' : 'none'}}>
           {filteredConvs.map(conv => (
             <div key={conv.id} className={"conv-item " + (conv.id === activeConvId ? 'active' : '')} onClick={() => selectConversation(conv.id)}>
-              <div className="conv-item-icon">{'💬'}</div>
+              <div className="conv-item-icon">{conv.source === 'telegram' ? '✈️' : '💬'}</div>
               <div className="conv-item-text">
                 {editingConvId === conv.id ? (
                   <input className="conv-rename-input" value={editingTitle} autoFocus
@@ -4197,7 +4201,7 @@ function App() {
                     onClick={function(e) { e.stopPropagation(); }}
                   />
                 ) : (
-                  <div className="conv-item-title" onDoubleClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }}>{conv.title}</div>
+                  <div className="conv-item-title" style={conv.source === 'telegram' ? {color:'#29b6f6'} : {}} onDoubleClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }}>{conv.title}</div>
                 )}
                 <div className="conv-item-date">
                   {conv.message_count > 0 && <span style={{color:'var(--accent)',fontWeight:'600',marginRight:'4px'}} title={conv.message_count + ' messages, ' + (conv.tool_call_count || 0) + ' tool calls'}>{conv.user_prompt_count != null ? (conv.user_prompt_count + (conv.user_prompt_count === 1 ? ' prompt' : ' prompts')) : (conv.message_count + ' msgs')}</span>}
