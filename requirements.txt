@@ -1,0 +1,3 @@
+# Hermes UI Proxy Server
+# No external dependencies required — uses only Python's standard library.
+# Just run: python3 serve.py
