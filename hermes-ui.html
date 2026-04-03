@@ -3723,6 +3723,8 @@ function App() {
           messages: [],
           input_tokens: sess.input_tokens,
           output_tokens: sess.output_tokens,
+          message_count: sess.message_count || 0,
+          tool_call_count: sess.tool_call_count || 0,
         }));
         setConversations(convs);
       } catch (err) {
@@ -3780,7 +3782,7 @@ function App() {
     setPendingImages([]);
 
     setConversations(prev =>
-      prev.map(c => c.id === sessionId ? { ...c, messages: newMessages, title: (c.title && c.title !== 'New Chat') ? c.title : (text.slice(0, 50) || c.title) } : c)
+      prev.map(c => c.id === sessionId ? { ...c, messages: newMessages, message_count: (c.message_count || 0) + 1, title: (c.title && c.title !== 'New Chat') ? c.title : (text.slice(0, 50) || c.title) } : c)
     );
 
     const abortCtrl = new AbortController();
@@ -4131,7 +4133,10 @@ function App() {
                 ) : (
                   <div className="conv-item-title" onDoubleClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }}>{conv.title}</div>
                 )}
-                <div className="conv-item-date">{conv.created}</div>
+                <div className="conv-item-date">
+                  {conv.message_count > 0 && <span style={{color:'var(--accent)',fontWeight:'600',marginRight:'4px'}}>{conv.message_count}</span>}
+                  {conv.created}
+                </div>
               </div>
               <button className="conv-item-rename" onClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }} title="Rename">{'✏'}</button>
               <button className="conv-item-delete" onClick={e => { e.stopPropagation(); deleteConversation(conv.id); }}>{'×'}</button>
