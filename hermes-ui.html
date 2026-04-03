@@ -133,12 +133,13 @@
     border: 1px solid var(--accent); border-radius: 4px; color: var(--text-primary);
     padding: 2px 6px; width: 100%; outline: none;
   }
-  .conv-item-delete {
+  .conv-item-delete, .conv-item-rename {
     opacity: 0; background: none; border: none; color: var(--text-muted);
     cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; transition: all 0.1s;
   }
-  .conv-item:hover .conv-item-delete { opacity: 1; }
+  .conv-item:hover .conv-item-delete, .conv-item:hover .conv-item-rename { opacity: 1; }
   .conv-item-delete:hover { color: var(--danger); background: rgba(224,85,85,0.1); }
+  .conv-item-rename:hover { color: var(--accent); background: rgba(124,111,224,0.1); }
 
   .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
   .personality-select {
@@ -1265,6 +1266,8 @@
     .view-skills > div:nth-child(2) { flex-wrap: wrap; }
     /* Header title truncation */
     .header-title { font-size: 14px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Always show conv action buttons on mobile (no hover) */
+    .conv-item-delete, .conv-item-rename { opacity: 0.7 !important; }
     /* Files view: stack panels vertically */
     .files-layout-mobile { flex-direction: column !important; }
     .files-tree-panel-mobile { width: 100% !important; border-right: none !important; border-bottom: 1px solid var(--border); max-height: 55vh; }
@@ -3769,7 +3772,7 @@ function App() {
     setPendingImages([]);
 
     setConversations(prev =>
-      prev.map(c => c.id === sessionId ? { ...c, messages: newMessages, title: text.slice(0, 50) || c.title } : c)
+      prev.map(c => c.id === sessionId ? { ...c, messages: newMessages, title: (c.title && c.title !== 'New Chat') ? c.title : (text.slice(0, 50) || c.title) } : c)
     );
 
     const abortCtrl = new AbortController();
@@ -4122,6 +4125,7 @@ function App() {
                 )}
                 <div className="conv-item-date">{conv.created}</div>
               </div>
+              <button className="conv-item-rename" onClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }} title="Rename" style={{background:'none',border:'none',color:'var(--text-muted)',cursor:'pointer',padding:'4px',fontSize:'11px',opacity:0,transition:'opacity 0.2s',flexShrink:0}}>{'✏'}</button>
               <button className="conv-item-delete" onClick={e => { e.stopPropagation(); deleteConversation(conv.id); }}>{'×'}</button>
             </div>
           ))}
