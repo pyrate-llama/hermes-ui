@@ -489,6 +489,9 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
     def do_DELETE(self):
         self._proxy()
 
+    def do_PATCH(self):
+        self._proxy()
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Allow", "GET, POST, PUT, DELETE, OPTIONS")

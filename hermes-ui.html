@@ -3701,11 +3701,21 @@ function App() {
   };
   const saveRenameConv = function() {
     if (editingConvId && editingTitle.trim()) {
+      var newTitle = editingTitle.trim();
+      var convId = editingConvId;
       setConversations(function(prev) {
         return prev.map(function(c) {
-          return c.id === editingConvId ? Object.assign({}, c, { title: editingTitle.trim() }) : c;
+          return c.id === convId ? Object.assign({}, c, { title: newTitle }) : c;
         });
       });
+      // Persist rename to Hermes API
+      try {
+        fetch(API_BASE + '/api/sessions/' + convId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: newTitle }),
+        });
+      } catch (e) { /* ignore */ }
     }
     setEditingConvId(null);
     setEditingTitle('');
