@@ -2860,7 +2860,7 @@ function TerminalView() {
   var [hermesInput, setHermesInput] = useState('');
   var [hermesHistory, setHermesHistory] = useState([]);
   var [hermesStreaming, setHermesStreaming] = useState(false);
-  var hermesSessionId = useRef(() => { try { return localStorage.getItem('hermes-terminal-session') || null; } catch(e) { return null; } })();
+  var hermesSessionId = useRef((() => { try { return localStorage.getItem('hermes-terminal-session') || null; } catch(e) { return null; } })());
   var hermesBodyRef = useRef(null);
   var hermesInputRef = useRef(null);
 
