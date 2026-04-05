@@ -3335,7 +3335,13 @@ function App() {
   });
 
   const [conversations, setConversations] = useState([]);
-  const [activeConvId, setActiveConvId] = useState(null);
+  const [activeConvId, _setActiveConvId] = useState(() => {
+    try { return localStorage.getItem('hermes-active-session') || null; } catch(e) { return null; }
+  });
+  const setActiveConvId = (id) => {
+    _setActiveConvId(id);
+    try { if (id) localStorage.setItem('hermes-active-session', id); else localStorage.removeItem('hermes-active-session'); } catch(e) {}
+  };
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -3881,6 +3887,25 @@ function App() {
           source: sess.source || 'webui',
         }));
         setConversations(convs);
+
+        // Restore active session from localStorage, or auto-select most recent
+        const savedId = localStorage.getItem('hermes-active-session');
+        if (savedId && convs.some(c => c.id === savedId)) {
+          // Saved session still exists — select it and load messages
+          _setActiveConvId(savedId);
+          try {
+            const msgs = await api.getSessionMessages(savedId);
+            setMessages(msgs);
+          } catch(e) {}
+        } else if (convs.length > 0 && !savedId) {
+          // No saved session — auto-select the most recent one
+          const mostRecent = convs[0];
+          setActiveConvId(mostRecent.id);
+          try {
+            const msgs = await api.getSessionMessages(mostRecent.id);
+            setMessages(msgs);
+          } catch(e) {}
+        }
 
         // Fetch real user prompt counts for all visible sessions in parallel
         const countPromises = convs.map(async (conv) => {
