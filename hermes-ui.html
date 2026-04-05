@@ -2860,7 +2860,7 @@ function TerminalView() {
   var [hermesInput, setHermesInput] = useState('');
   var [hermesHistory, setHermesHistory] = useState([]);
   var [hermesStreaming, setHermesStreaming] = useState(false);
-  var hermesSessionId = useRef(null);
+  var hermesSessionId = useRef(() => { try { return localStorage.getItem('hermes-terminal-session') || null; } catch(e) { return null; } })();
   var hermesBodyRef = useRef(null);
   var hermesInputRef = useRef(null);
 
@@ -2969,6 +2969,7 @@ function TerminalView() {
         sessionId = (sessData.session && sessData.session.id) || sessData.id || sessData.session_id;
         if (!sessionId) throw new Error('Failed to create session');
         hermesSessionId.current = sessionId;
+        try { localStorage.setItem('hermes-terminal-session', sessionId); } catch(e) {}
       }
 
       var response = await fetch(API_BASE + '/api/sessions/' + sessionId + '/chat', {
@@ -3943,6 +3944,15 @@ function App() {
     if ((!text.trim() && !pendingImages.length) || isStreaming) return;
 
     var sessionId = activeConvId;
+
+    // Safety net: if React state lost activeConvId, try recovering from localStorage
+    if (!sessionId) {
+      try { sessionId = localStorage.getItem('hermes-active-session'); } catch(e) {}
+      if (sessionId) {
+        console.warn('[hermes-ui] Recovered activeConvId from localStorage:', sessionId);
+        _setActiveConvId(sessionId);
+      }
+    }
 
     if (!sessionId) {
       try {
