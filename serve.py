@@ -195,6 +195,167 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
                 except Exception:
                     pass
 
+
+    def _memory_status(self):
+        """Return memory provider status from config.yaml and plugin directory."""
+        config_path = HERMES_HOME / "config.yaml"
+        result = {
+            "builtin": {"active": True, "memory_enabled": True, "user_profile_enabled": True},
+            "provider": None,
+            "installed_providers": [],
+        }
+
+        # Read config.yaml for memory section (simple parser, no PyYAML needed)
+        if config_path.exists():
+            try:
+                import re
+                text = config_path.read_text(encoding="utf-8")
+                # Find the memory: block and extract indented keys
+                in_memory = False
+                for line in text.splitlines():
+                    if re.match(r'^memory:', line):
+                        in_memory = True
+                        continue
+                    if in_memory:
+                        if line and not line[0].isspace():
+                            break  # left new top-level block
+                        m = re.match(r'\s+(\w+):\s*(.+)', line)
+                        if m:
+                            key, val = m.group(1), m.group(2).strip()
+                            # Strip quotes
+                            if val.startswith("'") and val.endswith("'"): val = val[1:-1]
+                            if val.startswith('"') and val.endswith('"'): val = val[1:-1]
+                            if key == "memory_enabled": result["builtin"]["memory_enabled"] = val.lower() == "true"
+                            elif key == "user_profile_enabled": result["builtin"]["user_profile_enabled"] = val.lower() == "true"
+                            elif key == "memory_char_limit": result["builtin"]["memory_char_limit"] = int(val)
+                            elif key == "user_char_limit": result["builtin"]["user_char_limit"] = int(val)
+                            elif key == "provider" and val:
+                                result["provider"] = {"name": val}
+            except Exception:
+                pass
+
+        # Scan plugin directory for installed providers
+        plugins_dir = Path.home() / ".hermes" / "hermes-agent" / "plugins" / "memory"
+        if plugins_dir.exists():
+            for d in sorted(plugins_dir.iterdir()):
+                if d.is_dir() and not d.name.startswith("_"):
+                    info = {"name": d.name, "installed": True}
+                    plugin_yaml = d / "plugin.yaml"
+                    if plugin_yaml.exists():
+                        try:
+                            import re as _re
+                            ptxt = plugin_yaml.read_text(encoding="utf-8")
+                            # Simple YAML key extraction
+                            for pline in ptxt.splitlines():
+                                pm = _re.match(r'(\w+):\s*"?([^"]*)"?', pline)
+                                if pm:
+                                    pk, pv = pm.group(1), pm.group(2).strip()
+                                    if pk == "description": info["description"] = pv
+                                    elif pk == "version": info["version"] = pv
+                            # Extract hooks list
+                            hooks = []
+                            in_hooks = False
+                            for pline in ptxt.splitlines():
+                                if _re.match(r'hooks:', pline):
+                                    in_hooks = True
+                                    continue
+                                if in_hooks:
+                                    hm = _re.match(r'\s+-\s+(\S+)', pline)
+                                    if hm:
+                                        hooks.append(hm.group(1))
+                                    elif pline.strip() and not pline[0].isspace():
+                                        break
+                            info["hooks"] = hooks
+                        except Exception:
+                            pass
+                    readme = d / "README.md"
+                    if readme.exists():
+                        try:
+                            info["readme"] = readme.read_text(encoding="utf-8")[:4000]
+                        except Exception:
+                            pass
+                    info["active"] = (result["provider"] or {}).get("name") == d.name
+                    result["installed_providers"].append(info)
+
+        # Enrich active provider with its config (redact secrets)
+        if result["provider"]:
+            pname = result["provider"]["name"]
+            provider_config_dir = HERMES_HOME / pname
+            if provider_config_dir.exists():
+                config_file = provider_config_dir / "config.json"
+                if config_file.exists():
+                    try:
+                        pcfg = json.loads(config_file.read_text())
+                        safe_cfg = {}
+                        for k, v in pcfg.items():
+                            if any(s in k.lower() for s in ["key", "token", "secret", "password"]):
+                                safe_cfg[k] = "***" if v else ""
+                            else:
+                                safe_cfg[k] = v
+                        result["provider"]["config"] = safe_cfg
+                    except Exception:
+                        pass
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps(result).encode())
+
+    def _config_fallback(self):
+        """Return config data by reading config.yaml directly.
+        
+        The /api/config endpoint on the WebAPI returns a 500 in v0.7.0 due to
+        Pydantic model restructuring.  This fallback reads config.yaml and builds
+        a minimal response that the UI needs (mainly mcp_tools list).
+        """
+        import re
+        config_path = HERMES_HOME / "config.yaml"
+        result = {"mcp_tools": [], "mcp_servers": {}}
+        try:
+            if config_path.exists():
+                text = config_path.read_text(encoding="utf-8")
+                # Parse mcp_servers block
+                in_mcp = False
+                current_server = None
+                servers = {}
+                for line in text.splitlines():
+                    if re.match(r'^mcp_servers:', line):
+                        in_mcp = True
+                        continue
+                    if in_mcp:
+                        if line and not line[0].isspace():
+                            break  # left top-level block
+                        m_server = re.match(r'^  (\S+):', line)
+                        if m_server:
+                            current_server = m_server.group(1)
+                            servers[current_server] = {"enabled": True}
+                            continue
+                        if current_server:
+                            m_kv = re.match(r'^\s+(\w+):\s*(.+)', line)
+                            if m_kv:
+                                key, val = m_kv.group(1), m_kv.group(2).strip()
+                                if key == "enabled":
+                                    servers[current_server]["enabled"] = val.lower() == "true"
+                                elif key == "command":
+                                    servers[current_server]["command"] = val
+                result["mcp_servers"] = servers
+                # Build mcp_tools list from server names
+                for name, info in servers.items():
+                    if info.get("enabled", True):
+                        result["mcp_tools"].append({
+                            "name": name,
+                            "description": f"MCP server: {name}",
+                            "status": "connected"
+                        })
+        except Exception as e:
+            pass  # return empty result on any error
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps(result).encode())
+
     def _skill_dates(self):
         """Return modification timestamps for all skills in ~/.hermes/skills."""
         skills_dir = HERMES_HOME / "skills"
@@ -333,12 +494,16 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         }).encode())
 
     def do_GET(self):
-        if self.path.startswith("/skills/dates"):
+        if self.path.startswith("/memory/status"):
+            self._memory_status()
+        elif self.path.startswith("/skills/dates"):
             self._skill_dates()
         elif self.path.startswith("/browse"):
             self._browse_dir()
         elif self.path.startswith("/readfile"):
             self._read_file()
+        elif self.path.startswith("/api/config"):
+            self._config_fallback()
         elif self.path.startswith("/v1/") or self.path.startswith("/health") or self.path.startswith("/api/"):
             self._proxy()
         elif self.path.startswith("/logs/stream"):
