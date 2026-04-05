@@ -640,11 +640,82 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"error": str(e)}).encode())
 
+    def _resolve_model(self):
+        """Read the default model string from config.yaml."""
+        import re
+        config_path = HERMES_HOME / "config.yaml"
+        try:
+            text = config_path.read_text(encoding="utf-8")
+            m = re.search(r'^model:\s*\n\s+default:\s*(\S+)', text, re.MULTILINE)
+            if m:
+                return m.group(1)
+        except Exception:
+            pass
+        return None
+
+    def _chat_inject_model(self):
+        """Proxy a chat/stream POST, injecting 'model' if missing.
+
+        v0.7.0 stores model as a dict {default, provider} in config.yaml.
+        The WebAPI chat handler calls .lower() on it and crashes with
+        "'dict' object has no attribute 'lower'".  Injecting the model
+        as a plain string in the request body sidesteps the bug.
+        """
+        content_length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(content_length) if content_length else b"{}"
+        try:
+            data = json.loads(raw)
+        except Exception:
+            data = {}
+
+        if "model" not in data or isinstance(data["model"], dict):
+            resolved = self._resolve_model()
+            if resolved:
+                data["model"] = resolved
+
+        new_body = json.dumps(data).encode()
+
+        url = HERMES + self.path
+        req = urllib.request.Request(url, data=new_body, method="POST")
+        req.add_header("Content-Type", "application/json")
+        for h in ("Authorization", "Accept"):
+            if self.headers.get(h):
+                req.add_header(h, self.headers[h])
+
+        try:
+            resp = urllib.request.urlopen(req, timeout=300)
+        except urllib.error.HTTPError as e:
+            resp = e
+
+        is_sse = "text/event-stream" in (resp.headers.get("Content-Type") or "")
+
+        self.send_response(resp.status)
+        for h in ("Content-Type", "Cache-Control"):
+            v = resp.headers.get(h)
+            if v:
+                self.send_header(h, v)
+        self.end_headers()
+
+        if is_sse:
+            try:
+                while True:
+                    chunk = resp.read(4096)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+        else:
+            self.wfile.write(resp.read())
+
     def do_POST(self):
         if self.path.startswith("/writefile"):
             self._write_file()
         elif self.path.startswith("/terminal/exec"):
             self._terminal_exec()
+        elif "/chat" in self.path and self.path.startswith("/api/sessions/"):
+            self._chat_inject_model()
         else:
             self._proxy()
 
