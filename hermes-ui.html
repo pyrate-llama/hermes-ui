@@ -3875,7 +3875,8 @@ function App() {
     const loadSessions = async () => {
       try {
         const sessions = await api.listSessions();
-        const convs = sessions.filter(sess => sess.preview || (sess.title && !/^New Chat(?: #\d+)?$/.test(sess.title))).slice(0, 30).map(sess => ({
+        const currentActiveId = localStorage.getItem('hermes-active-session');
+        const convs = sessions.filter(sess => sess.id === currentActiveId || sess.message_count > 0 || sess.preview || (sess.title && !/^New Chat(?: #\d+)?$/.test(sess.title))).slice(0, 30).map(sess => ({
           id: sess.id,
           title: (sess.title && sess.title !== 'null' && !/^New Chat(?: #\d+)?$/.test(sess.title)) ? sess.title : (sess.preview ? sess.preview.slice(0, 60) : (sess.title || 'Chat')),
           created: sess.started_at ? new Date(sess.started_at * 1000).toLocaleString() : '',
@@ -3949,6 +3950,7 @@ function App() {
         const conv = { id: sessionId, title: text.slice(0, 50) || 'New Chat', created: new Date().toLocaleString(), messages: [] };
         setConversations(prev => [conv, ...prev]);
         setActiveConvId(sessionId);
+        setMessages([]);  // Clear stale messages so user sees fresh session
       } catch (err) {
         console.error('Failed to create session:', err);
         return;
