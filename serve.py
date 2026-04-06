@@ -73,7 +73,7 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             body = self.rfile.read(int(self.headers["Content-Length"]))
 
         req = urllib.request.Request(url, data=body, method=self.command)
-        for h in ("Content-Type", "Authorization", "Accept"):
+        for h in ("Content-Type", "Authorization", "Accept", "X-Hermes-Session-Id"):
             if self.headers.get(h):
                 req.add_header(h, self.headers[h])
 
@@ -85,19 +85,24 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         is_sse = "text/event-stream" in (resp.headers.get("Content-Type") or "")
 
         self.send_response(resp.status)
-        for h in ("Content-Type", "Cache-Control"):
+        for h in ("Content-Type", "Cache-Control", "X-Hermes-Session-Id"):
             v = resp.headers.get(h)
             if v:
                 self.send_header(h, v)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Expose-Headers", "X-Hermes-Session-Id")
         self.end_headers()
 
         if is_sse:
+            # Use readline() for unbuffered SSE streaming — resp.read(n) buffers
+            # and holds data until n bytes arrive or the connection closes, which
+            # causes the UI to hang until Hermes finishes its entire response.
             try:
                 while True:
-                    chunk = resp.read(4096)
-                    if not chunk:
+                    line = resp.readline()
+                    if not line:
                         break
-                    self.wfile.write(chunk)
+                    self.wfile.write(line)
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
                 pass
@@ -493,15 +498,255 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             "type": file_type,
         }).encode())
 
+    def _sessions_list(self):
+        """List sessions — stub for UI compatibility."""
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps({"sessions": [], "total": 0}).encode())
+
+    def _sessions_create(self):
+        """Create a new session — generates a session ID and returns it."""
+        import uuid
+        session_id = f"sess_{uuid.uuid4().hex[:12]}"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps({"session": {"id": session_id}, "id": session_id}).encode())
+
+    def _sessions_chat(self, session_id):
+        """Handle chat request — forward to /v1/chat/completions and adapt response."""
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length)
+        try:
+            data = json.loads(body)
+        except:
+            body = b'{}'
+            data = {}
+
+        message = data.get("message", data.get("content", ""))
+
+        # Forward to Hermes Agent's /v1/chat/completions
+        forward_body = json.dumps({
+            "model": "hermes-agent",
+            "messages": [{"role": "user", "content": message}],
+            "stream": False
+        }).encode()
+
+        req = urllib.request.Request(
+            HERMES + "/v1/chat/completions",
+            data=forward_body,
+            method="POST"
+        )
+        req.add_header("Content-Type", "application/json")
+        req.add_header("Accept", "application/json")
+
+        try:
+            resp = urllib.request.urlopen(req, timeout=120)
+            resp_data = json.loads(resp.read())
+            choices = resp_data.get("choices", [])
+            final_response = ""
+            if choices and len(choices) > 0:
+                final_response = choices[0].get("message", {}).get("content", "")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"final_response": final_response}).encode())
+        except urllib.error.HTTPError as e:
+            self.send_response(e.code)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+    def _sessions_chat_stream(self, session_id):
+        """Handle streaming chat request — forward to /v1/chat/completions (stream:true) and emit SSE."""
+        import http.client
+        import select
+        import socket
+        from urllib.parse import urlparse
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length)
+        try:
+            data = json.loads(body)
+        except:
+            body = b'{}'
+            data = {}
+
+        message = data.get("message", data.get("content", ""))
+
+        # Use socket directly for non-blocking streaming
+        parsed = urlparse(HERMES)
+        if ":" in parsed.netloc:
+            host, port_str = parsed.netloc.rsplit(":", 1)
+            port = int(port_str)
+        else:
+            host = parsed.netloc
+            port = 80
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(60)
+        sock.connect((host, port))
+
+        forward_body = json.dumps({
+            "model": "hermes-agent",
+            "messages": [{"role": "user", "content": message}],
+            "stream": True
+        }).encode()
+
+        request = (
+            f"POST /v1/chat/completions HTTP/1.1\r\n"
+            f"Host: {parsed.netloc}\r\n"
+            f"Content-Type: application/json\r\n"
+            f"Accept: text/event-stream\r\n"
+            f"Content-Length: {len(forward_body)}\r\n"
+            f"Connection: close\r\n"
+            f"\r\n"
+        ).encode() + forward_body
+
+        sock.sendall(request)
+
+        # Read response headers
+        response_data = b""
+        while b"\r\n\r\n" not in response_data:
+            chunk = sock.recv(4096)
+            if not chunk:
+                sock.close()
+                return
+            response_data += chunk
+
+        header_end = response_data.index(b"\r\n\r\n")
+        headers = response_data[:header_end].decode("utf-8", errors="replace")
+        body_data = response_data[header_end + 4:]
+
+        # Parse status line
+        status_line = headers.split("\r\n")[0]
+        status_code = int(status_line.split()[1])
+
+        self.send_response(status_code)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+
+        # Forward body data we already read
+        if body_data:
+            self.wfile.write(body_data)
+            self.wfile.flush()
+
+        full_content = ""
+        buffer = b""
+
+        while True:
+            try:
+                ready, _, _ = select.select([sock], [], [], 2)
+                if not ready:
+                    # Timeout — flush accumulated buffer
+                    if buffer:
+                        for line in buffer.decode("utf-8", errors="replace").split("\n"):
+                            if not line.strip():
+                                continue
+                            if line.startswith("data:"):
+                                data_str = line[5:].strip()
+                                if data_str == "[DONE]":
+                                    done_data = json.dumps({"content": full_content})
+                                    self.wfile.write(f"event: assistant.completed\ndata: {done_data}\n\n".encode())
+                                    self.wfile.flush()
+                                    sock.close()
+                                    return
+                                try:
+                                    d = json.loads(data_str)
+                                    delta = d.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                                    if delta:
+                                        full_content += delta
+                                        event_data = json.dumps({"delta": delta})
+                                        self.wfile.write(f"event: assistant.delta\ndata: {event_data}\n\n".encode())
+                                        self.wfile.flush()
+                                except Exception:
+                                    pass
+                        buffer = b""
+                    continue
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                buffer += chunk
+
+                while b"\n" in buffer:
+                    line, buffer = buffer.split(b"\n", 1)
+                    line = line.rstrip(b"\r")
+                    if not line.startswith(b"data:"):
+                        continue
+                    data_str = line[5:].strip().decode("utf-8", errors="replace")
+                    if data_str == "[DONE]":
+                        done_data = json.dumps({"content": full_content})
+                        self.wfile.write(f"event: assistant.completed\ndata: {done_data}\n\n".encode())
+                        self.wfile.flush()
+                        sock.close()
+                        return
+                    try:
+                        d = json.loads(data_str)
+                        delta = d.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                        if delta:
+                            full_content += delta
+                            event_data = json.dumps({"delta": delta})
+                            self.wfile.write(f"event: assistant.delta\ndata: {event_data}\n\n".encode())
+                            self.wfile.flush()
+                    except Exception:
+                        pass
+            except Exception:
+                break
+
+        # If we exited due to timeout/close, send completion
+        try:
+            done_data = json.dumps({"content": full_content})
+            self.wfile.write(f"event: assistant.completed\ndata: {done_data}\n\n".encode())
+            self.wfile.flush()
+        except Exception:
+            pass
+        sock.close()
+
+    def _skills_list(self):
+        """List skills — stub for UI compatibility."""
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps({"skills": [], "total": 0}).encode())
+
+    def _memory_list(self):
+        """Memory status — stub for UI compatibility."""
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps({"entries": []}).encode())
+
     def do_GET(self):
         if self.path.startswith("/memory/status"):
             self._memory_status()
+        elif self.path == "/api/sessions":
+            self._sessions_list()
+        elif self.path == "/api/skills":
+            self._skills_list()
+        elif self.path.startswith("/api/memory"):
+            self._memory_list()
         elif self.path.startswith("/skills/dates"):
             self._skill_dates()
         elif self.path.startswith("/browse"):
             self._browse_dir()
         elif self.path.startswith("/readfile"):
             self._read_file()
+        elif self.path.startswith("/cron/list"):
+            self._cron_list()
         elif self.path.startswith("/api/config"):
             self._config_fallback()
         elif self.path.startswith("/v1/") or self.path.startswith("/health") or self.path.startswith("/api/"):
@@ -510,6 +755,45 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self._stream_logs()
         else:
             super().do_GET()
+
+    def _cron_list(self):
+        """Parse hermes cron list --all and return JSON."""
+        import subprocess, re
+        try:
+            result = subprocess.run(
+                ["hermes", "cron", "list", "--all"],
+                capture_output=True, text=True, timeout=15
+            )
+            output = result.stdout + result.stderr
+            jobs = []
+            current = None
+            for line in output.splitlines():
+                # Match job header: "  abc123def456 [active]" or "[disabled]"
+                m = re.match(r'^\s+([a-f0-9]{12})\s+\[(\w+)\]', line)
+                if m:
+                    if current:
+                        jobs.append(current)
+                    current = {"id": m.group(1), "status": m.group(2)}
+                    continue
+                if current:
+                    # Match key-value pairs like "    Name:      Foo Bar"
+                    kv = re.match(r'^\s+(Name|Schedule|Repeat|Next run|Deliver|Skills|Script|Last run|Runs):\s+(.+)', line)
+                    if kv:
+                        key = kv.group(1).lower().replace(' ', '_')
+                        current[key] = kv.group(2).strip()
+            if current:
+                jobs.append(current)
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"jobs": jobs}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e), "jobs": []}).encode())
 
     def _write_file(self):
         """Write content to a file for the Files view editor."""
@@ -690,19 +974,21 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         is_sse = "text/event-stream" in (resp.headers.get("Content-Type") or "")
 
         self.send_response(resp.status)
-        for h in ("Content-Type", "Cache-Control"):
+        for h in ("Content-Type", "Cache-Control", "X-Hermes-Session-Id"):
             v = resp.headers.get(h)
             if v:
                 self.send_header(h, v)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Expose-Headers", "X-Hermes-Session-Id")
         self.end_headers()
 
         if is_sse:
             try:
                 while True:
-                    chunk = resp.read(4096)
-                    if not chunk:
+                    line = resp.readline()
+                    if not line:
                         break
-                    self.wfile.write(chunk)
+                    self.wfile.write(line)
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
                 pass
@@ -714,6 +1000,20 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self._write_file()
         elif self.path.startswith("/terminal/exec"):
             self._terminal_exec()
+        elif self.path == "/api/sessions":
+            self._sessions_create()
+        elif self.path.startswith("/api/sessions/") and "/chat/stream" in self.path:
+            # Streaming: /api/sessions/{session_id}/chat/stream
+            parts = self.path.split("/")
+            session_id = parts[3] if len(parts) >= 4 else "unknown"
+            self._sessions_chat_stream(session_id)
+        elif self.path.startswith("/api/sessions/") and "/chat" in self.path:
+            # Extract session_id from /api/sessions/{session_id}/chat
+            parts = self.path.split("/")
+            session_id = parts[3] if len(parts) >= 4 else "unknown"
+            self._sessions_chat(session_id)
+        elif self.path == "/api/sessions":
+            self._sessions_create()
         elif "/chat" in self.path and self.path.startswith("/api/sessions/"):
             self._chat_inject_model()
         else:

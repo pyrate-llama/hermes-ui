@@ -1916,20 +1916,16 @@ function DashboardView() {
   const [lastRefresh, setLastRefresh] = useState(null);
 
   var fetchAll = async function() {
+    // v0.7.0: no /api/sessions listing — use client-side conversation data
     try {
-      var r = await fetch(API_BASE + '/api/sessions');
-      if (r.ok) {
-        var data = await r.json();
-        var items = data.items || [];
-        var totalMsgs = 0, totalTools = 0, totalTokens = 0;
-        for (var i = 0; i < items.length; i++) {
-          totalMsgs += (items[i].message_count || 0);
-          totalTools += (items[i].tool_call_count || 0);
-          totalTokens += ((items[i].input_tokens || 0) + (items[i].output_tokens || 0));
-        }
-        setStats({ sessions: data.total || items.length, messages: totalMsgs, tools: totalTools, tokens: totalTokens });
-        setRecentSessions(items.slice(0, 7));
+      var saved = [];
+      try { saved = JSON.parse(localStorage.getItem('hermes-conversations') || '[]'); } catch(e) {}
+      var totalMsgs = 0;
+      for (var i = 0; i < saved.length; i++) {
+        totalMsgs += (saved[i].messages || []).filter(function(m) { return m.role === 'user'; }).length;
       }
+      setStats({ sessions: saved.length, messages: totalMsgs, tools: 0, tokens: 0 });
+      setRecentSessions(saved.slice(0, 7));
     } catch (e) { /* ignore */ }
     try {
       var r2 = await fetch(API_BASE + '/api/skills');
@@ -2742,103 +2738,167 @@ function SkillsView() {
 }
 
 /* ── Terminal View (Shell + Hermes Terminal + Claude Code) ── */
-/* ── Jobs View ── */
+/* ── Cron Jobs View ── */
 function JobsView() {
   var [jobs, setJobs] = useState([]);
   var [loading, setLoading] = useState(true);
+  var [error, setError] = useState(null);
+
+  function parseCronOutput(text) {
+    var lines = text.split('\n');
+    var results = [];
+    var current = null;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var headerMatch = line.match(/^\s+([a-f0-9]{12})\s+\[(\w+)\]/);
+      if (headerMatch) {
+        if (current) results.push(current);
+        current = { id: headerMatch[1], status: headerMatch[2] };
+        continue;
+      }
+      if (current) {
+        var kvMatch = line.match(/^\s+(Name|Schedule|Repeat|Next run|Deliver|Skills|Script|Last run|Runs):\s+(.+)/);
+        if (kvMatch) {
+          var key = kvMatch[1].toLowerCase().replace(/ /g, '_');
+          current[key] = kvMatch[2].trim();
+        }
+      }
+    }
+    if (current) results.push(current);
+    return results;
+  }
+
+  function describeCron(schedule) {
+    if (!schedule) return '';
+    var parts = schedule.split(' ');
+    if (parts.length !== 5) return schedule;
+    var min = parts[0], hour = parts[1], dom = parts[2], mon = parts[3], dow = parts[4];
+    var h = parseInt(hour, 10);
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    var timeStr = h12 + ':' + (min === '0' ? '00' : min.padStart(2, '0')) + ' ' + ampm;
+    if (dom === '*' && mon === '*' && dow === '*') return 'Daily at ' + timeStr;
+    if (dom === '*' && mon === '*' && dow !== '*') {
+      var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      var dayNames = dow.split(',').map(function(d) { return days[parseInt(d,10)] || d; }).join(', ');
+      return dayNames + ' at ' + timeStr;
+    }
+    return schedule + ' (' + timeStr + ')';
+  }
+
+  function formatNextRun(nextRun) {
+    if (!nextRun) return '--';
+    try {
+      var d = new Date(nextRun);
+      var now = new Date();
+      var diffMs = d - now;
+      if (diffMs < 0) return 'overdue';
+      var diffMin = Math.floor(diffMs / 60000);
+      if (diffMin < 60) return 'in ' + diffMin + 'm';
+      var diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return 'in ' + diffHr + 'h ' + (diffMin % 60) + 'm';
+      return 'in ' + Math.floor(diffHr / 24) + 'd ' + (diffHr % 24) + 'h';
+    } catch(e) { return nextRun; }
+  }
 
   var fetchJobs = async function() {
     try {
-      var r = await fetch(API_BASE + '/api/sessions');
+      var r = await fetch(API_BASE + '/terminal/exec', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({command: 'hermes cron list --all'})
+      });
       if (r.ok) {
         var data = await r.json();
-        var items = (data.items || []).slice(0, 25).map(function(s) {
-          var isActive = !s.ended_at && s.last_active && (Date.now()/1000 - s.last_active < 300);
-          return Object.assign({}, s, { isActive: isActive });
-        });
-        setJobs(items);
+        var parsed = parseCronOutput(data.output || '');
+        setJobs(parsed);
+        setError(null);
       }
-    } catch(e) {}
+    } catch(e) { setError('Failed to fetch cron jobs'); }
     setLoading(false);
   };
 
   useEffect(function() {
     fetchJobs();
-    var iv = setInterval(fetchJobs, 10000);
+    var iv = setInterval(fetchJobs, 30000);
     return function() { clearInterval(iv); };
   }, []);
-
-  function timeAgo(ts) {
-    if (!ts) return '--';
-    var diff = Date.now()/1000 - ts;
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
-    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
-    return Math.floor(diff/86400) + 'd ago';
-  }
-
-  function formatTokens(n) {
-    if (!n) return '0';
-    if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
-    if (n >= 1000) return (n/1000).toFixed(1) + 'K';
-    return String(n);
-  }
 
   return (
     <div className="view-dashboard" style={{padding:'20px'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'20px'}}>
         <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-          <div className="status-dot-live"></div>
-          <span style={{fontSize:'12px',color:'var(--text-muted)'}}>Monitoring — auto-refresh every 10s</span>
+          <span style={{fontSize:'20px'}}>{'🕐'}</span>
+          <span style={{fontSize:'14px',fontWeight:600,color:'var(--text-primary)'}}>Scheduled Cron Jobs</span>
         </div>
-        <span style={{fontSize:'11px',color:'var(--text-muted)'}}>{jobs.filter(function(j){return j.isActive;}).length} active</span>
+        <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+          <span style={{fontSize:'11px',color:'var(--text-muted)'}}>{jobs.filter(function(j){return j.status==='active';}).length} active</span>
+          <button onClick={function(){setLoading(true);fetchJobs();}} style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'4px 10px',fontSize:'11px',color:'var(--text-secondary)',cursor:'pointer'}}>Refresh</button>
+        </div>
       </div>
 
-      {loading && <div style={{color:'var(--text-muted)',textAlign:'center',padding:'40px'}}>Loading jobs...</div>}
+      {loading && <div style={{color:'var(--text-muted)',textAlign:'center',padding:'40px'}}>Loading cron jobs...</div>}
+      {error && <div style={{color:'var(--error)',textAlign:'center',padding:'20px',fontSize:'13px'}}>{error}</div>}
 
-      <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+      <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
         {jobs.map(function(job) {
-          var title = job.title || job.preview || 'Untitled Session';
-          if (title.length > 60) title = title.slice(0,60) + '...';
-          var totalTokens = (job.input_tokens||0) + (job.output_tokens||0);
-
+          var isActive = job.status === 'active';
           return (
-            <div key={job.id} className="info-card" style={{padding:'14px 18px',transition:'all 0.2s',borderLeft: job.isActive ? '2px solid var(--success)' : '2px solid transparent'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'8px'}}>
+            <div key={job.id} className="info-card" style={{padding:'16px 20px',transition:'all 0.2s',borderLeft: isActive ? '2px solid var(--success)' : '2px solid var(--error)',opacity: isActive ? 1 : 0.6}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
                 <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1,minWidth:0}}>
-                  {job.isActive ? (
+                  {isActive ? (
                     <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'var(--success)',boxShadow:'0 0 8px rgba(68,216,138,0.5)',animation:'pulse 2s ease infinite',flexShrink:0}}></div>
                   ) : (
-                    <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'var(--text-muted)',opacity:0.3,flexShrink:0}}></div>
+                    <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'var(--error)',opacity:0.5,flexShrink:0}}></div>
                   )}
-                  <span style={{fontSize:'13px',fontWeight:600,color:'var(--text-primary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{title}</span>
+                  <span style={{fontSize:'14px',fontWeight:600,color:'var(--text-primary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{job.name || 'Unnamed Job'}</span>
                 </div>
-                <span style={{fontSize:'11px',color:'var(--text-muted)',fontFamily:'JetBrains Mono, monospace',flexShrink:0,marginLeft:'12px'}}>{timeAgo(job.last_active || job.started_at)}</span>
+                <span style={{fontSize:'10px',fontFamily:'JetBrains Mono, monospace',color:'var(--text-muted)',background:'var(--bg-tertiary)',padding:'2px 8px',borderRadius:'4px',flexShrink:0,marginLeft:'12px'}}>{job.status}</span>
               </div>
-              <div style={{display:'flex',gap:'16px',fontSize:'11px',color:'var(--text-muted)',fontFamily:'JetBrains Mono, monospace'}}>
-                <span title="Messages" style={{display:'flex',alignItems:'center',gap:'4px'}}>
-                  <span style={{color:'var(--accent)'}}>{'✉'}</span> {job.message_count || 0}
+
+              <div style={{fontSize:'12px',color:'var(--accent)',marginBottom:'8px',fontFamily:'JetBrains Mono, monospace'}}>{describeCron(job.schedule)}</div>
+
+              <div style={{display:'flex',flexWrap:'wrap',gap:'14px',fontSize:'11px',color:'var(--text-muted)',fontFamily:'JetBrains Mono, monospace'}}>
+                <span title="Cron schedule" style={{display:'flex',alignItems:'center',gap:'4px'}}>
+                  <span style={{color:'#c088e0'}}>{'🕐'}</span> {job.schedule || '--'}
                 </span>
-                <span title="Tool calls" style={{display:'flex',alignItems:'center',gap:'4px'}}>
-                  <span style={{color:'#c088e0'}}>{'⚙'}</span> {job.tool_call_count || 0}
-                </span>
-                <span title="Tokens" style={{display:'flex',alignItems:'center',gap:'4px'}}>
-                  <span style={{color:'#e8b04a'}}>{'⚡'}</span> {formatTokens(totalTokens)}
-                </span>
-                <span title="Source" style={{display:'flex',alignItems:'center',gap:'4px',marginLeft:'auto'}}>
-                  <span style={{background:'rgba(255,255,255,0.04)',padding:'1px 6px',borderRadius:'4px',fontSize:'10px'}}>{job.source || 'api'}</span>
-                </span>
+                {job.next_run && (
+                  <span title={'Next run: ' + job.next_run} style={{display:'flex',alignItems:'center',gap:'4px'}}>
+                    <span style={{color:'var(--success)'}}>{'▶'}</span> {formatNextRun(job.next_run)}
+                  </span>
+                )}
+                {job.skills && (
+                  <span title="Skills" style={{display:'flex',alignItems:'center',gap:'4px'}}>
+                    <span style={{color:'#e8b04a'}}>{'🧩'}</span> {job.skills}
+                  </span>
+                )}
+                {job.deliver && (
+                  <span title="Delivery" style={{display:'flex',alignItems:'center',gap:'4px',marginLeft:'auto'}}>
+                    <span style={{color:'#29b6f6'}}>{'📤'}</span> {job.deliver}
+                  </span>
+                )}
+              </div>
+
+              {job.script && (
+                <div style={{marginTop:'8px',fontSize:'10px',color:'var(--text-muted)',fontFamily:'JetBrains Mono, monospace',opacity:0.7}}>
+                  Script: {job.script}
+                </div>
+              )}
+
+              <div style={{marginTop:'8px',fontSize:'10px',color:'var(--text-muted)',fontFamily:'JetBrains Mono, monospace',opacity:0.5}}>
+                ID: {job.id} {job.repeat ? ' · Repeat: ' + job.repeat : ''}
               </div>
             </div>
           );
         })}
       </div>
 
-      {!loading && jobs.length === 0 && (
+      {!loading && !error && jobs.length === 0 && (
         <div style={{textAlign:'center',color:'var(--text-muted)',padding:'60px 0'}}>
-          <div style={{fontSize:'32px',marginBottom:'12px'}}>{'⚡'}</div>
-          <div style={{fontSize:'14px'}}>No jobs yet</div>
-          <div style={{fontSize:'12px',marginTop:'4px'}}>Sessions will appear here as they run</div>
+          <div style={{fontSize:'32px',marginBottom:'12px'}}>{'🕐'}</div>
+          <div style={{fontSize:'14px'}}>No cron jobs configured</div>
+          <div style={{fontSize:'12px',marginTop:'4px'}}>Use <span style={{fontFamily:'JetBrains Mono, monospace',background:'var(--bg-tertiary)',padding:'2px 6px',borderRadius:'4px'}}>hermes cron add</span> to schedule jobs</div>
         </div>
       )}
     </div>
@@ -2964,25 +3024,29 @@ function TerminalView() {
     try {
       var sessionId = hermesSessionId.current;
       if (!sessionId) {
-        var sessResp = await fetch(API_BASE + '/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: 'webui' }) });
-        var sessData = await sessResp.json();
-        sessionId = (sessData.session && sessData.session.id) || sessData.id || sessData.session_id;
-        if (!sessionId) throw new Error('Failed to create session');
+        sessionId = 'term_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
         hermesSessionId.current = sessionId;
         try { localStorage.setItem('hermes-terminal-session', sessionId); } catch(e) {}
       }
 
-      var response = await fetch(API_BASE + '/api/sessions/' + sessionId + '/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: cmd })
+      var response = await fetch(API_BASE + '/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Hermes-Session-Id': sessionId,
+        },
+        body: JSON.stringify({
+          model: 'hermes-agent',
+          messages: [{ role: 'user', content: cmd }],
+          stream: false,
+        }),
       });
       if (!response.ok) throw new Error('Chat request failed: ' + response.status);
       var chatData = await response.json();
-      var fullText = chatData.final_response || '';
-      if (!fullText && chatData.messages) {
-        for (var mi = chatData.messages.length - 1; mi >= 0; mi--) {
-          if (chatData.messages[mi].role === 'assistant') { fullText = chatData.messages[mi].content; break; }
-        }
+      var fullText = '';
+      var choices = chatData.choices || [];
+      if (choices.length > 0) {
+        fullText = (choices[0].message && choices[0].message.content) || '';
       }
       if (!fullText) fullText = '(No response from Hermes)';
       setHermesHistory(function(prev) { return prev.map(function(h) { return h.id === responseId ? Object.assign({}, h, { content: fullText, streaming: false }) : h; }); });
@@ -3217,7 +3281,7 @@ function WelcomePopup({ onClose, onOpenRemoteSetup }) {
         <div style={{fontSize:'48px',marginBottom:'12px'}}>{'⚡'}</div>
         <div className="modal-title" style={{marginBottom:'4px'}}>Welcome to Hermes UI</div>
         <div style={{fontSize:'13px',color:'var(--text-secondary)',marginBottom:'24px',lineHeight:'1.6'}}>
-          Your personal interface for Hermes Agent. Chat, browse skills, inspect memory, and monitor jobs — all from one place.
+          Your personal interface for Hermes Agent. Chat, browse skills, inspect memory, and manage cron jobs — all from one place.
         </div>
 
         <div style={{display:'flex',flexDirection:'column',gap:'10px',textAlign:'left',marginBottom:'24px'}}>
@@ -3264,9 +3328,8 @@ function StatusBar({ connected, conversations }) {
   useEffect(function() {
     var fetchStats = async function() {
       try {
-        var [memR, sessR, healthR] = await Promise.all([
+        var [memR, healthR] = await Promise.all([
           fetch(API_BASE + '/api/memory').catch(function() { return null; }),
-          fetch(API_BASE + '/api/sessions').catch(function() { return null; }),
           fetch(API_BASE + '/health').catch(function() { return null; })
         ]);
         var memCount = 0, model = 'MiniMax-M2.7', uptime = '';
@@ -3281,7 +3344,6 @@ function StatusBar({ connected, conversations }) {
           if (hd.uptime) { var hrs = Math.floor(hd.uptime / 3600); var mins = Math.floor((hd.uptime % 3600) / 60); uptime = hrs + 'h ' + mins + 'm'; }
         }
         var sessCount = conversations ? conversations.length : 0;
-        if (sessR && sessR.ok) { var sd = await sessR.json(); sessCount = sd.total || (sd.items || []).length; }
         setStats({ model: model, memory: memCount, sessions: sessCount, uptime: uptime });
       } catch(e) {}
     };
@@ -3522,53 +3584,34 @@ function App() {
     return function() { document.removeEventListener('keydown', handleKeyboard); };
   }, [messages, activeConvId, conversations]);
 
-  // ── API methods ──
+  // ── API methods (v0.7.0 — OpenAI-compatible /v1/chat/completions) ──
   const api = {
-    async createSession() {
-      const r = await fetch(API_BASE + '/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: 'webui' }),
-      });
-      if (!r.ok) {
-        const err = await r.text();
-        throw new Error('Failed to create session: ' + r.status + ' ' + err);
-      }
-      const data = await r.json();
-      return data.session.id;
+    // Session IDs are generated client-side; Hermes uses X-Hermes-Session-Id
+    // header to load/store conversation history in state.db automatically.
+    createSession() {
+      return 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     },
 
-    async listSessions() {
-      const r = await fetch(API_BASE + '/api/sessions');
-      if (!r.ok) {
-        const err = await r.text();
-        throw new Error('Failed to list sessions: ' + r.status + ' ' + err);
-      }
-      const data = await r.json();
-      return data.items || data.sessions || [];
-    },
+    // Sessions are managed client-side (localStorage + React state).
+    // The old /api/sessions listing endpoint no longer exists in v0.7.0.
+    async listSessions() { return []; },
 
-    async deleteSession(sessionId) {
-      try {
-        await fetch(API_BASE + '/api/sessions/' + sessionId, { method: 'DELETE' });
-      } catch (e) { /* ignore - still remove from UI */ }
-    },
+    async deleteSession(sessionId) { /* client-side only */ },
 
-    async getSessionMessages(sessionId) {
-      const r = await fetch(API_BASE + '/api/sessions/' + sessionId + '/messages');
-      if (!r.ok) {
-        const err = await r.text();
-        throw new Error('Failed to get messages: ' + r.status + ' ' + err);
-      }
-      const data = await r.json();
-      return data.items || data.messages || [];
-    },
+    async getSessionMessages(sessionId) { return []; },
 
     async chatStream(sessionId, message, onChunk, onDone, onToolEvent, onThinking, signal) {
-      const r = await fetch(API_BASE + '/api/sessions/' + sessionId + '/chat/stream', {
+      const r = await fetch(API_BASE + '/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message }),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Hermes-Session-Id': sessionId,
+        },
+        body: JSON.stringify({
+          model: 'hermes-agent',
+          messages: [{ role: 'user', content: message }],
+          stream: true,
+        }),
         signal: signal,
       });
       if (!r.ok) {
@@ -3582,20 +3625,18 @@ function App() {
       var fullContent = '';
 
       // Reasoning tag parser state
-      var rawContent = '';  // accumulates raw content including reasoning tags
+      var rawContent = '';
       var inReasoning = false;
       var reasoningBuffer = '';
       var _OPEN_TAGS = ['<REASONING_SCRATCHPAD>', '<think>', '<reasoning>', '<THINKING>', '<thinking>'];
       var _CLOSE_TAGS = ['</REASONING_SCRATCHPAD>', '</think>', '</reasoning>', '</THINKING>', '</thinking>'];
 
       function stripReasoningTags(text) {
-        // Remove all reasoning tag pairs and their content from visible text
         var result = text;
         result = result.replace(/<REASONING_SCRATCHPAD>[\s\S]*?<\/REASONING_SCRATCHPAD>/g, '');
         result = result.replace(/<think>[\s\S]*?<\/think>/gi, '');
         result = result.replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '');
         result = result.replace(/<THINKING>[\s\S]*?<\/THINKING>/g, '');
-        // Remove any unclosed reasoning tags (still streaming)
         result = result.replace(/<REASONING_SCRATCHPAD>[\s\S]*/g, '');
         result = result.replace(/<think>[\s\S]*/gi, '');
         result = result.replace(/<reasoning>[\s\S]*/gi, '');
@@ -3604,18 +3645,14 @@ function App() {
       }
 
       function processReasoningDelta(delta) {
-        // Accumulate raw content and extract reasoning
         rawContent += delta;
-        // Check for reasoning tags in the raw content and emit to onThinking
         if (!inReasoning) {
           for (var oi = 0; oi < _OPEN_TAGS.length; oi++) {
             var openIdx = rawContent.lastIndexOf(_OPEN_TAGS[oi]);
             if (openIdx !== -1) {
-              // Check if there's a matching close after this open
               var closeTag = _CLOSE_TAGS[oi];
               var closeIdx = rawContent.indexOf(closeTag, openIdx + _OPEN_TAGS[oi].length);
               if (closeIdx !== -1) {
-                // Complete reasoning block — extract and emit
                 var reasoningText = rawContent.slice(openIdx + _OPEN_TAGS[oi].length, closeIdx).trim();
                 if (reasoningText && onThinking) {
                   var lines = reasoningText.split('\n');
@@ -3624,7 +3661,6 @@ function App() {
                   }
                 }
               } else {
-                // Open tag found but no close yet — we're inside reasoning
                 inReasoning = true;
                 var newReasoning = rawContent.slice(openIdx + _OPEN_TAGS[oi].length);
                 if (newReasoning.trim() && onThinking) {
@@ -3636,7 +3672,6 @@ function App() {
             }
           }
         } else {
-          // Already inside reasoning — check for close tag
           reasoningBuffer += delta;
           for (var ci = 0; ci < _CLOSE_TAGS.length; ci++) {
             if (reasoningBuffer.indexOf(_CLOSE_TAGS[ci]) !== -1) {
@@ -3649,81 +3684,96 @@ function App() {
               break;
             }
           }
-          // Emit incremental reasoning while still inside block
           if (inReasoning && delta.trim() && onThinking) {
             onThinking('[reasoning] ' + delta.replace(/\n/g, ' ').trim().slice(0, 300));
           }
         }
-        // Return visible content with reasoning stripped
         return stripReasoningTags(rawContent);
       }
 
+      // Tool progress detection: v0.7.0 injects tool markers as markdown
+      // text deltas like "\n`⚙️ tool_name`\n" or "\n`🔍 search_query`\n"
+      var toolMarkerRegex = /^`[\p{Emoji}\uFE0F\u200D]*\s*(.+?)`$/u;
+      var pendingToolDelta = '';
+
+      function detectToolProgress(delta) {
+        // Check if this delta contains a tool marker injected by Hermes
+        var trimmed = delta.trim();
+        if (!trimmed) return false;
+        // Tool markers are wrapped in backticks with an emoji prefix
+        var match = trimmed.match(toolMarkerRegex);
+        if (match) {
+          var toolLabel = match[1].trim();
+          if (onToolEvent) {
+            onToolEvent({ type: 'started', toolName: toolLabel, label: toolLabel });
+          }
+          if (onThinking) {
+            onThinking('[tool] ' + toolLabel);
+          }
+          return true;
+        }
+        return false;
+      }
+
+      var onDoneFired = false;
+      var wrappedOnDone = function(content) {
+        if (onDoneFired) return;
+        onDoneFired = true;
+        if (typeof onDone === 'function') onDone(content);
+      };
+
+      // Parse OpenAI SSE format: "data: {json}\n\n" lines, ending with "data: [DONE]\n\n"
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
 
-        const events = buffer.split('\n\n');
-        buffer = events.pop() || '';
+        // Split on double-newline (SSE event boundary)
+        var parts = buffer.split('\n\n');
+        buffer = parts.pop() || '';
 
-        for (const eventBlock of events) {
-          if (!eventBlock.trim()) continue;
-          const lines = eventBlock.split('\n');
-          var eventType = '';
-          var eventData = '';
-          for (const line of lines) {
-            if (line.startsWith('event: ')) eventType = line.slice(7).trim();
-            else if (line.startsWith('data: ')) eventData = line.slice(6).trim();
+        for (var pi = 0; pi < parts.length; pi++) {
+          var block = parts[pi].trim();
+          if (!block) continue;
+
+          // Each block may have multiple "data:" lines (OpenAI format uses only data:, no event:)
+          var dataLines = block.split('\n');
+          for (var di = 0; di < dataLines.length; di++) {
+            var line = dataLines[di];
+            if (line.startsWith(':')) continue; // SSE comment / keepalive
+            if (!line.startsWith('data: ') && !line.startsWith('data:')) continue;
+            var dataStr = line.startsWith('data: ') ? line.slice(6) : line.slice(5);
+            dataStr = dataStr.trim();
+
+            if (dataStr === '[DONE]') {
+              wrappedOnDone(fullContent);
+              return fullContent;
+            }
+
+            try {
+              var parsed = JSON.parse(dataStr);
+              var choice = (parsed.choices && parsed.choices[0]) || {};
+              var delta = choice.delta || {};
+              var finishReason = choice.finish_reason;
+
+              if (delta.content) {
+                // Check for tool progress markers before adding to content
+                if (detectToolProgress(delta.content)) {
+                  // Tool marker — don't add to visible content
+                  continue;
+                }
+                fullContent = processReasoningDelta(delta.content);
+                onChunk(fullContent);
+              }
+
+              // finish_reason "stop" means agent is done (but wait for [DONE])
+            } catch (e) { /* ignore JSON parse errors */ }
           }
-          if (!eventType || !eventData) continue;
-          try {
-            const data = JSON.parse(eventData);
-            if (eventType === 'assistant.delta' && data.delta) {
-              fullContent = processReasoningDelta(data.delta);
-              onChunk(fullContent);
-            } else if (eventType === 'assistant.completed') {
-              fullContent = data.content || fullContent;
-              onDone(fullContent);
-            } else if (eventType === 'tool.progress') {
-              if (onThinking) onThinking(data.delta || '');
-            } else if (eventType === 'tool.started') {
-              onToolEvent({ type: 'started', toolName: data.tool_name, label: data.preview || data.tool_name, args: data.args });
-            } else if (eventType === 'tool.pending') {
-              onToolEvent({ type: 'pending', toolName: data.tool_name, label: data.preview || data.tool_name });
-            } else if (eventType === 'tool.completed' || eventType === 'tool.failed') {
-              onToolEvent({ type: 'completed', toolName: data.tool_name, result: data.result_preview || data.result, failed: eventType === 'tool.failed' });
-            } else if (eventType === 'artifact.created') {
-              onToolEvent({ type: 'artifact', toolName: data.tool_name, path: data.path });
-            } else if (eventType === 'error') {
-              var errMsg = data.message || data.error || 'Unknown error from Hermes';
-              onDone('⚠️ **Error:** ' + errMsg);
-            }
-          } catch (e) { /* ignore parse errors */ }
         }
       }
 
-      // Process remaining buffer
-      if (buffer.trim()) {
-        const lines = buffer.split('\n');
-        var eventType2 = '';
-        var eventData2 = '';
-        for (const line of lines) {
-          if (line.startsWith('event: ')) eventType2 = line.slice(7).trim();
-          else if (line.startsWith('data: ')) eventData2 = line.slice(6).trim();
-        }
-        if (eventType2 && eventData2) {
-          try {
-            const data = JSON.parse(eventData2);
-            if (eventType2 === 'assistant.delta' && data.delta) {
-              fullContent = processReasoningDelta(data.delta);
-              onChunk(fullContent);
-            } else if (eventType2 === 'assistant.completed') {
-              fullContent = data.content || fullContent;
-              onDone(fullContent);
-            }
-          } catch (e) { /* ignore */ }
-        }
-      }
+      // Stream ended without [DONE] — still fire onDone with what we have
+      wrappedOnDone(fullContent);
       return fullContent;
     }
   };
@@ -3781,57 +3831,21 @@ function App() {
   };
 
   // ── Conversation management ──
-  const newConversation = async () => {
-    try {
-      const sessionId = await api.createSession();
-      const conv = { id: sessionId, title: 'New Chat', created: new Date().toLocaleString(), messages: [] };
-      setConversations(prev => [conv, ...prev]);
-      setActiveConvId(sessionId);
-      setMessages([]);
-      setInput('');
-    } catch (err) {
-      console.error('Failed to create session:', err);
-    }
+  const newConversation = () => {
+    const sessionId = api.createSession();
+    const conv = { id: sessionId, title: 'New Chat', created: new Date().toLocaleString(), messages: [] };
+    setConversations(prev => [conv, ...prev]);
+    setActiveConvId(sessionId);
+    setMessages([]);
+    setInput('');
   };
 
-  const selectConversation = async (convId) => {
-    try {
-      setActiveConvId(convId);
-      const msgs = await api.getSessionMessages(convId);
-
-      // Count actual user prompts and detect compaction
-      const userPromptCount = msgs.filter(m => m.role === 'user').length;
-      const hasCompaction = msgs.some(m => (m.role === 'system' && m.content && /compaction|compacted|summary of prior|conversation summary|context.{0,20}(compacted|compressed|trimmed)/i.test(m.content)) || (m.type && /compaction/i.test(m.type)));
-
-      // Update the conversation with real user prompt count
-      setConversations(prev => prev.map(c => c.id === convId ? { ...c, user_prompt_count: userPromptCount, has_compaction: hasCompaction } : c));
-
-      // Build UI messages, inserting compaction markers for system compaction messages
-      const uiMessages = [];
-      msgs.forEach(function(msg) {
-        if ((msg.role === 'system' && msg.content && /compaction|compacted|summary of prior|conversation summary|context.{0,20}(compacted|compressed|trimmed)/i.test(msg.content)) || (msg.type && /compaction/i.test(msg.type))) {
-          uiMessages.push({
-            id: 'compaction-' + msg.id,
-            role: 'compaction',
-            content: 'Context compacted — earlier messages were summarized',
-            images: [],
-            toolCalls: [],
-          });
-        } else if ((msg.role === 'user' || msg.role === 'assistant') && (msg.role === 'user' || (msg.content && msg.content.trim()))) {
-          uiMessages.push({
-            id: String(msg.id),
-            role: msg.role,
-            content: msg.content || '',
-            images: [],
-            toolCalls: [],
-          });
-        }
-      });
-      setMessages(uiMessages);
-      setInput('');
-    } catch (err) {
-      console.error('Failed to load session messages:', err);
-    }
+  const selectConversation = (convId) => {
+    setActiveConvId(convId);
+    // Messages are stored in the conversation object (client-side)
+    const conv = conversations.find(c => c.id === convId);
+    setMessages((conv && conv.messages) || []);
+    setInput('');
   };
 
   const deleteConversation = (convId) => {
@@ -3858,78 +3872,41 @@ function App() {
           return c.id === convId ? Object.assign({}, c, { title: newTitle }) : c;
         });
       });
-      // Persist rename to Hermes API
-      try {
-        fetch(API_BASE + '/api/sessions/' + convId, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: newTitle }),
-        });
-      } catch (e) { /* ignore */ }
+      // Titles are persisted client-side only (v0.7.0 has no session rename API)
     }
     setEditingConvId(null);
     setEditingTitle('');
   };
 
-  // Load sessions on mount, then fetch real prompt counts
+  // Load conversations from localStorage on mount (v0.7.0: no server-side session listing)
   useEffect(() => {
-    const loadSessions = async () => {
-      try {
-        const sessions = await api.listSessions();
-        const currentActiveId = localStorage.getItem('hermes-active-session');
-        const convs = sessions.filter(sess => sess.id === currentActiveId || sess.message_count > 0 || sess.preview || (sess.title && !/^New Chat(?: #\d+)?$/.test(sess.title))).slice(0, 30).map(sess => ({
-          id: sess.id,
-          title: (sess.title && sess.title !== 'null' && !/^New Chat(?: #\d+)?$/.test(sess.title)) ? sess.title : (sess.preview ? sess.preview.slice(0, 60) : (sess.title || 'Chat')),
-          created: sess.started_at ? new Date(sess.started_at * 1000).toLocaleString() : '',
-          messages: [],
-          input_tokens: sess.input_tokens,
-          output_tokens: sess.output_tokens,
-          message_count: sess.message_count || 0,
-          tool_call_count: sess.tool_call_count || 0,
-          source: sess.source || 'webui',
-        }));
+    try {
+      const saved = localStorage.getItem('hermes-conversations');
+      if (saved) {
+        const convs = JSON.parse(saved);
         setConversations(convs);
-
-        // Restore active session from localStorage, or auto-select most recent
         const savedId = localStorage.getItem('hermes-active-session');
-        if (savedId && convs.some(c => c.id === savedId)) {
-          // Saved session still exists — select it and load messages
-          _setActiveConvId(savedId);
-          try {
-            const msgs = await api.getSessionMessages(savedId);
-            setMessages(msgs);
-          } catch(e) {}
-        } else if (convs.length > 0 && !savedId) {
-          // No saved session — auto-select the most recent one
-          const mostRecent = convs[0];
-          setActiveConvId(mostRecent.id);
-          try {
-            const msgs = await api.getSessionMessages(mostRecent.id);
-            setMessages(msgs);
-          } catch(e) {}
+        if (savedId) {
+          const conv = convs.find(c => c.id === savedId);
+          if (conv) {
+            _setActiveConvId(savedId);
+            setMessages(conv.messages || []);
+          }
         }
-
-        // Fetch real user prompt counts for all visible sessions in parallel
-        const countPromises = convs.map(async (conv) => {
-          try {
-            const msgs = await api.getSessionMessages(conv.id);
-            const userPromptCount = msgs.filter(m => m.role === 'user').length;
-            const compactionRegex = /compaction|compacted|summary of prior|conversation summary|context.{0,20}(compacted|compressed|trimmed)/i;
-            const hasCompaction = msgs.some(m => (m.role === 'system' && m.content && compactionRegex.test(m.content)) || (m.type && /compaction/i.test(m.type)));
-            return { id: conv.id, user_prompt_count: userPromptCount, has_compaction: hasCompaction };
-          } catch (e) { return null; }
-        });
-        const counts = await Promise.all(countPromises);
-        setConversations(prev => prev.map(c => {
-          const found = counts.find(x => x && x.id === c.id);
-          return found ? { ...c, user_prompt_count: found.user_prompt_count, has_compaction: found.has_compaction } : c;
-        }));
-      } catch (err) {
-        console.error('Failed to load sessions:', err);
       }
-    };
-    loadSessions();
+    } catch (e) {
+      console.warn('[hermes-ui] Failed to restore conversations from localStorage:', e);
+    }
   }, []);
+
+  // Persist conversations to localStorage whenever they change
+  useEffect(() => {
+    try {
+      // Store conversations with messages (cap at 50 most recent to avoid quota issues)
+      const toSave = conversations.slice(0, 50);
+      localStorage.setItem('hermes-conversations', JSON.stringify(toSave));
+    } catch (e) { /* localStorage quota exceeded — ignore */ }
+  }, [conversations]);
 
   // ── Export chat ──
   const exportChat = () => {
@@ -3955,16 +3932,11 @@ function App() {
     }
 
     if (!sessionId) {
-      try {
-        sessionId = await api.createSession();
-        const conv = { id: sessionId, title: text.slice(0, 50) || 'New Chat', created: new Date().toLocaleString(), messages: [] };
-        setConversations(prev => [conv, ...prev]);
-        setActiveConvId(sessionId);
-        setMessages([]);  // Clear stale messages so user sees fresh session
-      } catch (err) {
-        console.error('Failed to create session:', err);
-        return;
-      }
+      sessionId = api.createSession();
+      const conv = { id: sessionId, title: text.slice(0, 50) || 'New Chat', created: new Date().toLocaleString(), messages: [] };
+      setConversations(prev => [conv, ...prev]);
+      setActiveConvId(sessionId);
+      setMessages([]);  // Clear stale messages so user sees fresh session
     }
 
     const userMsg = {
@@ -4136,6 +4108,23 @@ function App() {
       addLocalLog('INFO  Response complete (' + toolCalls.length + ' tool calls, ' + fullContent.length + ' chars, ' + totalTime + 's total)');
       setIsStreaming(false);
       abortControllerRef.current = null;
+      // Persist final messages into conversation for localStorage save
+      setConversations(function(prev) {
+        return prev.map(function(c) {
+          if (c.id !== sessionId) return c;
+          // Grab current messages from the messages state updater
+          return c;  // will be synced by the useEffect that watches conversations
+        });
+      });
+      // Force-sync messages into the conversation object
+      setMessages(function(currentMsgs) {
+        setConversations(function(prev) {
+          return prev.map(function(c) {
+            return c.id === sessionId ? Object.assign({}, c, { messages: currentMsgs }) : c;
+          });
+        });
+        return currentMsgs;
+      });
     }
   };
 
@@ -4305,8 +4294,8 @@ function App() {
             <span className="nav-item-label">Terminal</span>
           </div>
           <div className={"nav-item " + (currentView === 'jobs' ? 'active' : '')} onClick={function() { setCurrentView('jobs'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon">{'⚡'}</span>
-            <span className="nav-item-label">Jobs</span>
+            <span className="nav-item-icon">{'🕐'}</span>
+            <span className="nav-item-label">Cron Jobs</span>
           </div>
 
           <div style={{borderTop:'1px solid var(--border)',margin:'4px 8px'}} />
@@ -4506,7 +4495,7 @@ function App() {
           <React.Fragment>
             <div className="header">
               <div className="header-title">
-                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Jobs' : currentView === 'memory' ? 'Memory' : 'Skills'}
+                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : 'Skills'}
               </div>
               <div className="header-controls">
                 <div className="theme-switcher">
