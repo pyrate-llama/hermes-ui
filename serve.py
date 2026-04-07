@@ -730,6 +730,52 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({"entries": []}).encode())
 
+
+    # ── UI Conversation Persistence ──────────────────────────────────────────
+    CONVERSATIONS_PATH = None  # set at class level below
+
+    def _conversations_load(self):
+        import os, json
+        path = os.path.expanduser('~/.hermes/ui-conversations.json')
+        try:
+            if os.path.exists(path):
+                with open(path) as f:
+                    data = f.read()
+            else:
+                data = '[]'
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(data.encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+
+    def _conversations_save(self):
+        import os, json
+        path = os.path.expanduser('~/.hermes/ui-conversations.json')
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+            # Validate JSON before saving
+            json.loads(body)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'wb') as f:
+                f.write(body)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+
     def do_GET(self):
         if self.path.startswith("/memory/status"):
             self._memory_status()
@@ -749,6 +795,8 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self._cron_list()
         elif self.path.startswith("/api/config"):
             self._config_fallback()
+        elif self.path == "/api/ui-conversations":
+            self._conversations_load()
         elif self.path.startswith("/v1/") or self.path.startswith("/health") or self.path.startswith("/api/"):
             self._proxy()
         elif self.path.startswith("/logs/stream"):
@@ -996,7 +1044,9 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(resp.read())
 
     def do_POST(self):
-        if self.path.startswith("/writefile"):
+        if self.path == "/api/ui-conversations":
+            self._conversations_save()
+        elif self.path.startswith("/writefile"):
             self._write_file()
         elif self.path.startswith("/terminal/exec"):
             self._terminal_exec()

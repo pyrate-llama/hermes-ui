@@ -3878,12 +3878,26 @@ function App() {
     setEditingTitle('');
   };
 
-  // Load conversations from localStorage on mount (v0.7.0: no server-side session listing)
+  // Load conversations on mount — localStorage first, server as fallback/sync
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('hermes-conversations');
-      if (saved) {
-        const convs = JSON.parse(saved);
+    async function loadConversations() {
+      var localConvs = [];
+      try {
+        const saved = localStorage.getItem('hermes-conversations');
+        if (saved) localConvs = JSON.parse(saved);
+      } catch(e) {}
+
+      // Always fetch from server — use whichever has more conversations
+      var serverConvs = [];
+      try {
+        const res = await fetch('/api/ui-conversations');
+        if (res.ok) serverConvs = await res.json();
+      } catch(e) {}
+
+      // Prefer server if it has data (survives browser data wipe)
+      const convs = serverConvs.length >= localConvs.length ? serverConvs : localConvs;
+
+      if (convs.length > 0) {
         setConversations(convs);
         const savedId = localStorage.getItem('hermes-active-session');
         if (savedId) {
@@ -3894,18 +3908,26 @@ function App() {
           }
         }
       }
-    } catch (e) {
-      console.warn('[hermes-ui] Failed to restore conversations from localStorage:', e);
     }
+    loadConversations().catch(e => console.warn('[hermes-ui] Failed to restore conversations:', e));
   }, []);
 
-  // Persist conversations to localStorage whenever they change
+  // Persist conversations to localStorage + server whenever they change
   useEffect(() => {
+    if (conversations.length === 0) return;
+    const toSave = conversations.slice(0, 50);
+    // Save to localStorage
     try {
-      // Store conversations with messages (cap at 50 most recent to avoid quota issues)
-      const toSave = conversations.slice(0, 50);
       localStorage.setItem('hermes-conversations', JSON.stringify(toSave));
-    } catch (e) { /* localStorage quota exceeded — ignore */ }
+    } catch(e) {}
+    // Save to server (disk) so it survives browser data wipe
+    try {
+      fetch('/api/ui-conversations', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(toSave),
+      }).catch(() => {});
+    } catch(e) {}
   }, [conversations]);
 
   // ── Export chat ──
