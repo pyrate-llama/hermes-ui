@@ -106,6 +106,15 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
                 pass
+            finally:
+                # Always close the Hermes connection explicitly. Without this,
+                # Python holds the socket open until GC, leaving Hermes mid-stream
+                # with no reader — which can corrupt session state and cause the
+                # next request to hang.
+                try:
+                    resp.close()
+                except Exception:
+                    pass
         else:
             self.wfile.write(resp.read())
 
@@ -1040,6 +1049,11 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
                 pass
+            finally:
+                try:
+                    resp.close()
+                except Exception:
+                    pass
         else:
             self.wfile.write(resp.read())
 
