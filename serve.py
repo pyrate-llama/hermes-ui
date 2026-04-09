@@ -808,6 +808,7 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         except Exception:
             self.send_response(400)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps({"success": False, "error": "Invalid JSON"}).encode())
             return
@@ -831,11 +832,13 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
                     except Exception as e:
                         self.send_response(500)
                         self.send_header("Content-Type", "application/json")
+                        self.send_header("Access-Control-Allow-Origin", "*")
                         self.end_headers()
                         self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode())
                     return
         self.send_response(404)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(json.dumps({"success": False, "error": "Skill not found"}).encode())
 
@@ -1264,6 +1267,9 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Allow", "GET, POST, PUT, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Hermes-Session-Id")
         self.end_headers()
 
     def log_message(self, fmt, *args):

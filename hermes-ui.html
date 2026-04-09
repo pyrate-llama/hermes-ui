@@ -2625,11 +2625,16 @@ function SkillsView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: editContent }),
       });
-      var data = await r.json();
+      var responseText = await r.text();
+      var data;
+      try { data = JSON.parse(responseText); } catch (parseErr) {
+        alert('Server returned invalid JSON (HTTP ' + r.status + '): ' + responseText.slice(0, 200));
+        setSaving(false);
+        return;
+      }
       if (data.success) {
         setEditingSkill(null);
         setEditContent('');
-        // Refresh skill details if expanded
         if (expandedSkillName === editingSkill) {
           fetchSkillDetails(editingSkill);
         }
