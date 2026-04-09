@@ -4016,6 +4016,10 @@ function App() {
       if (thinkingGotResponse) {
         // Monitor for mid-stream stalls after first chunk
         var stallSecs = Math.round((Date.now() - lastChunkTime) / 1000);
+        // Log a heartbeat every 15s so the right panel doesn't look frozen
+        if (stallSecs > 0 && stallSecs % 15 < 5) {
+          addLocalLog('INFO  Hermes working... (' + stallSecs + 's since last chunk, ' + fullContent.length + ' chars so far)');
+        }
         if (stallSecs >= MID_STREAM_TIMEOUT_S && abortControllerRef.current) {
           addLocalLog('WARN  Stream stalled for ' + stallSecs + 's — aborting');
           setMessages(function(prev) {
