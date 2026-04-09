@@ -2845,6 +2845,9 @@ function JobsView() {
   var [jobs, setJobs] = useState([]);
   var [loading, setLoading] = useState(true);
   var [error, setError] = useState(null);
+  var [editingJob, setEditingJob] = useState(null);
+  var [editFields, setEditFields] = useState({});
+  var [actionLoading, setActionLoading] = useState(null);
 
   function parseCronOutput(text) {
     var lines = text.split('\n');
@@ -2920,6 +2923,72 @@ function JobsView() {
     setLoading(false);
   };
 
+  var runCronCmd = async function(cmd) {
+    var r = await fetch(API_BASE + '/terminal/exec', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({command: cmd})
+    });
+    return r.ok ? await r.json() : { error: 'HTTP ' + r.status };
+  };
+
+  var handleToggle = async function(job) {
+    setActionLoading(job.id + '-toggle');
+    var cmd = job.status === 'active' ? 'hermes cron pause ' + job.id : 'hermes cron resume ' + job.id;
+    await runCronCmd(cmd);
+    await fetchJobs();
+    setActionLoading(null);
+  };
+
+  var handleRunNow = async function(job) {
+    setActionLoading(job.id + '-run');
+    await runCronCmd('hermes cron run ' + job.id);
+    await fetchJobs();
+    setActionLoading(null);
+  };
+
+  var handleDelete = async function(job) {
+    if (!confirm('Delete cron job "' + (job.name || job.id) + '"? This cannot be undone.')) return;
+    setActionLoading(job.id + '-delete');
+    await runCronCmd('hermes cron remove ' + job.id);
+    await fetchJobs();
+    setActionLoading(null);
+  };
+
+  var handleEditStart = function(job) {
+    if (editingJob === job.id) { setEditingJob(null); return; }
+    setEditingJob(job.id);
+    setEditFields({
+      name: job.name || '',
+      schedule: job.schedule || '',
+      prompt: job.prompt || '',
+      deliver: job.deliver || '',
+      skills: job.skills || '',
+      script: job.script || '',
+      repeat: job.repeat || '',
+    });
+  };
+
+  var handleEditSave = async function() {
+    if (!editingJob) return;
+    setActionLoading(editingJob + '-save');
+    var parts = ['hermes cron edit', editingJob];
+    if (editFields.name) parts.push('--name "' + editFields.name.replace(/"/g, '\\"') + '"');
+    if (editFields.schedule) parts.push('--schedule "' + editFields.schedule.replace(/"/g, '\\"') + '"');
+    if (editFields.prompt) parts.push('--prompt "' + editFields.prompt.replace(/"/g, '\\"') + '"');
+    if (editFields.deliver) parts.push('--deliver "' + editFields.deliver.replace(/"/g, '\\"') + '"');
+    if (editFields.repeat) parts.push('--repeat "' + editFields.repeat.replace(/"/g, '\\"') + '"');
+    if (editFields.script) parts.push('--script "' + editFields.script.replace(/"/g, '\\"') + '"');
+    var result = await runCronCmd(parts.join(' '));
+    if (result.error) {
+      alert('Edit failed: ' + (result.error || result.output));
+    } else {
+      setEditingJob(null);
+      await fetchJobs();
+    }
+    setActionLoading(null);
+  };
+
   useEffect(function() {
     fetchJobs();
     var iv = setInterval(fetchJobs, 30000);
@@ -2988,9 +3057,38 @@ function JobsView() {
                 </div>
               )}
 
-              <div style={{marginTop:'8px',fontSize:'10px',color:'var(--text-muted)',fontFamily:'JetBrains Mono, monospace',opacity:0.5}}>
-                ID: {job.id} {job.repeat ? ' · Repeat: ' + job.repeat : ''}
+              <div style={{marginTop:'10px',display:'flex',gap:'6px',alignItems:'center',flexWrap:'wrap'}}>
+                <button onClick={function(){handleEditStart(job);}} style={{background:editingJob===job.id?'var(--warning)':'var(--bg-secondary)',color:editingJob===job.id?'white':'var(--text-secondary)',border:'1px solid '+(editingJob===job.id?'var(--warning)':'var(--border)'),borderRadius:'6px',padding:'4px 12px',fontSize:'11px',cursor:'pointer',fontWeight:500}}>Edit</button>
+                <button onClick={function(){handleToggle(job);}} disabled={actionLoading===job.id+'-toggle'} style={{background:isActive?'var(--bg-secondary)':'var(--success)',color:isActive?'var(--text-secondary)':'white',border:'1px solid '+(isActive?'var(--border)':'var(--success)'),borderRadius:'6px',padding:'4px 12px',fontSize:'11px',cursor:'pointer',fontWeight:500,opacity:actionLoading===job.id+'-toggle'?0.5:1}}>{actionLoading===job.id+'-toggle'?'...':(isActive?'Pause':'Resume')}</button>
+                <button onClick={function(){handleRunNow(job);}} disabled={actionLoading===job.id+'-run'} style={{background:'var(--bg-secondary)',color:'var(--accent)',border:'1px solid var(--border)',borderRadius:'6px',padding:'4px 12px',fontSize:'11px',cursor:'pointer',fontWeight:500,opacity:actionLoading===job.id+'-run'?0.5:1}}>{actionLoading===job.id+'-run'?'Running...':'Run Now'}</button>
+                <button onClick={function(){handleDelete(job);}} disabled={actionLoading===job.id+'-delete'} style={{background:'var(--bg-secondary)',color:'var(--error)',border:'1px solid var(--border)',borderRadius:'6px',padding:'4px 12px',fontSize:'11px',cursor:'pointer',fontWeight:500,marginLeft:'auto',opacity:actionLoading===job.id+'-delete'?0.5:1}}>Delete</button>
+                <span style={{fontSize:'10px',color:'var(--text-muted)',fontFamily:'JetBrains Mono, monospace',opacity:0.5}}>ID: {job.id}</span>
               </div>
+
+              {editingJob === job.id && (
+                <div style={{marginTop:'12px',borderTop:'1px solid var(--border)',paddingTop:'12px'}}>
+                  <div style={{display:'grid',gridTemplateColumns:'100px 1fr',gap:'8px',alignItems:'center',fontSize:'12px'}}>
+                    <label style={{color:'var(--text-muted)',fontWeight:500}}>Name</label>
+                    <input value={editFields.name||''} onChange={function(e){setEditFields(function(p){return{...p,name:e.target.value};});}} style={{background:'var(--bg-primary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',fontSize:'12px',fontFamily:'JetBrains Mono, monospace'}} />
+                    <label style={{color:'var(--text-muted)',fontWeight:500}}>Schedule</label>
+                    <input value={editFields.schedule||''} onChange={function(e){setEditFields(function(p){return{...p,schedule:e.target.value};});}} placeholder="e.g. 0 9 * * *" style={{background:'var(--bg-primary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',fontSize:'12px',fontFamily:'JetBrains Mono, monospace'}} />
+                    <label style={{color:'var(--text-muted)',fontWeight:500}}>Deliver</label>
+                    <input value={editFields.deliver||''} onChange={function(e){setEditFields(function(p){return{...p,deliver:e.target.value};});}} placeholder="e.g. email, slack" style={{background:'var(--bg-primary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',fontSize:'12px',fontFamily:'JetBrains Mono, monospace'}} />
+                    <label style={{color:'var(--text-muted)',fontWeight:500}}>Skills</label>
+                    <input value={editFields.skills||''} onChange={function(e){setEditFields(function(p){return{...p,skills:e.target.value};});}} style={{background:'var(--bg-primary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',fontSize:'12px',fontFamily:'JetBrains Mono, monospace'}} />
+                    <label style={{color:'var(--text-muted)',fontWeight:500}}>Script</label>
+                    <input value={editFields.script||''} onChange={function(e){setEditFields(function(p){return{...p,script:e.target.value};});}} placeholder="Path to script" style={{background:'var(--bg-primary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',fontSize:'12px',fontFamily:'JetBrains Mono, monospace'}} />
+                    <label style={{color:'var(--text-muted)',fontWeight:500}}>Repeat</label>
+                    <input value={editFields.repeat||''} onChange={function(e){setEditFields(function(p){return{...p,repeat:e.target.value};});}} style={{background:'var(--bg-primary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',fontSize:'12px',fontFamily:'JetBrains Mono, monospace'}} />
+                    <label style={{color:'var(--text-muted)',fontWeight:500}}>Prompt</label>
+                    <textarea value={editFields.prompt||''} onChange={function(e){setEditFields(function(p){return{...p,prompt:e.target.value};});}} rows={3} style={{background:'var(--bg-primary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',fontSize:'12px',fontFamily:'JetBrains Mono, monospace',resize:'vertical'}} />
+                  </div>
+                  <div style={{display:'flex',gap:'8px',marginTop:'10px',justifyContent:'flex-end'}}>
+                    <button onClick={handleEditSave} disabled={actionLoading===editingJob+'-save'} style={{background:'var(--accent)',color:'white',border:'none',borderRadius:'6px',padding:'6px 16px',fontSize:'12px',fontWeight:600,cursor:'pointer',opacity:actionLoading===editingJob+'-save'?0.5:1}}>{actionLoading===editingJob+'-save'?'Saving...':'Save'}</button>
+                    <button onClick={function(){setEditingJob(null);}} style={{background:'var(--bg-tertiary)',color:'var(--text-secondary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 16px',fontSize:'12px',cursor:'pointer'}}>Cancel</button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
