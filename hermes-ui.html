@@ -2530,6 +2530,9 @@ function SkillsView() {
   var [skillEnabledState, setSkillEnabledState] = useState({});
   var [skillDates, setSkillDates] = useState({});
   var [sortBy, setSortBy] = useState('newest');
+  var [editingSkill, setEditingSkill] = useState(null);
+  var [editContent, setEditContent] = useState('');
+  var [saving, setSaving] = useState(false);
 
   useEffect(function() {
     var fetchSkills = async function() {
@@ -2596,6 +2599,47 @@ function SkillsView() {
       next[skillName] = !next[skillName];
       return next;
     });
+  };
+
+  var handleEditClick = function(skillName) {
+    if (editingSkill === skillName) {
+      setEditingSkill(null);
+      setEditContent('');
+    } else {
+      setEditingSkill(skillName);
+      setEditContent('');
+      // Load the skill content for editing
+      fetch(API_BASE + '/api/skills/' + encodeURIComponent(skillName))
+        .then(function(r) { return r.json(); })
+        .then(function(data) { setEditContent(data.content || ''); })
+        .catch(function() { setEditContent('(Error loading skill content)'); });
+    }
+  };
+
+  var handleSaveSkill = async function() {
+    if (!editingSkill) return;
+    setSaving(true);
+    try {
+      var r = await fetch(API_BASE + '/api/skills/' + encodeURIComponent(editingSkill), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: editContent }),
+      });
+      var data = await r.json();
+      if (data.success) {
+        setEditingSkill(null);
+        setEditContent('');
+        // Refresh skill details if expanded
+        if (expandedSkillName === editingSkill) {
+          fetchSkillDetails(editingSkill);
+        }
+      } else {
+        alert('Save failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e) {
+      alert('Save error: ' + e.message);
+    }
+    setSaving(false);
   };
 
   var filtered = skills.filter(function(s) {
@@ -2708,6 +2752,7 @@ function SkillsView() {
                   </div>
                   <div style={{display:'flex',flexDirection:'column',gap:'8px',minWidth:'120px'}}>
                     <button className="skill-btn" onClick={function() { handleDetailsClick(skill.name); }} style={{background:isExpanded ? 'var(--accent)' : 'var(--bg-secondary)',color:isExpanded ? 'white' : 'var(--text-secondary)',borderColor:isExpanded ? 'var(--accent)' : 'var(--border)'}}>Details</button>
+                    <button className="skill-btn" onClick={function() { handleEditClick(skill.name); }} style={{background:editingSkill === skill.name ? 'var(--warning)' : 'var(--bg-secondary)',color:editingSkill === skill.name ? 'white' : 'var(--text-secondary)',borderColor:editingSkill === skill.name ? 'var(--warning)' : 'var(--border)'}}>Edit</button>
                     <button className="skill-btn" onClick={function() { handleEnabledToggle(skill.name); }} style={{background:isEnabled ? 'var(--success)' : 'var(--bg-secondary)',color:isEnabled ? 'white' : 'var(--text-secondary)',borderColor:isEnabled ? 'var(--success)' : 'var(--border)'}}>{isEnabled ? 'Enabled' : 'Disabled'}</button>
                   </div>
                 </div>
@@ -2753,6 +2798,25 @@ function SkillsView() {
                     ) : (
                       <div style={{fontSize:'12px',color:'var(--text-muted)'}}>Loading details...</div>
                     )}
+                  </div>
+                )}
+                {editingSkill === skill.name && (
+                  <div style={{borderTop:'1px solid var(--border)',padding:'12px',background:'var(--bg-secondary)'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                      <div style={{fontSize:'12px',fontWeight:'600',color:'var(--text-primary)'}}>Edit SKILL.md</div>
+                      <div style={{display:'flex',gap:'8px'}}>
+                        <button onClick={handleSaveSkill} disabled={saving}
+                          style={{background:'var(--accent)',color:'white',border:'none',borderRadius:'6px',padding:'6px 16px',fontSize:'12px',fontWeight:'600',cursor:saving?'wait':'pointer',opacity:saving?0.6:1}}>
+                          {saving ? 'Saving...' : 'Save'}
+                        </button>
+                        <button onClick={function() { setEditingSkill(null); setEditContent(''); }}
+                          style={{background:'var(--bg-tertiary)',color:'var(--text-secondary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 16px',fontSize:'12px',cursor:'pointer'}}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                    <textarea value={editContent} onChange={function(e) { setEditContent(e.target.value); }}
+                      style={{width:'100%',minHeight:'300px',background:'var(--bg-primary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'10px',fontSize:'12px',fontFamily:'Monaco, Menlo, monospace',lineHeight:'1.5',resize:'vertical',boxSizing:'border-box'}} />
                   </div>
                 )}
               </div>

@@ -796,6 +796,49 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({"success": False, "error": "Skill not found"}).encode())
 
+    def _skill_update(self):
+        """Update a skill's SKILL.md content via PUT /api/skills/{name}."""
+        from urllib.parse import unquote
+        skill_name = self.path.split("/api/skills/")[1].split("?")[0]
+        skill_name = unquote(skill_name)
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length) if content_length else b""
+        try:
+            data = json.loads(body)
+        except Exception:
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": False, "error": "Invalid JSON"}).encode())
+            return
+
+        new_content = data.get("content", "")
+        skills_dir = HERMES_HOME / "skills"
+        if skills_dir.exists():
+            for category_dir in skills_dir.iterdir():
+                if not category_dir.is_dir():
+                    continue
+                skill_dir = category_dir / skill_name
+                if skill_dir.exists() and skill_dir.is_dir():
+                    skill_md = skill_dir / "SKILL.md"
+                    try:
+                        skill_md.write_text(new_content, encoding="utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"success": True}).encode())
+                    except Exception as e:
+                        self.send_response(500)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode())
+                    return
+        self.send_response(404)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"success": False, "error": "Skill not found"}).encode())
+
     def _memory_list(self):
         """Return memory entries from ~/.hermes/memories/ files."""
         memories_dir = HERMES_HOME / "memories"
@@ -1207,6 +1250,8 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
     def do_PUT(self):
         if self.path.startswith("/api/memory"):
             self._memory_update()
+        elif self.path.startswith("/api/skills/"):
+            self._skill_update()
         else:
             self._proxy()
 
