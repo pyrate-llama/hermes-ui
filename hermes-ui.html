@@ -4010,8 +4010,8 @@ function App() {
     var thinkingStart = Date.now();
     var thinkingGotResponse = false;
     var lastChunkTime = Date.now();
-    var NO_RESPONSE_TIMEOUT_S = 90;   // abort if Hermes never responds within 90s
-    var MID_STREAM_TIMEOUT_S  = 60;   // abort if stream stalls mid-response for 60s
+    var NO_RESPONSE_TIMEOUT_S = 120;  // abort if Hermes never responds within 2 min
+    var MID_STREAM_TIMEOUT_S  = 180; // abort if stream stalls mid-response for 3 min
     var thinkingInterval = setInterval(function() {
       if (thinkingGotResponse) {
         // Monitor for mid-stream stalls after first chunk
@@ -4022,7 +4022,7 @@ function App() {
             var updated = [...prev];
             var last = updated[updated.length - 1];
             if (last && last.role === 'assistant') {
-              updated[updated.length - 1] = { ...last, streaming: false, thinking: false, content: (last.content || '') + '\n\n_(Response timed out — Hermes may be busy)_' };
+              updated[updated.length - 1] = { ...last, streaming: false, thinking: false, content: (last.content || '') + '\n\n_(Hermes stopped mid-response — it may still be processing. Try resending your message.)_' };
             }
             return updated;
           });
@@ -4039,7 +4039,7 @@ function App() {
           var updated = [...prev];
           var last = updated[updated.length - 1];
           if (last && (last.thinking || last.streaming)) {
-            updated[updated.length - 1] = { ...last, streaming: false, thinking: false, content: '_(No response from Hermes after ' + NO_RESPONSE_TIMEOUT_S + 's. Hermes may be busy — try resending.)_' };
+            updated[updated.length - 1] = { ...last, streaming: false, thinking: false, content: '_(Hermes did not respond after ' + NO_RESPONSE_TIMEOUT_S + 's — it may be processing something else. Try resending your message.)_' };
           }
           return updated;
         });
