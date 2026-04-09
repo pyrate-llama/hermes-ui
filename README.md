@@ -212,6 +212,38 @@ Hermes UI ships with three built-in themes, accessible via the theme switcher in
 
 ---
 
+## Troubleshooting
+
+**Hermes stops responding / hangs after a few messages**
+
+If Hermes responds once or twice then goes silent, check your `~/.hermes/config.yaml` for this bug in the context compression config:
+
+```yaml
+compression:
+  summary_base_url: null   # ← this causes a 404 and hangs the agent
+```
+
+Fix it by setting `summary_base_url` to match your inference provider's base URL. For MiniMax:
+
+```yaml
+compression:
+  summary_base_url: https://api.minimax.io/anthropic
+```
+
+Then restart Hermes: `hermes restart`
+
+---
+
+**Chat is stuck in streaming state / can't send a second message**
+
+This happens if you're running Hermes v0.7.0+ with an older version of hermes-ui. The v0.7.0 API uses `/v1/chat/completions` (OpenAI-compatible) instead of the old `/api/sessions` routes. Make sure you're on the latest hermes-ui by pulling the repo:
+
+```bash
+git pull
+```
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
