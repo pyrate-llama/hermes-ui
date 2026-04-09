@@ -3639,6 +3639,7 @@ function App() {
     async getSessionMessages(sessionId) { return []; },
 
     async chatStream(sessionId, message, onChunk, onDone, onToolEvent, onThinking, signal) {
+      var _streamStart = Date.now();
       const r = await fetch(API_BASE + '/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -3652,6 +3653,9 @@ function App() {
         }),
         signal: signal,
       });
+      var _httpMs = Date.now() - _streamStart;
+      console.log('[stream] HTTP response in ' + _httpMs + 'ms (status ' + r.status + ')');
+      if (onThinking) onThinking('[timing] HTTP connected in ' + (_httpMs < 1000 ? _httpMs + 'ms' : Math.round(_httpMs/1000) + 's'));
       if (!r.ok) {
         const err = await r.text();
         throw new Error('Chat error ' + r.status + ': ' + err);
@@ -3659,6 +3663,7 @@ function App() {
 
       const reader = r.body.getReader();
       const decoder = new TextDecoder();
+      var _firstDataLogged = false;
       var buffer = '';
       var fullContent = '';
 
@@ -3764,6 +3769,12 @@ function App() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        if (!_firstDataLogged) {
+          _firstDataLogged = true;
+          var _firstDataMs = Date.now() - _streamStart;
+          console.log('[stream] First SSE data after ' + _firstDataMs + 'ms (' + Math.round(_firstDataMs/1000) + 's)');
+          if (onThinking) onThinking('[timing] First data after ' + (_firstDataMs < 1000 ? _firstDataMs + 'ms' : Math.round(_firstDataMs/1000) + 's'));
+        }
         buffer += decoder.decode(value, { stream: true });
 
         // Split on double-newline (SSE event boundary)
@@ -4043,7 +4054,8 @@ function App() {
     setIsStreaming(true);
     setActivityLog([]);
     addLocalLog('INFO  Sending message to session ' + sessionId);
-    addLocalLog('INFO  Waiting for Hermes to respond...');
+    var fetchStart = Date.now();
+    addLocalLog('INFO  Connecting to Hermes...');
 
     var thinkingStart = Date.now();
     var thinkingGotResponse = false;
