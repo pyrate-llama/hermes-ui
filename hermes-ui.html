@@ -1472,13 +1472,22 @@ function ThinkingBubble() {
     var t = setInterval(function() { setElapsed(function(s) { return s + 1; }); }, 1000);
     return function() { clearInterval(t); };
   }, []);
+  var latestThought = ThinkingBubble._latestThought || '';
   return (
     <div className="thinking-indicator">
       <div className="thinking-dots"><span></span><span></span><span></span></div>
-      {'Hermes is thinking... (' + elapsed + 's)'}
+      <div style={{display:'flex',flexDirection:'column',gap:'2px'}}>
+        <span>{'Hermes is thinking... (' + elapsed + 's)'}</span>
+        {latestThought && (
+          <span style={{fontSize:'11px',color:'var(--text-muted)',fontStyle:'italic',maxWidth:'500px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+            {latestThought}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
+ThinkingBubble._latestThought = '';
 
 function MessageBubble({ message, onImageClick, onEdit }) {
   const isUser = message.role === 'user';
@@ -4200,7 +4209,10 @@ function App() {
         },
         function(thinkingText) {
           if (!thinkingGotResponse) { thinkingGotResponse = true; clearInterval(thinkingInterval); }
-          if (thinkingText) addLocalLog('INFO  [thinking] ' + thinkingText.replace(/\n/g, ' ').slice(0, 300));
+          if (thinkingText) {
+            addLocalLog('INFO  [thinking] ' + thinkingText.replace(/\n/g, ' ').slice(0, 300));
+            ThinkingBubble._latestThought = thinkingText.replace(/^\[(?:reasoning|tool)\] /, '');
+          }
         },
         abortCtrl.signal
       );
@@ -4211,6 +4223,7 @@ function App() {
       }
     } finally {
       clearInterval(thinkingInterval);
+      ThinkingBubble._latestThought = '';
       var totalTime = Math.round((Date.now() - thinkingStart) / 1000);
       addLocalLog('INFO  Response complete (' + toolCalls.length + ' tool calls, ' + fullContent.length + ' chars, ' + totalTime + 's total)');
       setIsStreaming(false);
