@@ -4151,7 +4151,8 @@ function App() {
         },
         function(toolEvent) {
           if (toolEvent.type === 'started') {
-            if (!thinkingGotResponse) { thinkingGotResponse = true; clearInterval(thinkingInterval); }
+            if (!thinkingGotResponse) { thinkingGotResponse = true; }
+            lastChunkTime = Date.now();  // Reset stall timer — tools count as activity
             addLocalLog('INFO  [tool] ' + (toolEvent.label || toolEvent.toolName) + ' started');
             toolCalls.push({
               toolName: toolEvent.toolName,
