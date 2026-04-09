@@ -3897,11 +3897,25 @@ function App() {
       // Prefer server if it has data (survives browser data wipe)
       const convs = serverConvs.length >= localConvs.length ? serverConvs : localConvs;
 
-      if (convs.length > 0) {
-        setConversations(convs);
+      // Clean up any messages that were saved mid-stream (streaming/thinking stuck true).
+      // This happens when Hermes hangs and the user refreshes — without this, the UI
+      // loads right back into a permanently-stuck streaming state.
+      const cleanConvs = convs.map(function(c) {
+        if (!c.messages || !c.messages.length) return c;
+        var cleaned = c.messages.map(function(m) {
+          if (!m.streaming && !m.thinking) return m;
+          // Drop empty thinking-only messages; convert partial streaming ones to complete
+          if (m.thinking && !m.content) return null;
+          return { ...m, streaming: false, thinking: false };
+        }).filter(Boolean);
+        return { ...c, messages: cleaned };
+      });
+
+      if (cleanConvs.length > 0) {
+        setConversations(cleanConvs);
         const savedId = localStorage.getItem('hermes-active-session');
         if (savedId) {
-          const conv = convs.find(c => c.id === savedId);
+          const conv = cleanConvs.find(c => c.id === savedId);
           if (conv) {
             _setActiveConvId(savedId);
             setMessages(conv.messages || []);
@@ -3995,10 +4009,43 @@ function App() {
 
     var thinkingStart = Date.now();
     var thinkingGotResponse = false;
+    var lastChunkTime = Date.now();
+    var NO_RESPONSE_TIMEOUT_S = 90;   // abort if Hermes never responds within 90s
+    var MID_STREAM_TIMEOUT_S  = 60;   // abort if stream stalls mid-response for 60s
     var thinkingInterval = setInterval(function() {
-      if (thinkingGotResponse) { clearInterval(thinkingInterval); return; }
+      if (thinkingGotResponse) {
+        // Monitor for mid-stream stalls after first chunk
+        var stallSecs = Math.round((Date.now() - lastChunkTime) / 1000);
+        if (stallSecs >= MID_STREAM_TIMEOUT_S && abortControllerRef.current) {
+          addLocalLog('WARN  Stream stalled for ' + stallSecs + 's — aborting');
+          setMessages(function(prev) {
+            var updated = [...prev];
+            var last = updated[updated.length - 1];
+            if (last && last.role === 'assistant') {
+              updated[updated.length - 1] = { ...last, streaming: false, thinking: false, content: (last.content || '') + '\n\n_(Response timed out — Hermes may be busy)_' };
+            }
+            return updated;
+          });
+          abortControllerRef.current.abort();
+          clearInterval(thinkingInterval);
+        }
+        return;
+      }
       var elapsed = Math.round((Date.now() - thinkingStart) / 1000);
       addLocalLog('INFO  ... thinking (' + elapsed + 's elapsed)');
+      if (elapsed >= NO_RESPONSE_TIMEOUT_S && abortControllerRef.current) {
+        addLocalLog('WARN  No response after ' + NO_RESPONSE_TIMEOUT_S + 's — aborting. Try stopping and resending.');
+        setMessages(function(prev) {
+          var updated = [...prev];
+          var last = updated[updated.length - 1];
+          if (last && (last.thinking || last.streaming)) {
+            updated[updated.length - 1] = { ...last, streaming: false, thinking: false, content: '_(No response from Hermes after ' + NO_RESPONSE_TIMEOUT_S + 's. Hermes may be busy — try resending.)_' };
+          }
+          return updated;
+        });
+        abortControllerRef.current.abort();
+        clearInterval(thinkingInterval);
+      }
     }, 5000);
 
     var fullContent = '';
@@ -4024,7 +4071,8 @@ function App() {
         sessionId,
         messageText,
         function(content) {
-          if (!thinkingGotResponse) { thinkingGotResponse = true; clearInterval(thinkingInterval); addLocalLog('INFO  First response received'); }
+          if (!thinkingGotResponse) { thinkingGotResponse = true; addLocalLog('INFO  First response received'); }
+          lastChunkTime = Date.now();
           fullContent = content;
           setMessages(function(prev) {
             const updated = [...prev];
