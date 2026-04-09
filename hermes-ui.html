@@ -4407,8 +4407,11 @@ function App() {
         function(thinkingText) {
           if (!thinkingGotResponse) { thinkingGotResponse = true; clearInterval(thinkingInterval); }
           if (thinkingText) {
-            addLocalLog('INFO  [thinking] ' + thinkingText.replace(/\n/g, ' ').slice(0, 300));
-            ThinkingBubble._latestThought = thinkingText.replace(/^\[(?:reasoning|tool)\] /, '');
+            // Only log reasoning events — tool events are already logged by onToolEvent
+            if (!thinkingText.startsWith('[tool] ') && !thinkingText.startsWith('[timing] ')) {
+              addLocalLog('INFO  [thinking] ' + thinkingText.replace(/\n/g, ' ').slice(0, 300));
+            }
+            ThinkingBubble._latestThought = thinkingText.replace(/^\[(?:reasoning|tool|timing)\] /, '');
           }
         },
         abortCtrl.signal
