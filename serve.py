@@ -724,20 +724,131 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         sock.close()
 
     def _skills_list(self):
-        """List skills — stub for UI compatibility."""
+        """List all installed skills by scanning ~/.hermes/skills/ directories."""
+        skills_dir = HERMES_HOME / "skills"
+        skills = []
+        if skills_dir.exists():
+            for category_dir in sorted(skills_dir.iterdir()):
+                if not category_dir.is_dir() or category_dir.name.startswith("."):
+                    continue
+                for skill_dir in sorted(category_dir.iterdir()):
+                    if not skill_dir.is_dir() or skill_dir.name.startswith("."):
+                        continue
+                    skill = {
+                        "name": skill_dir.name,
+                        "category": category_dir.name,
+                        "disabled": False,
+                    }
+                    # Try to read description from first line of SKILL.md
+                    skill_md = skill_dir / "SKILL.md"
+                    if skill_md.exists():
+                        try:
+                            text = skill_md.read_text(encoding="utf-8", errors="replace")
+                            # First non-empty, non-heading line as description
+                            for line in text.splitlines():
+                                line = line.strip()
+                                if line and not line.startswith("#"):
+                                    skill["description"] = line[:200]
+                                    break
+                        except Exception:
+                            pass
+                    skills.append(skill)
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        self.wfile.write(json.dumps({"skills": [], "total": 0}).encode())
+        self.wfile.write(json.dumps({"skills": skills, "total": len(skills)}).encode())
+
+    def _skill_detail(self, skill_name):
+        """Return details for a single skill including its SKILL.md content."""
+        skills_dir = HERMES_HOME / "skills"
+        # Search for the skill in any category
+        if skills_dir.exists():
+            for category_dir in skills_dir.iterdir():
+                if not category_dir.is_dir():
+                    continue
+                skill_dir = category_dir / skill_name
+                if skill_dir.exists() and skill_dir.is_dir():
+                    result = {
+                        "name": skill_name,
+                        "category": category_dir.name,
+                        "success": True,
+                    }
+                    skill_md = skill_dir / "SKILL.md"
+                    if skill_md.exists():
+                        try:
+                            result["content"] = skill_md.read_text(encoding="utf-8", errors="replace")[:10000]
+                        except Exception:
+                            result["content"] = "(Could not read SKILL.md)"
+                    # List other files in the skill directory
+                    result["files"] = [f.name for f in skill_dir.iterdir() if f.is_file()]
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(result).encode())
+                    return
+        self.send_response(404)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"success": False, "error": "Skill not found"}).encode())
 
     def _memory_list(self):
-        """Memory status — stub for UI compatibility."""
+        """Return memory entries from ~/.hermes/memories/ files."""
+        memories_dir = HERMES_HOME / "memories"
+        targets = []
+        for target_name, filename in [("memory", "MEMORY.md"), ("user", "USER.md")]:
+            filepath = memories_dir / filename
+            entries = []
+            usage = ""
+            if filepath.exists():
+                try:
+                    text = filepath.read_text(encoding="utf-8", errors="replace").strip()
+                    if text:
+                        # Split on --- separators or double newlines
+                        parts = [p.strip() for p in text.split("\n---\n") if p.strip()]
+                        if len(parts) <= 1:
+                            parts = [p.strip() for p in text.split("\n\n") if p.strip()]
+                        entries = parts
+                        char_count = len(text)
+                        limit = 4000 if target_name == "memory" else 1375
+                        usage = f"{char_count}/{limit} chars"
+                except Exception:
+                    pass
+            targets.append({
+                "target": target_name,
+                "entries": entries,
+                "usage": usage,
+            })
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        self.wfile.write(json.dumps({"entries": []}).encode())
+        self.wfile.write(json.dumps({"targets": targets}).encode())
+
+    def _memory_update(self):
+        """Update memory entries — write back to ~/.hermes/memories/ files."""
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+        try:
+            data = json.loads(body)
+        except Exception:
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "Invalid JSON"}).encode())
+            return
+
+        memories_dir = HERMES_HOME / "memories"
+        memories_dir.mkdir(parents=True, exist_ok=True)
+
+        if "memory" in data:
+            (memories_dir / "MEMORY.md").write_text(data["memory"], encoding="utf-8")
+        if "user_profile" in data:
+            (memories_dir / "USER.md").write_text(data["user_profile"], encoding="utf-8")
+
+        # Return updated targets
+        self._memory_list()
 
 
     # ── UI Conversation Persistence ──────────────────────────────────────────
@@ -792,6 +903,13 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self._sessions_list()
         elif self.path == "/api/skills":
             self._skills_list()
+        elif self.path.startswith("/api/skills/"):
+            # /api/skills/{skill_name}
+            skill_name = self.path.split("/api/skills/")[1].split("?")[0]
+            from urllib.parse import unquote
+            self._skill_detail(unquote(skill_name))
+        elif self.path == "/api/memory":
+            self._memory_list()
         elif self.path.startswith("/api/memory"):
             self._memory_list()
         elif self.path.startswith("/skills/dates"):
@@ -1084,7 +1202,10 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self._proxy()
 
     def do_PUT(self):
-        self._proxy()
+        if self.path.startswith("/api/memory"):
+            self._memory_update()
+        else:
+            self._proxy()
 
     def do_DELETE(self):
         self._proxy()
