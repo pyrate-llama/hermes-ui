@@ -227,13 +227,37 @@
     border-left-color: var(--success); opacity: 0.8;
   }
   .tool-call-row.active {
-    animation: toolPulse 1.5s ease-in-out infinite;
+    border-left-color: var(--accent);
+    background: rgba(var(--accent-rgb, 99,102,241), 0.08);
+    animation: toolPulse 2s ease-in-out infinite;
   }
   @keyframes toolPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+    0%, 100% { border-left-color: var(--accent); }
+    50% { border-left-color: #a78bfa; box-shadow: 0 0 8px rgba(99,102,241,0.3); }
   }
   .tool-call-emoji { font-size: 14px; flex-shrink: 0; }
+  .tool-call-row.active .tool-call-emoji {
+    display: inline-block;
+    animation: spinGear 1.2s linear infinite;
+  }
+  @keyframes spinGear {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  .tool-working-dots {
+    display: inline-flex; gap: 3px; align-items: center; margin-left: 4px;
+  }
+  .tool-working-dots span {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--accent); display: inline-block;
+    animation: dotBounce 1.2s ease-in-out infinite;
+  }
+  .tool-working-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .tool-working-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dotBounce {
+    0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1.2); }
+  }
   .tool-call-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tool-call-status { flex-shrink: 0; font-weight: 600; }
   .tool-call-status.checkmark { color: var(--success); }
@@ -1521,6 +1545,11 @@ function MessageBubble({ message, onImageClick, onEdit }) {
                   style={hasResult ? {cursor: 'pointer'} : {}}>
                   <span className="tool-call-emoji">{'⚙️'}</span>
                   <span className="tool-call-label">{tool.label || tool.toolName}</span>
+                  {!tool.done && (
+                    <span className="tool-working-dots">
+                      <span/><span/><span/>
+                    </span>
+                  )}
                   {tool.done && <span className="tool-call-status checkmark">{'✓'}</span>}
                   {hasResult && (
                     <button className="tool-call-toggle" onClick={function(e) { e.stopPropagation(); toggleToolExpand(i); }}>
