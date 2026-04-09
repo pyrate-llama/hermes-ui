@@ -4049,7 +4049,8 @@ function App() {
     var thinkingGotResponse = false;
     var lastChunkTime = Date.now();
     var NO_RESPONSE_TIMEOUT_S = 120;  // abort if Hermes never responds within 2 min
-    var MID_STREAM_TIMEOUT_S  = 180; // abort if stream stalls mid-response for 3 min
+    var MID_STREAM_TIMEOUT_S  = 90;  // abort if stream stalls mid-response for 90s
+    var healthCheckDone = false;
     var thinkingInterval = setInterval(function() {
       if (thinkingGotResponse) {
         // Monitor for mid-stream stalls after first chunk
@@ -4061,13 +4062,38 @@ function App() {
           var stallNote = stallSecs > 5 ? ', stalled ' + stallSecs + 's' : '';
           addLocalLog('INFO  Hermes working... (' + totalSecs + 's elapsed, ' + fullContent.length + ' chars' + stallNote + ')');
         }
+        // If stalled >30s, check if Hermes is even alive — abort early if not
+        if (stallSecs >= 30 && !healthCheckDone) {
+          healthCheckDone = true;
+          fetch('/health', { signal: AbortSignal.timeout(5000) })
+            .then(function(r) { return r.ok; })
+            .catch(function() { return false; })
+            .then(function(alive) {
+              if (!alive && abortControllerRef.current) {
+                addLocalLog('WARN  Hermes health check failed during stall — aborting');
+                setMessages(function(prev) {
+                  var updated = [...prev];
+                  var last = updated[updated.length - 1];
+                  if (last && last.role === 'assistant') {
+                    updated[updated.length - 1] = { ...last, streaming: false, thinking: false, content: (last.content || '') + '\n\n_(Hermes appears to be down. Check that it\'s running and try again.)_' };
+                  }
+                  return updated;
+                });
+                abortControllerRef.current.abort();
+                clearInterval(thinkingInterval);
+              } else {
+                addLocalLog('INFO  Health check OK — Hermes alive, stream just quiet');
+                healthCheckDone = false; // allow re-check if stall continues
+              }
+            });
+        }
         if (stallSecs >= MID_STREAM_TIMEOUT_S && abortControllerRef.current) {
           addLocalLog('WARN  Stream stalled for ' + stallSecs + 's — aborting');
           setMessages(function(prev) {
             var updated = [...prev];
             var last = updated[updated.length - 1];
             if (last && last.role === 'assistant') {
-              updated[updated.length - 1] = { ...last, streaming: false, thinking: false, content: (last.content || '') + '\n\n_(Hermes stopped mid-response — it may still be processing. Try resending your message.)_' };
+              updated[updated.length - 1] = { ...last, streaming: false, thinking: false, content: (last.content || '') + '\n\n_(Hermes stopped responding after ' + stallSecs + 's. Click Stop if still stuck, or resend your message.)_' };
             }
             return updated;
           });
