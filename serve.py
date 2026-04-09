@@ -97,9 +97,25 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             # Use readline() for unbuffered SSE streaming — resp.read(n) buffers
             # and holds data until n bytes arrive or the connection closes, which
             # causes the UI to hang until Hermes finishes its entire response.
+            import socket
+            # Set a 120s read timeout so readline() doesn't block forever if
+            # Hermes goes silent. The UI has its own 90s stall abort, but this
+            # is a backstop so serve.py doesn't leak blocked threads.
+            if hasattr(resp, 'fp') and hasattr(resp.fp, 'raw') and hasattr(resp.fp.raw, '_sock'):
+                resp.fp.raw._sock.settimeout(120)
             try:
                 while True:
-                    line = resp.readline()
+                    try:
+                        line = resp.readline()
+                    except socket.timeout:
+                        # Hermes went silent for 120s — send a final SSE comment
+                        # so the browser knows the stream ended, then break.
+                        try:
+                            self.wfile.write(b"data: {\"error\":\"Stream timeout — Hermes stopped sending data\"}\n\n")
+                            self.wfile.flush()
+                        except Exception:
+                            pass
+                        break
                     if not line:
                         break
                     self.wfile.write(line)
