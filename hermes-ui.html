@@ -4343,12 +4343,17 @@ function App() {
         },
         function(finalContent) {
           fullContent = finalContent;
+          // If Hermes ran tools but sent no text, show a placeholder
+          var displayContent = finalContent;
+          if (!finalContent.trim() && toolCalls.length > 0) {
+            displayContent = '_Hermes completed ' + toolCalls.length + ' tool call' + (toolCalls.length > 1 ? 's' : '') + ' but didn\'t provide a summary. Try asking "what did you do?" for details._';
+          }
           setMessages(function(prev) {
             const updated = [...prev];
             updated[updated.length - 1] = {
               ...updated[updated.length - 1],
               role: 'assistant',
-              content: finalContent,
+              content: displayContent,
               streaming: false,
               toolCalls: toolCalls.map(tc => ({ ...tc, done: true })),
             };
