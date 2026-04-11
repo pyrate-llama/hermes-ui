@@ -510,6 +510,69 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             "type": file_type,
         }).encode())
 
+    def _read_local_file(self):
+        """Read any local file for the artifact panel (restricted to safe text/code extensions)."""
+        from urllib.parse import urlparse, parse_qs
+        import os
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        file_path = params.get("path", [""])[0]
+
+        # Expand ~ to home directory
+        file_path = os.path.expanduser(file_path)
+        file_path = os.path.abspath(file_path)
+
+        # Restrict to safe file extensions
+        SAFE_EXTS = {'.html', '.htm', '.svg', '.css', '.js', '.jsx', '.ts', '.tsx',
+                     '.py', '.json', '.xml', '.md', '.txt', '.yaml', '.yml',
+                     '.sh', '.bash', '.rs', '.go', '.java', '.c', '.cpp', '.h',
+                     '.rb', '.php', '.toml', '.ini', '.cfg', '.conf', '.log', '.csv'}
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext not in SAFE_EXTS:
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": f"File type '{ext}' not allowed"}).encode())
+            return
+
+        if not os.path.isfile(file_path):
+            self.send_response(404)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "File not found"}).encode())
+            return
+
+        try:
+            size = os.path.getsize(file_path)
+            if size > 2_000_000:
+                self.send_response(413)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"File too large ({size:,} bytes, max 2MB)"}).encode())
+                return
+
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+
+            file_type = "html" if ext in {'.html', '.htm'} else "svg" if ext == '.svg' else "code"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "content": content,
+                "path": file_path,
+                "name": os.path.basename(file_path),
+                "size": size,
+                "type": file_type,
+                "extension": ext,
+            }).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
+
     def _sessions_list(self):
         """List sessions — stub for UI compatibility."""
         self.send_response(200)
@@ -967,6 +1030,8 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self._browse_dir()
         elif self.path.startswith("/readfile"):
             self._read_file()
+        elif self.path.startswith("/api/localfile"):
+            self._read_local_file()
         elif self.path.startswith("/cron/list"):
             self._cron_list()
         elif self.path.startswith("/api/config"):

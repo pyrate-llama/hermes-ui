@@ -161,11 +161,13 @@
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--glass-border);
     padding: 12px 20px; gap: 12px;
+    height: 48px; min-height: 48px; max-height: 48px; overflow: hidden; flex-shrink: 0;
   }
-  .header-title { font-size: 14px; font-weight: 500; }
+  .header-title { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 200px; }
   .header-status {
     font-size: 12px; color: var(--text-muted);
     display: flex; align-items: center; gap: 6px;
+    white-space: nowrap; flex-shrink: 0;
   }
   .status-dot {
     width: 6px; height: 6px; border-radius: 50%;
@@ -377,6 +379,11 @@
     transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .right-column.closed { margin-right: -320px; }
+.right-column.wide { width: 600px; min-width: 600px; }
+.right-column.wide.closed { margin-right: -600px; }
+.artifact-container { padding: 12px; overflow: auto; flex: 1; background: #0c0c14; position: relative; z-index: 1; }
+.artifact-iframe { width: 100%; height: 100%; border: none; background: white; border-radius: 4px; }
+.artifact-code { background: var(--bg-primary); color: var(--text-primary); padding: 12px; border-radius: 4px; overflow: auto; font-family: monospace; font-size: 12px; }
   .activity-panel {
     flex: 1; min-height: 0;
     display: flex; flex-direction: column;
@@ -594,6 +601,7 @@
   .token-counter {
     font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;
     padding: 4px 8px; border-radius: 4px; background: rgba(255,255,255,0.02);
+    white-space: nowrap; flex-shrink: 0;
   }
   .token-counter span { font-weight: 600; color: var(--text-primary); }
 
@@ -825,6 +833,7 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 6px 14px; background: var(--bg-secondary);
     border-bottom: 1px solid var(--border); flex-shrink: 0;
+    overflow: hidden; max-height: 40px; white-space: nowrap;
   }
   .terminal-tab {
     padding: 4px 12px; font-size: 12px; font-weight: 600;
@@ -1227,12 +1236,16 @@
   @media (max-width: 1200px) {
     .right-column { width: 260px; min-width: 260px; }
     .right-column.closed { margin-right: -260px; }
+    .right-column.wide { width: 500px; min-width: 500px; }
+    .right-column.wide.closed { margin-right: -500px; }
   }
   @media (max-width: 1024px) {
     .sidebar { width: 240px; min-width: 240px; }
     .sidebar.collapsed { margin-left: -240px; }
     .right-column { width: 240px; min-width: 240px; }
     .right-column.closed { margin-right: -240px; }
+    .right-column.wide { width: 420px; min-width: 420px; }
+    .right-column.wide.closed { margin-right: -420px; }
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 768px) {
@@ -1788,13 +1801,24 @@ function MCPBrowserModal({ tools, onClose }) {
 }
 
 /* ── Terminal / Live Logs Panel ── */
-function TerminalPanel({ isOpen, onClose, localLogs }) {
+function TerminalPanel({ isOpen, onClose, localLogs, artifacts, onArtifactTab, onAddArtifact, onRemoveArtifact }) {
   const [logLines, setLogLines] = useState([]);
   const [activeTab, setActiveTab] = useState('webui');
   const [isConnected, setIsConnected] = useState(false);
   const bodyRef = useRef(null);
   const eventSourceRef = useRef(null);
   const autoScrollRef = useRef(true);
+  const prevArtifactCount = useRef(0);
+  const blobUrlCache = useRef({});
+
+  // Auto-switch to artifacts tab when new artifacts are detected
+  useEffect(function() {
+    if (artifacts && artifacts.length > prevArtifactCount.current) {
+      setActiveTab('artifacts');
+      if (onArtifactTab) onArtifactTab(true);
+    }
+    prevArtifactCount.current = (artifacts && artifacts.length) || 0;
+  }, [artifacts && artifacts.length]);
 
   // Colorize a log line
   const colorize = useCallback(function(line, logName) {
@@ -1914,10 +1938,11 @@ function TerminalPanel({ isOpen, onClose, localLogs }) {
     <div className={"terminal-panel " + (isOpen ? '' : 'hidden')}>
       <div className="terminal-panel-header">
         <div style={{display:'flex', gap:'4px'}}>
-          <button className={"terminal-tab " + (activeTab === 'gateway' ? 'active' : '')} onClick={function(){setActiveTab('gateway')}}>Gateway</button>
-          <button className={"terminal-tab " + (activeTab === 'errors' ? 'active' : '')} onClick={function(){setActiveTab('errors')}}>Errors</button>
-          <button className={"terminal-tab " + (activeTab === 'webui' ? 'active' : '')} onClick={function(){setActiveTab('webui')}}>Web UI</button>
-          <button className={"terminal-tab " + (activeTab === 'all' ? 'active' : '')} onClick={function(){setActiveTab('all')}}>All</button>
+          <button className={"terminal-tab " + (activeTab === 'gateway' ? 'active' : '')} onClick={function(){setActiveTab('gateway'); if(onArtifactTab) onArtifactTab(false);}}>Gateway</button>
+          <button className={"terminal-tab " + (activeTab === 'errors' ? 'active' : '')} onClick={function(){setActiveTab('errors'); if(onArtifactTab) onArtifactTab(false);}}>Errors</button>
+          <button className={"terminal-tab " + (activeTab === 'webui' ? 'active' : '')} onClick={function(){setActiveTab('webui'); if(onArtifactTab) onArtifactTab(false);}}>Web UI</button>
+          <button className={"terminal-tab " + (activeTab === 'all' ? 'active' : '')} onClick={function(){setActiveTab('all'); if(onArtifactTab) onArtifactTab(false);}}>All</button>
+          <button className={"terminal-tab " + (activeTab === 'artifacts' ? 'active' : '')} style={artifacts && artifacts.length > 0 ? {borderColor:'var(--accent)',color: activeTab === 'artifacts' ? 'white' : 'var(--accent)'} : {}} onClick={function(){setActiveTab('artifacts'); if(onArtifactTab) onArtifactTab(true);}}>Artifacts{artifacts && artifacts.length > 0 ? ' (' + artifacts.length + ')' : ''}</button>
         </div>
         <div className="terminal-controls">
           <div className="terminal-status">
@@ -1929,17 +1954,82 @@ function TerminalPanel({ isOpen, onClose, localLogs }) {
           <button className="terminal-close-btn" onClick={onClose} title="Close">{'✕'}</button>
         </div>
       </div>
-      <div className="terminal-body" ref={bodyRef} onScroll={handleScroll}>
-        {filtered.map(function(entry) {
-          var colored = colorize(entry.line, entry.log);
-          return (
-            <div key={entry.id} className={"log-line " + colored.className}>
-              {colored.parts.map(function(p, i) {
-                return <span key={i} className={p.cls}>{p.text}</span>;
-              })}
+      <div className="artifact-container" style={{display: activeTab === 'artifacts' ? 'flex' : 'none', flexDirection: 'column'}}>
+          <div style={{display:'flex', justifyContent:'flex-end', marginBottom:'8px', gap:'6px', flexShrink:0}}>
+            <label style={{display:'inline-flex', alignItems:'center', gap:'4px', background:'none', border:'1px solid var(--border)', color:'var(--text-secondary)', borderRadius:'4px', padding:'3px 10px', fontSize:'11px', cursor:'pointer', transition:'all 0.15s'}}>
+              {'📂 Load File'}
+              <input type="file" accept=".html,.htm,.svg,.js,.jsx,.ts,.tsx,.py,.css,.json,.xml,.md,.txt,.yaml,.yml,.sh,.rs,.go,.c,.cpp" style={{display:'none'}} onChange={function(e) {
+                var file = e.target.files[0];
+                if (!file) return;
+                var reader = new FileReader();
+                reader.onload = function(ev) {
+                  var ext = file.name.split('.').pop().toLowerCase();
+                  var type = (ext === 'html' || ext === 'htm') ? 'html' : ext === 'svg' ? 'svg' : 'code';
+                  var art = { type: type, content: ev.target.result, timestamp: Date.now(), fileName: file.name };
+                  if (type === 'code') art.language = ext;
+                  if (onAddArtifact) onAddArtifact(art);
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+              }} />
+            </label>
+          </div>
+          {(!artifacts || artifacts.length === 0) ? (
+            <div style={{color:'var(--text-muted)', textAlign:'center', padding:'40px 20px', fontSize:'13px'}}>
+              <div style={{fontSize:'28px', marginBottom:'12px'}}>{'🎨'}</div>
+              <div style={{fontWeight:600, marginBottom:'6px'}}>No artifacts yet</div>
+              <div>When Hermes generates HTML, SVG, or code blocks, they will appear here as live previews.</div>
+              <div style={{marginTop:'12px', fontSize:'11px'}}>Or use the Load File button above to open a local file.</div>
             </div>
-          );
-        })}
+          ) : (
+            artifacts.map(function(art, idx) {
+              var cacheKey = art.timestamp + '_' + idx;
+              if (art.type === 'html' || art.type === 'svg') {
+                if (!blobUrlCache.current[cacheKey]) {
+                  var htmlContent = art.type === 'svg' ? '<html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#1a1a2e">' + art.content + '</body></html>' : art.content;
+                  blobUrlCache.current[cacheKey] = URL.createObjectURL(new Blob([htmlContent], {type: 'text/html'}));
+                }
+                var cachedUrl = blobUrlCache.current[cacheKey];
+                return (
+                  <div key={cacheKey} style={{marginBottom:'12px', position:'relative'}}>
+                    <div style={{fontSize:'11px', color:'var(--text-muted)', marginBottom:'4px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span>{(art.fileName || art.type.toUpperCase() + ' artifact')}</span>
+                      <div style={{display:'flex', gap:'4px'}}>
+                        <button style={{background:'none', border:'1px solid var(--border)', color:'var(--text-secondary)', borderRadius:'4px', padding:'2px 8px', fontSize:'10px', cursor:'pointer'}} onClick={function(){ navigator.clipboard.writeText(art.content); }}>Copy</button>
+                        <button style={{background:'none', border:'1px solid var(--border)', color:'var(--danger, #e55)', borderRadius:'4px', padding:'2px 6px', fontSize:'10px', cursor:'pointer', lineHeight:1}} onClick={function(){ if(blobUrlCache.current[cacheKey]){ URL.revokeObjectURL(blobUrlCache.current[cacheKey]); delete blobUrlCache.current[cacheKey]; } if(onRemoveArtifact) onRemoveArtifact(idx); }}>✕</button>
+                      </div>
+                    </div>
+                    <iframe className="artifact-iframe" src={cachedUrl} style={{height:'calc(90vh - 100px)', maxHeight:'calc(90vh - 100px)'}} sandbox="allow-scripts allow-same-origin" />
+                  </div>
+                );
+              } else {
+                return (
+                  <div key={cacheKey} style={{marginBottom:'12px', position:'relative'}}>
+                    <div style={{fontSize:'11px', color:'var(--text-muted)', marginBottom:'4px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span>{(art.fileName || (art.language || 'code').toUpperCase() + ' artifact')}</span>
+                      <div style={{display:'flex', gap:'4px'}}>
+                        <button style={{background:'none', border:'1px solid var(--border)', color:'var(--text-secondary)', borderRadius:'4px', padding:'2px 8px', fontSize:'10px', cursor:'pointer'}} onClick={function(){ navigator.clipboard.writeText(art.content); }}>Copy</button>
+                        <button style={{background:'none', border:'1px solid var(--border)', color:'var(--danger, #e55)', borderRadius:'4px', padding:'2px 6px', fontSize:'10px', cursor:'pointer', lineHeight:1}} onClick={function(){ if(onRemoveArtifact) onRemoveArtifact(idx); }}>✕</button>
+                      </div>
+                    </div>
+                    <pre className="artifact-code"><code>{art.content}</code></pre>
+                  </div>
+                );
+              }
+            })
+          )}
+      </div>
+      <div className="terminal-body" ref={bodyRef} onScroll={handleScroll} style={{display: activeTab === 'artifacts' ? 'none' : 'block'}}>
+          {filtered.map(function(entry) {
+            var colored = colorize(entry.line, entry.log);
+            return (
+              <div key={entry.id} className={"log-line " + colored.className}>
+                {colored.parts.map(function(p, i) {
+                  return <span key={i} className={p.cls}>{p.text}</span>;
+                })}
+              </div>
+            );
+          })}
       </div>
     </div>
   );
@@ -3633,6 +3723,8 @@ function App() {
   const [editingContent, setEditingContent] = useState('');
   const [showMCPBrowser, setShowMCPBrowser] = useState(false);
   const [showTerminal, setShowTerminal] = useState(false);
+  const [artifacts, setArtifacts] = useState([]);
+  const [artifactPanelWide, setArtifactPanelWide] = useState(false);
   const [localLogs, setLocalLogs] = useState([]);
   var addLocalLog = function(text) {
     var ts = new Date().toLocaleTimeString();
@@ -4343,6 +4435,75 @@ function App() {
         },
         function(finalContent) {
           fullContent = finalContent;
+
+          // ── Artifact auto-detection ──
+          (function detectArtifacts(text) {
+            if (!text) return;
+            console.log('[Artifacts] Scanning response (' + text.length + ' chars) for artifacts...');
+            var newArtifacts = [];
+            // Detect full HTML documents (```html ... ```)
+            var htmlFenceRe = /```html\s*\n([\s\S]*?)```/gi;
+            var m;
+            while ((m = htmlFenceRe.exec(text)) !== null) {
+              var code = m[1].trim();
+              if (code.length > 10) {
+                newArtifacts.push({ type: 'html', content: code, timestamp: Date.now() });
+              }
+            }
+            // Detect SVG blocks (```svg ... ``` or inline <svg...)
+            var svgFenceRe = /```svg\s*\n([\s\S]*?)```/gi;
+            while ((m = svgFenceRe.exec(text)) !== null) {
+              newArtifacts.push({ type: 'svg', content: m[1].trim(), timestamp: Date.now() });
+            }
+            var inlineSvgRe = /<svg[\s\S]*?<\/svg>/gi;
+            while ((m = inlineSvgRe.exec(text)) !== null) {
+              if (m[0].length > 10) newArtifacts.push({ type: 'svg', content: m[0], timestamp: Date.now() });
+            }
+            // Detect other code fences (python, javascript, css, etc.)
+            var codeFenceRe = /```(\w+)\s*\n([\s\S]*?)```/gi;
+            while ((m = codeFenceRe.exec(text)) !== null) {
+              var lang = m[1].toLowerCase();
+              if (lang === 'html' || lang === 'svg') continue; // already handled
+              if (m[2].trim().length > 10) {
+                newArtifacts.push({ type: 'code', language: lang, content: m[2].trim(), timestamp: Date.now() });
+              }
+            }
+
+            // Detect file paths saved by Hermes (~/path/to/file.html, /Users/.../file.svg, etc.)
+            var filePathRe = /(~\/[^\s`"'<>]+\.(?:html|htm|svg|js|jsx|ts|tsx|py|css|json|xml|md))|((\/Users\/[^\s`"'<>]+\.(?:html|htm|svg|js|jsx|ts|tsx|py|css|json|xml|md)))/gi;
+            var detectedFiles = [];
+            while ((m = filePathRe.exec(text)) !== null) {
+              var filePath = m[0];
+              if (detectedFiles.indexOf(filePath) === -1) detectedFiles.push(filePath);
+            }
+            // Fetch each detected file from the local file endpoint
+            detectedFiles.forEach(function(fp) {
+              console.log('[Artifacts] Auto-loading file: ' + fp);
+              fetch('/api/localfile?path=' + encodeURIComponent(fp))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                  if (data.error) { console.warn('[Artifacts] Failed to load ' + fp + ': ' + data.error); return; }
+                  var art = { type: data.type, content: data.content, timestamp: Date.now(), fileName: data.name, filePath: fp };
+                  if (data.type === 'code') art.language = data.extension.replace('.', '');
+                  setArtifacts(function(prev) { return prev.concat([art]); });
+                  setShowTerminal(true);
+                  setArtifactPanelWide(true);
+                  addLocalLog('INFO  Loaded file artifact: ' + data.name);
+                })
+                .catch(function(err) { console.warn('[Artifacts] Error loading ' + fp, err); });
+            });
+
+            console.log('[Artifacts] Found ' + newArtifacts.length + ' inline artifact(s), ' + detectedFiles.length + ' file artifact(s)');
+            if (newArtifacts.length > 0) {
+              setArtifacts(function(prev) { return prev.concat(newArtifacts); });
+              setShowTerminal(true);
+              setArtifactPanelWide(true);
+              addLocalLog('INFO  Detected ' + newArtifacts.length + ' artifact(s) in response');
+            } else if (detectedFiles.length === 0) {
+              addLocalLog('INFO  No artifacts detected in response');
+            }
+          })(finalContent);
+
           // If Hermes ran tools but sent no text, show a placeholder
           var displayContent = finalContent;
           if (!finalContent.trim() && toolCalls.length > 0) {
@@ -4844,8 +5005,8 @@ function App() {
       </div>
 
       {/* Right column: Live Terminal */}
-      <div className={"right-column " + (showTerminal ? '' : 'closed')}>
-        <TerminalPanel isOpen={showTerminal} onClose={function(){setShowTerminal(false)}} localLogs={localLogs} />
+      <div className={"right-column" + (artifactPanelWide ? ' wide' : '') + (showTerminal ? '' : ' closed')}>
+        <TerminalPanel isOpen={showTerminal} onClose={function(){setShowTerminal(false); setArtifactPanelWide(false);}} localLogs={localLogs} artifacts={artifacts} onArtifactTab={function(isWide){ setArtifactPanelWide(isWide); if(isWide && !showTerminal) setShowTerminal(true); }} onAddArtifact={function(art){ setArtifacts(function(prev){ return prev.concat([art]); }); }} onRemoveArtifact={function(idx){ setArtifacts(function(prev){ return prev.filter(function(_,i){ return i !== idx; }); }); }} />
       </div>
 
       {/* Modals */}

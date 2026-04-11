@@ -8,6 +8,9 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
+### Artifact Panel
+![Artifact Panel](screenshots/screenshot-artifacts.png)
+
 ### Midnight (default)
 ![Midnight Theme](screenshots/screenshot-midnight.png)
 
@@ -36,12 +39,20 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 - System info panel (model, provider, uptime)
 - Hermes configuration overview
 
+**Artifact Panel**
+- 5th tab in the live terminal panel (alongside Gateway, Errors, Web UI, All)
+- Auto-detects HTML, SVG, and code blocks in Hermes responses and renders them live
+- Auto-detects file paths Hermes saves to disk (e.g. `~/Desktop/page.html`) and loads them automatically — no need to copy-paste code
+- Panel dynamically widens from 320px to 600px when Artifacts tab is active
+- Sandboxed iframe rendering for HTML/SVG with full animation and JavaScript support
+- Syntax-highlighted code blocks for Python, JS, CSS, and other languages
+- Per-artifact Copy and close (✕) buttons
+- Manual "Load File" button to open any local HTML/SVG/code file directly in the panel
+- Scroll position preserved when switching between tabs
+
 **Terminal**
-- Tabbed interface: Live Logs, Shell, Hermes Chat, Claude Code
-- Real-time gateway and error log streaming via SSE
-- Shell command execution
-- Hermes chat with persistent sessions
-- Claude Code CLI integration with conversation continuity
+- Tabbed interface: Gateway, Errors, Web UI, All — real-time log streaming via SSE
+- Live connection indicator with line count
 
 **File Browser**
 - Browse `~/.hermes` directory tree
