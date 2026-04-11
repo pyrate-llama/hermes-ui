@@ -4224,6 +4224,18 @@ function App() {
   };
 
   const selectConversation = (convId) => {
+    // Save current messages back to the conversation before switching.
+    // Use functional updater on setMessages to capture the latest state
+    // (streaming may have updated it since last render).
+    const prevConvId = activeConvId;
+    if (prevConvId) {
+      setMessages(currentMsgs => {
+        setConversations(prev =>
+          prev.map(c => c.id === prevConvId ? { ...c, messages: currentMsgs } : c)
+        );
+        return currentMsgs;
+      });
+    }
     setActiveConvId(convId);
     // Messages are stored in the conversation object (client-side)
     const conv = conversations.find(c => c.id === convId);
