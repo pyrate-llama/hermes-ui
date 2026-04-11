@@ -3775,7 +3775,15 @@ function App() {
     _setActiveConvId(id);
     try { if (id) localStorage.setItem('hermes-active-session', id); else localStorage.removeItem('hermes-active-session'); } catch(e) {}
   };
-  const [messages, setMessages] = useState([]);
+  const [messages, _setMessages] = useState([]);
+  const setMessages = (val) => {
+    if (typeof val === 'function') {
+      _setMessages(prev => { const next = val(prev); messagesRef.current = next; return next; });
+    } else {
+      messagesRef.current = val;
+      _setMessages(val);
+    }
+  };
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -3831,6 +3839,7 @@ function App() {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const messagesRef = useRef([]);
   const activityLogRef = useRef(null);
 
   // Health check
@@ -4225,16 +4234,13 @@ function App() {
 
   const selectConversation = (convId) => {
     // Save current messages back to the conversation before switching.
-    // Use functional updater on setMessages to capture the latest state
-    // (streaming may have updated it since last render).
+    // messagesRef.current always has the latest value, even mid-stream.
     const prevConvId = activeConvId;
-    if (prevConvId) {
-      setMessages(currentMsgs => {
-        setConversations(prev =>
-          prev.map(c => c.id === prevConvId ? { ...c, messages: currentMsgs } : c)
-        );
-        return currentMsgs;
-      });
+    if (prevConvId && messagesRef.current.length > 0) {
+      const snapshot = messagesRef.current;
+      setConversations(prev =>
+        prev.map(c => c.id === prevConvId ? { ...c, messages: snapshot } : c)
+      );
     }
     setActiveConvId(convId);
     // Messages are stored in the conversation object (client-side)
