@@ -1046,32 +1046,42 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps(data).encode())
 
     def _cron_list(self):
-        """Parse hermes cron list --all and return JSON."""
-        import subprocess, re
+        """Read cron jobs from jobs.json directly — includes prompts, scripts, and all metadata."""
+        jobs_file = HERMES_HOME / "cron" / "jobs.json"
         try:
-            result = subprocess.run(
-                ["hermes", "cron", "list", "--all"],
-                capture_output=True, text=True, timeout=15
-            )
-            output = result.stdout + result.stderr
+            if not jobs_file.exists():
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"jobs": []}).encode())
+                return
+
+            raw = json.loads(jobs_file.read_text(encoding="utf-8"))
+            raw_jobs = raw.get("jobs", [])
+
+            # Normalize to the shape the UI expects
             jobs = []
-            current = None
-            for line in output.splitlines():
-                # Match job header: "  abc123def456 [active]" or "[disabled]"
-                m = re.match(r'^\s+([a-f0-9]{12})\s+\[(\w+)\]', line)
-                if m:
-                    if current:
-                        jobs.append(current)
-                    current = {"id": m.group(1), "status": m.group(2)}
-                    continue
-                if current:
-                    # Match key-value pairs like "    Name:      Foo Bar"
-                    kv = re.match(r'^\s+(Name|Schedule|Repeat|Next run|Deliver|Skills|Script|Last run|Runs):\s+(.+)', line)
-                    if kv:
-                        key = kv.group(1).lower().replace(' ', '_')
-                        current[key] = kv.group(2).strip()
-            if current:
-                jobs.append(current)
+            for j in raw_jobs:
+                sched = j.get("schedule", {})
+                sched_expr = sched.get("expr", "") if isinstance(sched, dict) else str(sched)
+                job = {
+                    "id": j.get("id", ""),
+                    "name": j.get("name", ""),
+                    "status": "active" if j.get("enabled") else "disabled",
+                    "state": j.get("state", ""),
+                    "schedule": sched_expr,
+                    "prompt": j.get("prompt", ""),
+                    "script": j.get("script", ""),
+                    "skills": j.get("skill", "") or ", ".join(j.get("skills", [])),
+                    "deliver": j.get("deliver", ""),
+                    "next_run": j.get("next_run_at", ""),
+                    "last_run": j.get("last_run_at", ""),
+                    "last_status": j.get("last_status", ""),
+                    "last_error": j.get("last_error", ""),
+                    "repeat": str(j.get("repeat", {}).get("times", "")) if isinstance(j.get("repeat"), dict) else str(j.get("repeat", "")),
+                }
+                jobs.append(job)
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

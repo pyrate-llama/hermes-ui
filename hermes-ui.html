@@ -3003,15 +3003,10 @@ function JobsView() {
 
   var fetchJobs = async function() {
     try {
-      var r = await fetch(API_BASE + '/terminal/exec', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({command: 'hermes cron list --all'})
-      });
+      var r = await fetch(API_BASE + '/cron/list');
       if (r.ok) {
         var data = await r.json();
-        var parsed = parseCronOutput(data.output || '');
-        setJobs(parsed);
+        setJobs(data.jobs || []);
         setError(null);
       }
     } catch(e) { setError('Failed to fetch cron jobs'); }
@@ -3061,6 +3056,7 @@ function JobsView() {
       skills: job.skills || '',
       script: job.script || '',
       repeat: job.repeat || '',
+      last_status: job.last_status || '',
     });
   };
 
@@ -3149,6 +3145,21 @@ function JobsView() {
               {job.script && (
                 <div style={{marginTop:'8px',fontSize:'10px',color:'var(--text-muted)',fontFamily:'JetBrains Mono, monospace',opacity:0.7}}>
                   Script: {job.script}
+                </div>
+              )}
+
+              {job.prompt && (
+                <details style={{marginTop:'8px'}}>
+                  <summary style={{fontSize:'11px',color:'var(--accent)',cursor:'pointer',userSelect:'none',fontWeight:500}}>
+                    {'📝'} Prompt ({job.prompt.length > 200 ? Math.round(job.prompt.length / 100) * 100 + '+ chars' : job.prompt.length + ' chars'})
+                  </summary>
+                  <pre style={{marginTop:'6px',fontSize:'11px',color:'var(--text-secondary)',fontFamily:'JetBrains Mono, monospace',background:'var(--bg-primary)',padding:'10px 12px',borderRadius:'6px',whiteSpace:'pre-wrap',wordBreak:'break-word',maxHeight:'300px',overflowY:'auto',border:'1px solid var(--border)',lineHeight:1.5}}>{job.prompt}</pre>
+                </details>
+              )}
+
+              {job.last_error && (
+                <div style={{marginTop:'8px',fontSize:'11px',color:'var(--error)',fontFamily:'JetBrains Mono, monospace',background:'rgba(248,81,73,0.08)',padding:'6px 10px',borderRadius:'6px',border:'1px solid rgba(248,81,73,0.2)'}}>
+                  {'⚠️'} {job.last_error}
                 </div>
               )}
 
