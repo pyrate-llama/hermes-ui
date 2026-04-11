@@ -55,7 +55,7 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 3333
 DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Log files to watch
-HERMES_HOME = Path.home() / ".hermes"
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 LOG_FILES = {
     "gateway": HERMES_HOME / "logs" / "gateway.log",
     "errors": HERMES_HOME / "logs" / "errors.log",
