@@ -642,10 +642,12 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"error": str(e)}).encode())
 
     def _sessions_chat_stream(self, session_id):
-        """Handle streaming chat request — forward to /v1/chat/completions (stream:true) and emit SSE."""
+        """Handle streaming chat request — forward to /v1/chat/completions (stream:true) and emit SSE.
+
+        Uses http.client for proper HTTP handling and makefile() for line-buffered
+        reads — each SSE line is forwarded the instant it arrives, no select() polling.
+        """
         import http.client
-        import select
-        import socket
         from urllib.parse import urlparse
 
         content_length = int(self.headers.get("Content-Length", 0))
@@ -653,23 +655,13 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         try:
             data = json.loads(body)
         except:
-            body = b'{}'
             data = {}
 
         message = data.get("message", data.get("content", ""))
 
-        # Use socket directly for non-blocking streaming
         parsed = urlparse(HERMES)
-        if ":" in parsed.netloc:
-            host, port_str = parsed.netloc.rsplit(":", 1)
-            port = int(port_str)
-        else:
-            host = parsed.netloc
-            port = 80
-
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(60)
-        sock.connect((host, port))
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or 80
 
         forward_body = json.dumps({
             "model": "hermes-agent",
@@ -677,117 +669,95 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             "stream": True
         }).encode()
 
-        request = (
-            f"POST /v1/chat/completions HTTP/1.1\r\n"
-            f"Host: {parsed.netloc}\r\n"
-            f"Content-Type: application/json\r\n"
-            f"Accept: text/event-stream\r\n"
-            f"Content-Length: {len(forward_body)}\r\n"
-            f"Connection: close\r\n"
-            f"\r\n"
-        ).encode() + forward_body
+        try:
+            conn = http.client.HTTPConnection(host, port, timeout=300)
+            hdrs = {
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream",
+                "X-Hermes-Session-Id": session_id,
+            }
+            conn.request("POST", "/v1/chat/completions", body=forward_body, headers=hdrs)
+            resp = conn.getresponse()
+        except Exception as e:
+            self.send_response(502)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": f"Hermes connection failed: {e}"}).encode())
+            return
 
-        sock.sendall(request)
-
-        # Read response headers
-        response_data = b""
-        while b"\r\n\r\n" not in response_data:
-            chunk = sock.recv(4096)
-            if not chunk:
-                sock.close()
-                return
-            response_data += chunk
-
-        header_end = response_data.index(b"\r\n\r\n")
-        headers = response_data[:header_end].decode("utf-8", errors="replace")
-        body_data = response_data[header_end + 4:]
-
-        # Parse status line
-        status_line = headers.split("\r\n")[0]
-        status_code = int(status_line.split()[1])
-
-        self.send_response(status_code)
+        self.send_response(resp.status)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
         self.send_header("Access-Control-Allow-Origin", "*")
+        # Forward session header if Hermes sent one
+        sid_hdr = resp.getheader("X-Hermes-Session-Id")
+        if sid_hdr:
+            self.send_header("X-Hermes-Session-Id", sid_hdr)
         self.end_headers()
 
-        # Forward body data we already read
-        if body_data:
-            self.wfile.write(body_data)
-            self.wfile.flush()
-
+        # Use makefile for line-buffered reads — each line flushes immediately
+        # instead of waiting for a socket buffer or select() timeout.
+        sock = resp.fp  # the raw socket file object
         full_content = ""
-        buffer = b""
 
-        while True:
-            try:
-                ready, _, _ = select.select([sock], [], [], 2)
-                if not ready:
-                    # Timeout — flush accumulated buffer
-                    if buffer:
-                        for line in buffer.decode("utf-8", errors="replace").split("\n"):
-                            if not line.strip():
-                                continue
-                            if line.startswith("data:"):
-                                data_str = line[5:].strip()
-                                if data_str == "[DONE]":
-                                    done_data = json.dumps({"content": full_content})
-                                    self.wfile.write(f"event: assistant.completed\ndata: {done_data}\n\n".encode())
-                                    self.wfile.flush()
-                                    sock.close()
-                                    return
-                                try:
-                                    d = json.loads(data_str)
-                                    delta = d.get("choices", [{}])[0].get("delta", {}).get("content", "")
-                                    if delta:
-                                        full_content += delta
-                                        event_data = json.dumps({"delta": delta})
-                                        self.wfile.write(f"event: assistant.delta\ndata: {event_data}\n\n".encode())
-                                        self.wfile.flush()
-                                except Exception:
-                                    pass
-                        buffer = b""
-                    continue
-                chunk = sock.recv(4096)
-                if not chunk:
-                    break
-                buffer += chunk
-
-                while b"\n" in buffer:
-                    line, buffer = buffer.split(b"\n", 1)
-                    line = line.rstrip(b"\r")
-                    if not line.startswith(b"data:"):
-                        continue
-                    data_str = line[5:].strip().decode("utf-8", errors="replace")
-                    if data_str == "[DONE]":
-                        done_data = json.dumps({"content": full_content})
-                        self.wfile.write(f"event: assistant.completed\ndata: {done_data}\n\n".encode())
-                        self.wfile.flush()
-                        sock.close()
-                        return
-                    try:
-                        d = json.loads(data_str)
-                        delta = d.get("choices", [{}])[0].get("delta", {}).get("content", "")
-                        if delta:
-                            full_content += delta
-                            event_data = json.dumps({"delta": delta})
-                            self.wfile.write(f"event: assistant.delta\ndata: {event_data}\n\n".encode())
-                            self.wfile.flush()
-                    except Exception:
-                        pass
-            except Exception:
-                break
-
-        # If we exited due to timeout/close, send completion
         try:
-            done_data = json.dumps({"content": full_content})
-            self.wfile.write(f"event: assistant.completed\ndata: {done_data}\n\n".encode())
-            self.wfile.flush()
+            while True:
+                line = sock.readline()
+                if not line:
+                    break
+                line = line.rstrip(b"\r\n")
+                if not line.startswith(b"data:"):
+                    # Forward raw SSE lines (event:, comments, blank lines for framing)
+                    self.wfile.write(line + b"\n")
+                    if line == b"":
+                        self.wfile.flush()
+                    continue
+
+                data_str = line[5:].strip().decode("utf-8", errors="replace")
+
+                if data_str == "[DONE]":
+                    done_data = json.dumps({"content": full_content})
+                    self.wfile.write(f"event: assistant.completed\ndata: {done_data}\n\n".encode())
+                    self.wfile.flush()
+                    break
+
+                try:
+                    d = json.loads(data_str)
+                    delta = d.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                    if delta:
+                        full_content += delta
+                        event_data = json.dumps({"delta": delta})
+                        self.wfile.write(f"event: assistant.delta\ndata: {event_data}\n\n".encode())
+                        self.wfile.flush()
+                    # Forward tool_calls deltas if present
+                    tool_delta = d.get("choices", [{}])[0].get("delta", {}).get("tool_calls")
+                    if tool_delta:
+                        event_data = json.dumps({"tool_calls": tool_delta})
+                        self.wfile.write(f"event: assistant.tool\ndata: {event_data}\n\n".encode())
+                        self.wfile.flush()
+                except json.JSONDecodeError:
+                    # Forward unparseable data lines raw
+                    self.wfile.write(line + b"\n\n")
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
         except Exception:
             pass
-        sock.close()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        # Send completion if we didn't already
+        try:
+            if not full_content or data_str != "[DONE]":
+                done_data = json.dumps({"content": full_content})
+                self.wfile.write(f"event: assistant.completed\ndata: {done_data}\n\n".encode())
+                self.wfile.flush()
+        except Exception:
+            pass
 
     def _skills_list(self):
         """List all installed skills by scanning ~/.hermes/skills/ directories."""
