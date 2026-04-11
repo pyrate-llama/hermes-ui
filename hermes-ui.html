@@ -3793,7 +3793,7 @@ function App() {
   const [pendingImages, setPendingImages] = useState([]);
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth <= 768);
   const [activityLog, setActivityLog] = useState([]);
   const [activityPanelOpen, setActivityPanelOpen] = useState(() => {
     try {
