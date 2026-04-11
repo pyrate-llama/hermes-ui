@@ -3818,8 +3818,24 @@ function App() {
   };
 
   const [input, setInput] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
+  // Per-conversation streaming state: Map<sessionId, { abortController, paused }>
+  const streamingMap = useRef({});
+  const [streamingSessionIds, setStreamingSessionIds] = useState([]);
+  // Derived: is the CURRENT conversation streaming/paused?
+  const isStreaming = streamingSessionIds.includes(activeConvId);
+  const isPaused = !!(streamingMap.current[activeConvId] && streamingMap.current[activeConvId].paused);
+
+  const startStreaming = (sessionId, abortCtrl) => {
+    streamingMap.current[sessionId] = { abortController: abortCtrl, paused: false };
+    setStreamingSessionIds(prev => prev.includes(sessionId) ? prev : [...prev, sessionId]);
+  };
+  const stopStreaming = (sessionId) => {
+    delete streamingMap.current[sessionId];
+    setStreamingSessionIds(prev => prev.filter(id => id !== sessionId));
+  };
+  const getStreamAbort = (sessionId) => {
+    return streamingMap.current[sessionId] && streamingMap.current[sessionId].abortController;
+  };
   const [personality, setPersonality] = useState('default');
   const [connected, setConnected] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -3871,7 +3887,7 @@ function App() {
   const textareaRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
-  const abortControllerRef = useRef(null);
+  // abortControllerRef removed — now in streamingMap per-session
   const messagesRef = useRef([]);
   const activeConvRef = useRef(null);
   const conversationsRef = useRef([]);
@@ -4399,9 +4415,10 @@ function App() {
 
   // ── Send message ──
   const sendMessage = async (text) => {
-    if ((!text.trim() && !pendingImages.length) || isStreaming) return;
-
+    if ((!text.trim() && !pendingImages.length)) return;
+    // Block only if THIS conversation is already streaming
     var sessionId = activeConvId;
+    if (sessionId && streamingMap.current[sessionId]) return;
 
     // Safety net: if React state lost activeConvId, try recovering from localStorage
     if (!sessionId) {
@@ -4447,8 +4464,7 @@ function App() {
     );
 
     const abortCtrl = new AbortController();
-    abortControllerRef.current = abortCtrl;
-    setIsStreaming(true);
+    startStreaming(sessionId, abortCtrl);
     setActivityLog([]);
     addLocalLog('INFO  Sending message to session ' + sessionId);
     var fetchStart = Date.now();
@@ -4481,7 +4497,7 @@ function App() {
             .catch(function() { return false; })
             .then(function(alive) {
               healthCheckPending = false;
-              if (!alive && abortControllerRef.current) {
+              if (!alive && getStreamAbort(sessionId)) {
                 addLocalLog('WARN  Hermes health check FAILED — aborting');
                 updateStreamMessages(sessionId, function(prev) {
                   var updated = [...prev];
@@ -4491,7 +4507,7 @@ function App() {
                   }
                   return updated;
                 });
-                abortControllerRef.current.abort();
+                var ac = getStreamAbort(sessionId); if (ac) ac.abort();
                 clearInterval(thinkingInterval);
               } else {
                 // Hermes is alive — DON'T abort, just keep waiting
@@ -4505,7 +4521,7 @@ function App() {
       }
       var elapsed = Math.round((Date.now() - thinkingStart) / 1000);
       addLocalLog('INFO  ... thinking (' + elapsed + 's elapsed)');
-      if (elapsed >= NO_RESPONSE_TIMEOUT_S && abortControllerRef.current) {
+      if (elapsed >= NO_RESPONSE_TIMEOUT_S && getStreamAbort(sessionId)) {
         addLocalLog('WARN  No response after ' + NO_RESPONSE_TIMEOUT_S + 's — aborting. Try stopping and resending.');
         updateStreamMessages(sessionId, function(prev) {
           var updated = [...prev];
@@ -4515,7 +4531,7 @@ function App() {
           }
           return updated;
         });
-        abortControllerRef.current.abort();
+        var ac2 = getStreamAbort(sessionId); if (ac2) ac2.abort();
         clearInterval(thinkingInterval);
       }
     }, 5000);
@@ -4730,8 +4746,7 @@ function App() {
       ThinkingBubble._latestThought = '';
       var totalTime = Math.round((Date.now() - thinkingStart) / 1000);
       addLocalLog('INFO  Response complete (' + toolCalls.length + ' tool calls, ' + fullContent.length + ' chars, ' + totalTime + 's total)');
-      setIsStreaming(false);
-      abortControllerRef.current = null;
+      stopStreaming(sessionId);
       // Final sync: persist messages into conversation for localStorage save.
       // updateStreamMessages already keeps conversations in sync during streaming,
       // but do one final write from messagesRef to be safe.
@@ -4751,27 +4766,37 @@ function App() {
   // ── Pause / Stop / Interject ──
   const sendInterjection = async (text) => {
     if (!text.trim()) return;
-    setIsPaused(false);
+    // Unpause current conversation
+    if (streamingMap.current[activeConvId]) streamingMap.current[activeConvId].paused = false;
+    setStreamingSessionIds(prev => [...prev]); // force re-render
     await sendMessage(text);
   };
 
   const pauseStreaming = () => {
-    setIsPaused(true);
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setIsStreaming(false);
+    const sid = activeConvId;
+    if (!sid) return;
+    var entry = streamingMap.current[sid];
+    if (entry) {
+      entry.paused = true;
+      entry.abortController.abort();
     }
+    stopStreaming(sid);
   };
 
-  const stopStreaming = () => {
-    setIsPaused(false);
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setIsStreaming(false);
+  const stopStreamingAction = () => {
+    const sid = activeConvId;
+    if (!sid) return;
+    var entry = streamingMap.current[sid];
+    if (entry) {
+      entry.abortController.abort();
     }
+    stopStreaming(sid);
   };
 
-  const cancelPause = () => { setIsPaused(false); };
+  const cancelPause = () => {
+    if (streamingMap.current[activeConvId]) streamingMap.current[activeConvId].paused = false;
+    setStreamingSessionIds(prev => [...prev]); // force re-render
+  };
 
   // ── Message editing ──
   const startEditMessage = (messageId, currentContent) => {
@@ -4937,7 +4962,7 @@ function App() {
         <div className="conversation-list" style={{display: currentView === 'chat' ? 'block' : 'none'}}>
           {filteredConvs.map(conv => (
             <div key={conv.id} className={"conv-item " + (conv.id === activeConvId ? 'active' : '')} onClick={() => selectConversation(conv.id)}>
-              <div className="conv-item-icon">{conv.source === 'telegram' ? '✈️' : '💬'}</div>
+              <div className="conv-item-icon">{streamingSessionIds.includes(conv.id) ? '⚡' : conv.source === 'telegram' ? '✈️' : '💬'}</div>
               <div className="conv-item-text">
                 {editingConvId === conv.id ? (
                   <input className="conv-rename-input" value={editingTitle} autoFocus
@@ -5090,7 +5115,7 @@ function App() {
                         <button className="send-btn pause-btn" onClick={pauseStreaming} title="Pause to interject">
                           <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
                         </button>
-                        <button className="send-btn stop-btn" onClick={stopStreaming} title="Stop">
+                        <button className="send-btn stop-btn" onClick={stopStreamingAction} title="Stop">
                           <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
                         </button>
                       </React.Fragment>
