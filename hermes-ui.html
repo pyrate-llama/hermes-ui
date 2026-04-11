@@ -3767,7 +3767,15 @@ function App() {
     }
   });
 
-  const [conversations, setConversations] = useState([]);
+  const [conversations, _setConversations] = useState([]);
+  const setConversations = (val) => {
+    if (typeof val === 'function') {
+      _setConversations(prev => { const next = val(prev); conversationsRef.current = next; return next; });
+    } else {
+      conversationsRef.current = val;
+      _setConversations(val);
+    }
+  };
   const [activeConvId, _setActiveConvId] = useState(() => {
     var saved = null;
     try { saved = localStorage.getItem('hermes-active-session') || null; } catch(e) {}
@@ -3802,7 +3810,9 @@ function App() {
       prev.map(c => {
         if (c.id !== sessionId) return c;
         const updated = updater(c.messages || []);
-        return { ...c, messages: updated };
+        const userMsgs = updated.filter(m => m.role === 'user').length;
+        const tcCount = updated.reduce((sum, m) => sum + (m.toolCalls ? m.toolCalls.length : 0), 0);
+        return { ...c, messages: updated, message_count: updated.length, user_prompt_count: userMsgs, tool_call_count: tcCount };
       })
     );
   };
@@ -3864,6 +3874,7 @@ function App() {
   const abortControllerRef = useRef(null);
   const messagesRef = useRef([]);
   const activeConvRef = useRef(null);
+  const conversationsRef = useRef([]);
   const activityLogRef = useRef(null);
 
   // Health check
@@ -4257,23 +4268,22 @@ function App() {
   };
 
   const selectConversation = (convId) => {
-    // Save current messages and load new conversation's messages in one
-    // setConversations call so we always read the freshest state.
+    // 1. Save current messages to the old conversation
     const prevConvId = activeConvRef.current;
     const snapshot = messagesRef.current;
-
-    setConversations(prev => {
-      // 1. Save current messages to the old conversation
-      let updated = prev;
-      if (prevConvId && snapshot.length > 0) {
-        updated = prev.map(c => c.id === prevConvId ? { ...c, messages: snapshot } : c);
-      }
-      // 2. Load the target conversation's messages from the freshest state
-      const targetConv = updated.find(c => c.id === convId);
-      setMessages((targetConv && targetConv.messages) || []);
-      return updated;
-    });
-
+    if (prevConvId && snapshot.length > 0) {
+      setConversations(prev =>
+        prev.map(c => {
+          if (c.id !== prevConvId) return c;
+          var userMsgs = snapshot.filter(m => m.role === 'user').length;
+          var tcCount = snapshot.reduce((sum, m) => sum + (m.toolCalls ? m.toolCalls.length : 0), 0);
+          return { ...c, messages: snapshot, message_count: snapshot.length, user_prompt_count: userMsgs, tool_call_count: tcCount };
+        })
+      );
+    }
+    // 2. Load target conversation's messages from the ref (always fresh)
+    const targetConv = conversationsRef.current.find(c => c.id === convId);
+    setMessages((targetConv && targetConv.messages) || []);
     setActiveConvId(convId);
     setInput('');
   };
@@ -4352,6 +4362,7 @@ function App() {
           const conv = cleanConvs.find(c => c.id === savedId);
           if (conv) {
             _setActiveConvId(savedId);
+            activeConvRef.current = savedId;
             setMessages(conv.messages || []);
           }
         }
@@ -4398,6 +4409,7 @@ function App() {
       if (sessionId) {
         console.warn('[hermes-ui] Recovered activeConvId from localStorage:', sessionId);
         _setActiveConvId(sessionId);
+        activeConvRef.current = sessionId;
       }
     }
 
