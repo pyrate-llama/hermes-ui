@@ -1620,10 +1620,30 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
   const [geminiKey, setGeminiKey] = useState(config.geminiKey || '');
   const [baseSystemPrompt, setBaseSystemPrompt] = useState(config.baseSystemPrompt || '');
   const [settingsTab, setSettingsTab] = useState('general');
+  const [serverStatus, setServerStatus] = useState(null);
 
   const handleSave = () => {
     onSave({ apiUrl: config.apiUrl, geminiKey, baseSystemPrompt });
     onClose();
+  };
+
+  const handleRestart = async () => {
+    setServerStatus('Restarting server...');
+    try {
+      await fetch(API_BASE + '/server/restart', { method: 'POST' });
+      setServerStatus('Server restarting — refreshing in 3s...');
+      setTimeout(() => window.location.reload(), 3000);
+    } catch(e) { setServerStatus('Restart signal sent — refreshing in 3s...'); setTimeout(() => window.location.reload(), 3000); }
+  };
+
+  const handlePullRestart = async () => {
+    setServerStatus('Pulling updates & restarting...');
+    try {
+      var r = await fetch(API_BASE + '/server/pull-restart', { method: 'POST' });
+      var data = await r.json();
+      setServerStatus('Pull: ' + (data.pull || 'done') + ' — refreshing in 3s...');
+      setTimeout(() => window.location.reload(), 3000);
+    } catch(e) { setServerStatus('Update signal sent — refreshing in 3s...'); setTimeout(() => window.location.reload(), 3000); }
   };
 
   return (
@@ -1631,11 +1651,11 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
       <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth:'560px',maxHeight:'85vh',overflow:'auto'}}>
         <div className="modal-title">Settings</div>
         <div style={{display:'flex',gap:'4px',marginBottom:'16px'}}>
-          {['general','remote'].map(function(tab) {
+          {['general','server','remote'].map(function(tab) {
             return (
               <button key={tab} onClick={function(){ setSettingsTab(tab); }}
                 style={{background: settingsTab === tab ? 'var(--accent)' : 'var(--bg-tertiary)', color: settingsTab === tab ? 'white' : 'var(--text-secondary)', border:'1px solid ' + (settingsTab === tab ? 'var(--accent)' : 'var(--border)'), borderRadius:'8px', padding:'6px 14px', fontSize:'12px', cursor:'pointer', fontWeight: settingsTab === tab ? '600' : '400', textTransform:'capitalize'}}>
-                {tab === 'general' ? 'General' : 'Remote Access'}
+                {tab === 'general' ? 'General' : tab === 'server' ? 'Server' : 'Remote Access'}
               </button>
             );
           })}
@@ -1668,6 +1688,50 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
               <div className="config-item">
                 <span>Session Mode</span>
                 <span className="config-value">API-based (v2)</span>
+              </div>
+            </div>
+          </React.Fragment>
+        ) : settingsTab === 'server' ? (
+          <React.Fragment>
+            <div style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'10px',padding:'16px',marginBottom:'16px'}}>
+              <div style={{fontSize:'14px',fontWeight:'600',color:'var(--text-primary)',marginBottom:'8px',display:'flex',alignItems:'center',gap:'8px'}}>
+                <span>{'🔧'}</span> Server Management
+              </div>
+              <div style={{fontSize:'12px',color:'var(--text-secondary)',lineHeight:'1.6'}}>
+                Restart the proxy server or pull the latest updates from GitHub. The UI will automatically refresh after a restart.
+              </div>
+            </div>
+
+            <div style={{display:'flex',gap:'10px',marginBottom:'16px'}}>
+              <button onClick={handleRestart} style={{flex:1,background:'var(--bg-tertiary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
+                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'🔄'} Restart Server</div>
+                <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>Restart serve.py without pulling updates</div>
+              </button>
+              <button onClick={handlePullRestart} style={{flex:1,background:'var(--accent)',color:'white',border:'none',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
+                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'⬆'} Update &amp; Restart</div>
+                <div style={{fontSize:'11px',color:'rgba(255,255,255,0.8)'}}>Git pull + restart server + refresh UI</div>
+              </button>
+            </div>
+
+            {serverStatus && (
+              <div style={{background:'rgba(68,216,138,0.08)',border:'1px solid rgba(68,216,138,0.2)',borderRadius:'8px',padding:'12px',fontSize:'12px',color:'var(--success)',lineHeight:'1.5',marginBottom:'16px',fontFamily:'JetBrains Mono, monospace'}}>
+                {serverStatus}
+              </div>
+            )}
+
+            <div className="config-panel">
+              <div className="config-section-title">Server Info</div>
+              <div className="config-item">
+                <span>Proxy Server</span>
+                <span className="config-value">serve.py on port {window.location.port || '3333'}</span>
+              </div>
+              <div className="config-item">
+                <span>Hermes WebAPI</span>
+                <span className="config-value">127.0.0.1:8642</span>
+              </div>
+              <div className="config-item">
+                <span>Quick Refresh</span>
+                <span className="config-value" style={{cursor:'pointer',color:'var(--accent)'}} onClick={function(){ window.location.reload(); }}>Click to reload UI</span>
               </div>
             </div>
           </React.Fragment>
