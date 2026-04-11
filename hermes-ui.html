@@ -5088,7 +5088,14 @@ function App() {
                 {isPaused && (
                   <div className="paused-banner">
                     <span className="paused-banner-text">{'⏸ Paused — type an interjection or resume'}</span>
-                    <button className="cancel-resume" onClick={() => { cancelPause(); sendMessage('continue'); }} style={{background:'var(--accent)',color:'white',border:'none',borderRadius:'6px',padding:'4px 12px',fontSize:'12px',cursor:'pointer',fontWeight:600}}>Resume</button>
+                    <button className="cancel-resume" onClick={() => {
+                      var lastMsg = messagesRef.current.filter(m => m.role === 'assistant').pop();
+                      var tail = lastMsg && lastMsg.content ? lastMsg.content.trim().slice(-300) : '';
+                      var resumePrompt = tail
+                        ? '[I paused your response. Here is the last part you wrote before I paused:]\n\n"...' + tail + '"\n\nPlease continue exactly where you left off.'
+                        : 'I paused your response — please continue exactly where you left off.';
+                      cancelPause(); sendMessage(resumePrompt);
+                    }} style={{background:'var(--accent)',color:'white',border:'none',borderRadius:'6px',padding:'4px 12px',fontSize:'12px',cursor:'pointer',fontWeight:600}}>Resume</button>
                     <button className="cancel-resume" onClick={cancelPause}>Dismiss</button>
                   </div>
                 )}
