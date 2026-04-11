@@ -3823,7 +3823,7 @@ function App() {
   const [streamingSessionIds, setStreamingSessionIds] = useState([]);
   // Derived: is the CURRENT conversation streaming/paused?
   const isStreaming = streamingSessionIds.includes(activeConvId);
-  const isPaused = !!(streamingMap.current[activeConvId] && streamingMap.current[activeConvId].paused);
+  // isPaused is now derived from pausedSessionIds (defined later with pause/stop functions)
 
   const startStreaming = (sessionId, abortCtrl) => {
     streamingMap.current[sessionId] = { abortController: abortCtrl, paused: false };
@@ -4766,21 +4766,23 @@ function App() {
   // ── Pause / Stop / Interject ──
   const sendInterjection = async (text) => {
     if (!text.trim()) return;
-    // Unpause current conversation
-    if (streamingMap.current[activeConvId]) streamingMap.current[activeConvId].paused = false;
-    setStreamingSessionIds(prev => [...prev]); // force re-render
+    setPausedSessionIds(prev => prev.filter(id => id !== activeConvId));
     await sendMessage(text);
   };
+
+  const [pausedSessionIds, setPausedSessionIds] = useState([]);
+  // Override isPaused to use dedicated state
+  const isPaused = pausedSessionIds.includes(activeConvId);
 
   const pauseStreaming = () => {
     const sid = activeConvId;
     if (!sid) return;
     var entry = streamingMap.current[sid];
     if (entry) {
-      entry.paused = true;
       entry.abortController.abort();
     }
     stopStreaming(sid);
+    setPausedSessionIds(prev => prev.includes(sid) ? prev : [...prev, sid]);
   };
 
   const stopStreamingAction = () => {
@@ -4791,11 +4793,11 @@ function App() {
       entry.abortController.abort();
     }
     stopStreaming(sid);
+    setPausedSessionIds(prev => prev.filter(id => id !== sid));
   };
 
   const cancelPause = () => {
-    if (streamingMap.current[activeConvId]) streamingMap.current[activeConvId].paused = false;
-    setStreamingSessionIds(prev => [...prev]); // force re-render
+    setPausedSessionIds(prev => prev.filter(id => id !== activeConvId));
   };
 
   // ── Message editing ──
