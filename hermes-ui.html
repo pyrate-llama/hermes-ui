@@ -5085,7 +5085,8 @@ function App() {
 
                 {isPaused && (
                   <div className="paused-banner">
-                    <span className="paused-banner-text">{'⏸ Paused — type your interjection and send'}</span>
+                    <span className="paused-banner-text">{'⏸ Paused — type an interjection or resume'}</span>
+                    <button className="cancel-resume" onClick={() => { cancelPause(); sendMessage('continue'); }} style={{background:'var(--accent)',color:'white',border:'none',borderRadius:'6px',padding:'4px 12px',fontSize:'12px',cursor:'pointer',fontWeight:600}}>Resume</button>
                     <button className="cancel-resume" onClick={cancelPause}>Dismiss</button>
                   </div>
                 )}
