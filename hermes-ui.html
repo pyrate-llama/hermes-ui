@@ -3769,10 +3769,13 @@ function App() {
 
   const [conversations, setConversations] = useState([]);
   const [activeConvId, _setActiveConvId] = useState(() => {
-    try { return localStorage.getItem('hermes-active-session') || null; } catch(e) { return null; }
+    var saved = null;
+    try { saved = localStorage.getItem('hermes-active-session') || null; } catch(e) {}
+    return saved;
   });
   const setActiveConvId = (id) => {
     _setActiveConvId(id);
+    activeConvRef.current = id;
     try { if (id) localStorage.setItem('hermes-active-session', id); else localStorage.removeItem('hermes-active-session'); } catch(e) {}
   };
   const [messages, _setMessages] = useState([]);
@@ -3784,6 +3787,26 @@ function App() {
       _setMessages(val);
     }
   };
+
+  // Helper: update messages for a specific session, even if the user has switched away.
+  // If the session is still active, updates messages state (fast, visible immediately).
+  // If the user switched to a different chat, writes to the conversations array instead
+  // so the data is preserved and visible when they switch back.
+  const updateStreamMessages = (sessionId, updater) => {
+    if (activeConvRef.current === sessionId) {
+      // Still viewing this conversation — update messages state normally
+      setMessages(updater);
+    }
+    // Always persist to conversations array so switching back loads the latest
+    setConversations(prev =>
+      prev.map(c => {
+        if (c.id !== sessionId) return c;
+        const updated = updater(c.messages || []);
+        return { ...c, messages: updated };
+      })
+    );
+  };
+
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -3840,6 +3863,7 @@ function App() {
   const fileInputRef = useRef(null);
   const abortControllerRef = useRef(null);
   const messagesRef = useRef([]);
+  const activeConvRef = useRef(null);
   const activityLogRef = useRef(null);
 
   // Health check
@@ -4233,19 +4257,24 @@ function App() {
   };
 
   const selectConversation = (convId) => {
-    // Save current messages back to the conversation before switching.
-    // messagesRef.current always has the latest value, even mid-stream.
-    const prevConvId = activeConvId;
-    if (prevConvId && messagesRef.current.length > 0) {
-      const snapshot = messagesRef.current;
-      setConversations(prev =>
-        prev.map(c => c.id === prevConvId ? { ...c, messages: snapshot } : c)
-      );
-    }
+    // Save current messages and load new conversation's messages in one
+    // setConversations call so we always read the freshest state.
+    const prevConvId = activeConvRef.current;
+    const snapshot = messagesRef.current;
+
+    setConversations(prev => {
+      // 1. Save current messages to the old conversation
+      let updated = prev;
+      if (prevConvId && snapshot.length > 0) {
+        updated = prev.map(c => c.id === prevConvId ? { ...c, messages: snapshot } : c);
+      }
+      // 2. Load the target conversation's messages from the freshest state
+      const targetConv = updated.find(c => c.id === convId);
+      setMessages((targetConv && targetConv.messages) || []);
+      return updated;
+    });
+
     setActiveConvId(convId);
-    // Messages are stored in the conversation object (client-side)
-    const conv = conversations.find(c => c.id === convId);
-    setMessages((conv && conv.messages) || []);
     setInput('');
   };
 
@@ -4442,7 +4471,7 @@ function App() {
               healthCheckPending = false;
               if (!alive && abortControllerRef.current) {
                 addLocalLog('WARN  Hermes health check FAILED — aborting');
-                setMessages(function(prev) {
+                updateStreamMessages(sessionId, function(prev) {
                   var updated = [...prev];
                   var last = updated[updated.length - 1];
                   if (last && last.role === 'assistant') {
@@ -4466,7 +4495,7 @@ function App() {
       addLocalLog('INFO  ... thinking (' + elapsed + 's elapsed)');
       if (elapsed >= NO_RESPONSE_TIMEOUT_S && abortControllerRef.current) {
         addLocalLog('WARN  No response after ' + NO_RESPONSE_TIMEOUT_S + 's — aborting. Try stopping and resending.');
-        setMessages(function(prev) {
+        updateStreamMessages(sessionId, function(prev) {
           var updated = [...prev];
           var last = updated[updated.length - 1];
           if (last && (last.thinking || last.streaming)) {
@@ -4505,7 +4534,7 @@ function App() {
           if (!thinkingGotResponse) { thinkingGotResponse = true; addLocalLog('INFO  First response received'); }
           lastChunkTime = Date.now();
           fullContent = content;
-          setMessages(function(prev) {
+          updateStreamMessages(sessionId, function(prev) {
             const updated = [...prev];
             var last = updated[updated.length - 1];
             if (last?.role === 'user') {
@@ -4606,7 +4635,7 @@ function App() {
           if (!finalContent.trim() && toolCalls.length > 0) {
             displayContent = '_Hermes completed ' + toolCalls.length + ' tool call' + (toolCalls.length > 1 ? 's' : '') + ' but didn\'t provide a summary. Try asking "what did you do?" for details._';
           }
-          setMessages(function(prev) {
+          updateStreamMessages(sessionId, function(prev) {
             const updated = [...prev];
             updated[updated.length - 1] = {
               ...updated[updated.length - 1],
@@ -4630,7 +4659,7 @@ function App() {
               done: false,
             });
             // Update the thinking/streaming message with tool calls
-            setMessages(function(prev) {
+            updateStreamMessages(sessionId, function(prev) {
               var updated = [...prev];
               var last = updated[updated.length - 1];
               if (last && last.role === 'assistant') {
@@ -4691,23 +4720,19 @@ function App() {
       addLocalLog('INFO  Response complete (' + toolCalls.length + ' tool calls, ' + fullContent.length + ' chars, ' + totalTime + 's total)');
       setIsStreaming(false);
       abortControllerRef.current = null;
-      // Persist final messages into conversation for localStorage save
-      setConversations(function(prev) {
-        return prev.map(function(c) {
-          if (c.id !== sessionId) return c;
-          // Grab current messages from the messages state updater
-          return c;  // will be synced by the useEffect that watches conversations
-        });
-      });
-      // Force-sync messages into the conversation object
-      setMessages(function(currentMsgs) {
+      // Final sync: persist messages into conversation for localStorage save.
+      // updateStreamMessages already keeps conversations in sync during streaming,
+      // but do one final write from messagesRef to be safe.
+      if (activeConvRef.current === sessionId) {
+        // Still viewing this conversation — sync from current messages state
         setConversations(function(prev) {
           return prev.map(function(c) {
-            return c.id === sessionId ? Object.assign({}, c, { messages: currentMsgs }) : c;
+            return c.id === sessionId ? Object.assign({}, c, { messages: messagesRef.current }) : c;
           });
         });
-        return currentMsgs;
-      });
+      }
+      // If user switched away, conversations array is already up-to-date
+      // from updateStreamMessages calls during streaming.
     }
   };
 
