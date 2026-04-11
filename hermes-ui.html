@@ -2087,7 +2087,7 @@ function DashboardView() {
     return m + 'm';
   }
 
-  var modelName = (health && (health.model || health.default_model)) || 'MiniMax-M2.7';
+  var modelName = (health && (health.model || health.default_model)) || 'Loading...';
   var uptime = health && health.uptime ? formatUptime(health.uptime) : '--';
 
   var statCards = [
@@ -3618,7 +3618,7 @@ function WelcomePopup({ onClose, onOpenRemoteSetup }) {
 /* ── Main App ── */
 /* ── Status Bar ── */
 function StatusBar({ connected, conversations }) {
-  var [stats, setStats] = useState({ model: 'MiniMax-M2.7', memory: 0, sessions: 0, uptime: '' });
+  var [stats, setStats] = useState({ model: '...', memory: 0, sessions: 0, uptime: '' });
 
   useEffect(function() {
     var fetchStats = async function() {
@@ -3627,7 +3627,7 @@ function StatusBar({ connected, conversations }) {
           fetch(API_BASE + '/api/memory').catch(function() { return null; }),
           fetch(API_BASE + '/health').catch(function() { return null; })
         ]);
-        var memCount = 0, model = 'MiniMax-M2.7', uptime = '';
+        var memCount = 0, model = '...', uptime = '';
         if (memR && memR.ok) {
           var md = await memR.json();
           if (md.targets) { for (var t = 0; t < md.targets.length; t++) { memCount += (md.targets[t].entries || []).length; } }

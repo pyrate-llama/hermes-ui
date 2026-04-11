@@ -1008,12 +1008,42 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self._config_fallback()
         elif self.path == "/api/ui-conversations":
             self._conversations_load()
-        elif self.path.startswith("/v1/") or self.path.startswith("/health") or self.path.startswith("/api/"):
+        elif self.path.startswith("/health"):
+            self._health_with_model()
+        elif self.path.startswith("/v1/") or self.path.startswith("/api/"):
             self._proxy()
         elif self.path.startswith("/logs/stream"):
             self._stream_logs()
         else:
             super().do_GET()
+
+    def _health_with_model(self):
+        """Proxy /health and inject the configured model name.
+
+        The Hermes WebAPI /health response doesn't include the model,
+        so the UI falls back to a hardcoded default. We enrich the
+        response with the model from config.yaml so the status bar
+        shows the correct model.
+        """
+        # Proxy the real health check
+        url = HERMES + self.path
+        try:
+            resp = urllib.request.urlopen(url, timeout=5)
+            data = json.loads(resp.read())
+        except Exception:
+            data = {"status": "ok"}
+
+        # Inject model if missing
+        if "model" not in data or isinstance(data["model"], dict):
+            resolved = self._resolve_model()
+            if resolved:
+                data["model"] = resolved
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode())
 
     def _cron_list(self):
         """Parse hermes cron list --all and return JSON."""
