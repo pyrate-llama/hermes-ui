@@ -4291,7 +4291,11 @@ function App() {
           if (m.thinking && !m.content) return null;
           return { ...m, streaming: false, thinking: false };
         }).filter(Boolean);
-        return { ...c, messages: cleaned };
+        // Recalculate message counts from actual data
+        var totalMsgs = cleaned.length;
+        var userMsgs = cleaned.filter(function(m) { return m.role === 'user'; }).length;
+        var toolCalls = cleaned.reduce(function(sum, m) { return sum + (m.toolCalls ? m.toolCalls.length : 0); }, 0);
+        return { ...c, messages: cleaned, message_count: totalMsgs, user_prompt_count: userMsgs, tool_call_count: toolCalls };
       });
 
       if (cleanConvs.length > 0) {
