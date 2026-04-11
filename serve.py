@@ -1300,7 +1300,11 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(resp.read())
 
     def do_POST(self):
-        if self.path == "/api/ui-conversations":
+        if self.path == "/server/restart":
+            self._server_restart()
+        elif self.path == "/server/pull-restart":
+            self._server_pull_restart()
+        elif self.path == "/api/ui-conversations":
             self._conversations_save()
         elif self.path.startswith("/writefile"):
             self._write_file()
@@ -1338,6 +1342,47 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
 
     def do_PATCH(self):
         self._proxy()
+
+    def _server_restart(self):
+        """Restart serve.py by re-executing the current process."""
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "restarting"}).encode())
+
+        def _do_restart():
+            time.sleep(0.5)  # let the response flush
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        threading.Thread(target=_do_restart, daemon=True).start()
+
+    def _server_pull_restart(self):
+        """Git pull then restart serve.py."""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["git", "pull", "--rebase"],
+                cwd=DIR,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            pull_output = (result.stdout + result.stderr).strip()
+        except Exception as e:
+            pull_output = f"git pull failed: {e}"
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "restarting", "pull": pull_output}).encode())
+
+        def _do_restart():
+            time.sleep(0.5)
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        threading.Thread(target=_do_restart, daemon=True).start()
 
     def do_OPTIONS(self):
         self.send_response(200)
