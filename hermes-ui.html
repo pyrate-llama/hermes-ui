@@ -836,14 +836,15 @@
   .terminal-panel.hidden { display: none; }
   .terminal-panel-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 6px 14px; background: var(--bg-secondary);
+    padding: 6px 8px; background: var(--bg-secondary);
     border-bottom: 1px solid var(--border); flex-shrink: 0;
-    overflow: hidden; max-height: 40px; white-space: nowrap;
+    max-height: 40px; white-space: nowrap; gap: 2px;
   }
   .terminal-tab {
-    padding: 4px 12px; font-size: 12px; font-weight: 600;
+    padding: 4px 8px; font-size: 11px; font-weight: 600;
     background: none; border: none; color: var(--text-muted);
     cursor: pointer; border-radius: 4px; transition: all 0.15s;
+    flex-shrink: 0;
   }
   .terminal-tab.active { background: var(--bg-active); color: var(--accent); }
   .terminal-tab:hover { color: var(--text-primary); }
