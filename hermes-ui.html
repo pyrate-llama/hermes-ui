@@ -4054,6 +4054,7 @@ function App() {
           model: 'hermes-agent',
           messages: [{ role: 'user', content: message }],
           stream: true,
+          stream_options: { include_usage: true },
         }),
         signal: signal,
       });
@@ -4070,6 +4071,7 @@ function App() {
       var _firstDataLogged = false;
       var buffer = '';
       var fullContent = '';
+      var streamUsage = null;  // Capture token usage from SSE stream
 
       // Reasoning tag parser state
       var rawContent = '';
@@ -4200,7 +4202,7 @@ function App() {
 
             if (dataStr === '[DONE]') {
               wrappedOnDone(fullContent);
-              return fullContent;
+              return { content: fullContent, usage: streamUsage };
             }
 
             try {
@@ -4208,6 +4210,12 @@ function App() {
               var choice = (parsed.choices && parsed.choices[0]) || {};
               var delta = choice.delta || {};
               var finishReason = choice.finish_reason;
+
+              // Capture token usage if present (OpenAI sends it in final chunk)
+              if (parsed.usage) {
+                streamUsage = parsed.usage;
+                console.log('[stream] Token usage:', JSON.stringify(parsed.usage));
+              }
 
               if (delta.content) {
                 // Check for tool progress markers before adding to content
@@ -4227,7 +4235,7 @@ function App() {
 
       // Stream ended without [DONE] — still fire onDone with what we have
       wrappedOnDone(fullContent);
-      return fullContent;
+      return { content: fullContent, usage: streamUsage };
     }
   };
 
@@ -4565,7 +4573,7 @@ function App() {
         }
       }
 
-      await api.chatStream(
+      var streamResult = await api.chatStream(
         sessionId,
         messageText,
         function(content) {
@@ -4757,16 +4765,46 @@ function App() {
       var totalTime = Math.round((Date.now() - thinkingStart) / 1000);
       addLocalLog('INFO  Response complete (' + toolCalls.length + ' tool calls, ' + fullContent.length + ' chars, ' + totalTime + 's total)');
       stopStreaming(sessionId);
-      // Final sync: persist messages into conversation for localStorage save.
+      // Capture token usage from stream result
+      var usage = streamResult && streamResult.usage;
+      // Fallback: estimate tokens from content if API didn't provide usage
+      if (!usage && fullContent.length > 0) {
+        // Rough estimate: ~4 chars per token for English text
+        var estOutputTokens = Math.ceil(fullContent.length / 4);
+        var estInputTokens = Math.ceil((text || '').length / 4);
+        usage = { prompt_tokens: estInputTokens, completion_tokens: estOutputTokens, estimated: true };
+        console.log('[tokens] No usage from API — estimated:', usage.prompt_tokens, 'in /', usage.completion_tokens, 'out');
+      }
+      // Final sync: persist messages and token usage into conversation for localStorage save.
       // updateStreamMessages already keeps conversations in sync during streaming,
       // but do one final write from messagesRef to be safe.
       if (activeConvRef.current === sessionId) {
         // Still viewing this conversation — sync from current messages state
         setConversations(function(prev) {
           return prev.map(function(c) {
-            return c.id === sessionId ? Object.assign({}, c, { messages: messagesRef.current }) : c;
+            if (c.id !== sessionId) return c;
+            var update = { messages: messagesRef.current };
+            if (usage) {
+              update.input_tokens = (c.input_tokens || 0) + (usage.prompt_tokens || 0);
+              update.output_tokens = (c.output_tokens || 0) + (usage.completion_tokens || 0);
+              console.log('[tokens] Updated conversation tokens:', update.input_tokens, 'in /', update.output_tokens, 'out');
+            }
+            return Object.assign({}, c, update);
           });
         });
+      } else {
+        // User switched away — still update token counts
+        if (usage) {
+          setConversations(function(prev) {
+            return prev.map(function(c) {
+              if (c.id !== sessionId) return c;
+              return Object.assign({}, c, {
+                input_tokens: (c.input_tokens || 0) + (usage.prompt_tokens || 0),
+                output_tokens: (c.output_tokens || 0) + (usage.completion_tokens || 0),
+              });
+            });
+          });
+        }
       }
       // If user switched away, conversations array is already up-to-date
       // from updateStreamMessages calls during streaming.
