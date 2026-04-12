@@ -2167,7 +2167,7 @@ function DashboardView() {
     { key: 'sessions', label: 'Sessions', value: stats.sessions, icon: '💬', color: '#4588e0' },
     { key: 'messages', label: 'Messages', value: formatTokens(stats.messages), icon: '✉️', color: '#44d88a' },
     { key: 'tools', label: 'Tool Calls', value: formatTokens(stats.tools), icon: '⚙️', color: '#c088e0' },
-    { key: 'tokens', label: 'Tokens Used', value: formatTokens(stats.tokens), icon: '⚡', color: '#e8b04a' }
+
   ];
 
   return (
@@ -5048,9 +5048,7 @@ function App() {
                 <div className={"status-dot " + (connected === false ? 'disconnected' : '')}></div>
                 {connected === null ? 'Checking...' : connected ? 'Connected' : 'Offline'}
               </div>
-              <div className="token-counter">
-                <span>{formatTokens(sessionTokens.input, sessionTokens.output)}</span>
-              </div>
+
               <div className="header-controls">
                 <div className="theme-switcher">
                   {Object.entries(THEMES).map(function([key, t]) {
