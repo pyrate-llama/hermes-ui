@@ -4657,12 +4657,15 @@ function App() {
               if (m[0].length > 10) newArtifacts.push({ type: 'svg', content: m[0], timestamp: Date.now() });
             }
             // Detect other code fences (python, javascript, css, etc.)
+            // Only grab substantial code blocks (5+ lines) — short snippets stay in chat
             var codeFenceRe = /```(\w+)\s*\n([\s\S]*?)```/gi;
             while ((m = codeFenceRe.exec(text)) !== null) {
               var lang = m[1].toLowerCase();
               if (lang === 'html' || lang === 'svg') continue; // already handled
-              if (m[2].trim().length > 10) {
-                newArtifacts.push({ type: 'code', language: lang, content: m[2].trim(), timestamp: Date.now() });
+              var codeContent = m[2].trim();
+              var lineCount = codeContent.split('\n').length;
+              if (codeContent.length > 200 && lineCount >= 5) {
+                newArtifacts.push({ type: 'code', language: lang, content: codeContent, timestamp: Date.now() });
               }
             }
 
