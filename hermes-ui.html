@@ -359,6 +359,11 @@
     border-left: 3px solid var(--accent-dim); padding-left: 12px;
     margin: 12px 0; color: var(--text-secondary); font-style: italic;
   }
+  .message-content img {
+    max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer;
+  }
+  .message-content img:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
   .message-content a {
     color: var(--accent); text-decoration: none; transition: color 0.15s;
   }
@@ -1361,8 +1366,28 @@ const PERSONALITY_PROMPTS = {
 };
 
 function renderMarkdown(content) {
+  var text = content || '';
+
+  // Detect local image file paths and render them as inline images
+  // Matches paths like /Users/.../image.png, ~/photos/pic.jpg
+  // Negative lookbehind avoids paths already in markdown image/link syntax or inside backticks
+  var imagePathRe = /(?<![(`![\]])((\/[\w .~-]+)+\.(?:jpg|jpeg|png|gif|webp|bmp|tiff|tif)|~\/[\w .~\/-]+\.(?:jpg|jpeg|png|gif|webp|bmp|tiff|tif))/gi;
+  text = text.replace(imagePathRe, function(match, _g1, _g2, offset) {
+    // Skip if inside a code block (backtick fenced)
+    var before = text.slice(0, offset);
+    var backtickCount = (before.match(/```/g) || []).length;
+    if (backtickCount % 2 !== 0) return match;  // Inside a code fence
+    // Skip if inside inline backticks
+    var lastBacktick = before.lastIndexOf('`');
+    if (lastBacktick !== -1 && before.slice(lastBacktick).indexOf('`') !== -1) {
+      var afterBacktick = before.slice(lastBacktick + 1);
+      if (afterBacktick.indexOf('`') === -1) return match;  // unclosed inline backtick
+    }
+    return '\n\n![image](' + API_BASE + '/api/image?path=' + encodeURIComponent(match.trim()) + ')\n\n';
+  });
+
   const parse = typeof marked === 'function' ? marked : marked.parse;
-  const html = parse(content || '', { breaks: true, gfm: true });
+  const html = parse(text, { breaks: true, gfm: true });
   return { __html: html };
 }
 

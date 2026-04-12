@@ -573,6 +573,58 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"error": str(e)}).encode())
 
+    def _serve_local_image(self):
+        """Serve a local image file with the correct Content-Type."""
+        from urllib.parse import urlparse, parse_qs
+        import mimetypes
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        file_path = params.get("path", [""])[0]
+        file_path = os.path.expanduser(file_path)
+        file_path = os.path.abspath(file_path)
+
+        IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.ico', '.tiff', '.tif'}
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext not in IMAGE_EXTS:
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": f"Not an image type: '{ext}'"}).encode())
+            return
+
+        if not os.path.isfile(file_path):
+            self.send_response(404)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "File not found"}).encode())
+            return
+
+        try:
+            size = os.path.getsize(file_path)
+            if size > 20_000_000:  # 20MB limit for images
+                self.send_response(413)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"Image too large ({size:,} bytes, max 20MB)"}).encode())
+                return
+
+            mime = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+            with open(file_path, "rb") as f:
+                data = f.read()
+
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
+
     def _sessions_list(self):
         """List sessions — stub for UI compatibility."""
         self.send_response(200)
@@ -1039,6 +1091,8 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             self._read_file()
         elif self.path.startswith("/api/localfile"):
             self._read_local_file()
+        elif self.path.startswith("/api/image"):
+            self._serve_local_image()
         elif self.path.startswith("/cron/list"):
             self._cron_list()
         elif self.path.startswith("/api/config"):
