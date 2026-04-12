@@ -2105,7 +2105,7 @@ function TerminalPanel({ isOpen, onClose, localLogs, artifacts, onArtifactTab, o
                         <button style={{background:'none', border:'1px solid var(--border)', color:'var(--danger, #e55)', borderRadius:'4px', padding:'2px 6px', fontSize:'10px', cursor:'pointer', lineHeight:1}} onClick={function(){ if(onRemoveArtifact) onRemoveArtifact(idx); }}>✕</button>
                       </div>
                     </div>
-                    <iframe src={art.url} style={{width:'100%', height:'calc(90vh - 100px)', maxHeight:'calc(90vh - 100px)', border:'1px solid var(--border)', borderRadius:'6px', background:'white'}} />
+                    <iframe src={art.url + '#toolbar=1&navpanes=0'} style={{width:'100%', height:'calc(90vh - 100px)', maxHeight:'calc(90vh - 100px)', border:'1px solid var(--border)', borderRadius:'6px', background:'white'}} />
                   </div>
                 );
               } else if (art.type === 'csv') {
