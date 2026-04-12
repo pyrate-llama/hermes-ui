@@ -2113,10 +2113,19 @@ function DashboardView() {
       var saved = [];
       try { saved = JSON.parse(localStorage.getItem('hermes-conversations') || '[]'); } catch(e) {}
       var totalMsgs = 0;
+      var totalTools = 0;
+      var totalTokens = 0;
       for (var i = 0; i < saved.length; i++) {
-        totalMsgs += (saved[i].messages || []).filter(function(m) { return m.role === 'user'; }).length;
+        var msgs = saved[i].messages || [];
+        totalMsgs += msgs.filter(function(m) { return m.role === 'user'; }).length;
+        // Sum tool calls from all messages
+        for (var j = 0; j < msgs.length; j++) {
+          if (msgs[j].toolCalls) totalTools += msgs[j].toolCalls.length;
+        }
+        // Sum tokens if tracked
+        totalTokens += (saved[i].input_tokens || 0) + (saved[i].output_tokens || 0);
       }
-      setStats({ sessions: saved.length, messages: totalMsgs, tools: 0, tokens: 0 });
+      setStats({ sessions: saved.length, messages: totalMsgs, tools: totalTools, tokens: totalTokens });
       setRecentSessions(saved.slice(0, 7));
     } catch (e) { /* ignore */ }
     try {
@@ -2192,8 +2201,9 @@ function DashboardView() {
             {recentSessions.map(function(s, i) {
               var title = s.title || s.preview || 'Untitled';
               if (title.length > 50) title = title.slice(0, 50) + '...';
-              var msgs = s.message_count || 0;
-              var tools = s.tool_call_count || 0;
+              var sMsgs = s.messages || [];
+              var msgs = s.user_prompt_count || sMsgs.filter(function(m) { return m.role === 'user'; }).length;
+              var tools = s.tool_call_count || sMsgs.reduce(function(sum, m) { return sum + (m.toolCalls ? m.toolCalls.length : 0); }, 0);
               return (
                 <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom: i < recentSessions.length - 1 ? '1px solid var(--glass-border)' : 'none',transition:'background 0.2s'}}>
                   <span style={{color:'var(--text-primary)',fontSize:'12px',fontWeight:500}}>{title}</span>

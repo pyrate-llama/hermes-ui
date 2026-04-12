@@ -760,9 +760,28 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             pass
 
     def _skills_list(self):
-        """List all installed skills by scanning ~/.hermes/skills/ directories."""
+        """List all installed skills by scanning ~/.hermes/skills/ directories.
+
+        Scans category/skill and also category/skill/subskill (3 levels)
+        to match how Hermes itself counts skills.
+        """
         skills_dir = HERMES_HOME / "skills"
         skills = []
+
+        def _read_desc(skill_md):
+            """Extract first non-heading line from SKILL.md as description."""
+            if not skill_md.exists():
+                return None
+            try:
+                text = skill_md.read_text(encoding="utf-8", errors="replace")
+                for line in text.splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        return line[:200]
+            except Exception:
+                pass
+            return None
+
         if skills_dir.exists():
             for category_dir in sorted(skills_dir.iterdir()):
                 if not category_dir.is_dir() or category_dir.name.startswith("."):
@@ -770,25 +789,43 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
                 for skill_dir in sorted(category_dir.iterdir()):
                     if not skill_dir.is_dir() or skill_dir.name.startswith("."):
                         continue
-                    skill = {
-                        "name": skill_dir.name,
-                        "category": category_dir.name,
-                        "disabled": False,
-                    }
-                    # Try to read description from first line of SKILL.md
+                    # Check for sub-skills (depth 3)
+                    sub_skills = [
+                        s for s in skill_dir.iterdir()
+                        if s.is_dir() and not s.name.startswith(".") and (s / "SKILL.md").exists()
+                    ]
+                    if sub_skills:
+                        # Parent is a skill group — add each sub-skill
+                        for sub in sorted(sub_skills):
+                            skill = {
+                                "name": sub.name,
+                                "category": category_dir.name,
+                                "group": skill_dir.name,
+                                "disabled": False,
+                            }
+                            desc = _read_desc(sub / "SKILL.md")
+                            if desc:
+                                skill["description"] = desc
+                            skills.append(skill)
+                    # Also add the parent if it has its own SKILL.md
                     skill_md = skill_dir / "SKILL.md"
                     if skill_md.exists():
-                        try:
-                            text = skill_md.read_text(encoding="utf-8", errors="replace")
-                            # First non-empty, non-heading line as description
-                            for line in text.splitlines():
-                                line = line.strip()
-                                if line and not line.startswith("#"):
-                                    skill["description"] = line[:200]
-                                    break
-                        except Exception:
-                            pass
-                    skills.append(skill)
+                        skill = {
+                            "name": skill_dir.name,
+                            "category": category_dir.name,
+                            "disabled": False,
+                        }
+                        desc = _read_desc(skill_md)
+                        if desc:
+                            skill["description"] = desc
+                        skills.append(skill)
+                    elif not sub_skills:
+                        # No SKILL.md and no sub-skills — still list it
+                        skills.append({
+                            "name": skill_dir.name,
+                            "category": category_dir.name,
+                            "disabled": False,
+                        })
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
