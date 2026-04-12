@@ -1369,21 +1369,19 @@ function renderMarkdown(content) {
   var text = content || '';
 
   // Detect local image file paths and render them as inline images
-  // Matches paths like /Users/.../image.png, ~/photos/pic.jpg
-  // Negative lookbehind avoids paths already in markdown image/link syntax or inside backticks
-  var imagePathRe = /(?<![(`![\]])((\/[\w .~-]+)+\.(?:jpg|jpeg|png|gif|webp|bmp|tiff|tif)|~\/[\w .~\/-]+\.(?:jpg|jpeg|png|gif|webp|bmp|tiff|tif))/gi;
-  text = text.replace(imagePathRe, function(match, _g1, _g2, offset) {
-    // Skip if inside a code block (backtick fenced)
+  // Matches paths like /Users/.../image.png, ~/photos/pic.jpg, /tmp/img.webp
+  // Works even when path is wrapped in backticks — we strip them and show the image
+  var imagePathRe = /`?((?:\/[\w ._~-]+)+\.(?:jpg|jpeg|png|gif|webp|bmp|tiff|tif))`?|`?(~\/[\w ._~\/-]+\.(?:jpg|jpeg|png|gif|webp|bmp|tiff|tif))`?/gi;
+  text = text.replace(imagePathRe, function(match, absPath, tilPath, offset) {
+    var imgPath = (absPath || tilPath || '').trim();
+    if (!imgPath) return match;
+    // Skip if inside a triple-backtick code fence
     var before = text.slice(0, offset);
-    var backtickCount = (before.match(/```/g) || []).length;
-    if (backtickCount % 2 !== 0) return match;  // Inside a code fence
-    // Skip if inside inline backticks
-    var lastBacktick = before.lastIndexOf('`');
-    if (lastBacktick !== -1 && before.slice(lastBacktick).indexOf('`') !== -1) {
-      var afterBacktick = before.slice(lastBacktick + 1);
-      if (afterBacktick.indexOf('`') === -1) return match;  // unclosed inline backtick
-    }
-    return '\n\n![image](' + API_BASE + '/api/image?path=' + encodeURIComponent(match.trim()) + ')\n\n';
+    var fenceCount = (before.match(/```/g) || []).length;
+    if (fenceCount % 2 !== 0) return match;
+    // Skip if already inside markdown image syntax ![...](...) 
+    if (before.length > 0 && before.slice(-2) === '](') return match;
+    return '\n\n![image](' + API_BASE + '/api/image?path=' + encodeURIComponent(imgPath) + ')\n\n';
   });
 
   const parse = typeof marked === 'function' ? marked : marked.parse;
@@ -4670,7 +4668,8 @@ function App() {
             }
 
             // Detect file paths saved by Hermes (~/path/to/file.html, /Users/.../file.svg, etc.)
-            var filePathRe = /(~\/[^\s`"'<>]+\.(?:html|htm|svg|js|jsx|ts|tsx|py|css|json|xml|md))|((\/Users\/[^\s`"'<>]+\.(?:html|htm|svg|js|jsx|ts|tsx|py|css|json|xml|md)))/gi;
+            // Only auto-load HTML and SVG files into artifact panel — other file types stay in chat
+            var filePathRe = /(~\/[^\s`"'<>]+\.(?:html|htm|svg))|((\/Users\/[^\s`"'<>]+\.(?:html|htm|svg)))/gi;
             var detectedFiles = [];
             while ((m = filePathRe.exec(text)) !== null) {
               var filePath = m[0];
