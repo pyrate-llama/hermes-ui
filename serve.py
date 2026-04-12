@@ -526,7 +526,8 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         SAFE_EXTS = {'.html', '.htm', '.svg', '.css', '.js', '.jsx', '.ts', '.tsx',
                      '.py', '.json', '.xml', '.md', '.txt', '.yaml', '.yml',
                      '.sh', '.bash', '.rs', '.go', '.java', '.c', '.cpp', '.h',
-                     '.rb', '.php', '.toml', '.ini', '.cfg', '.conf', '.log', '.csv'}
+                     '.rb', '.php', '.toml', '.ini', '.cfg', '.conf', '.log',
+                     '.csv', '.tsv'}
         ext = os.path.splitext(file_path)[1].lower()
         if ext not in SAFE_EXTS:
             self.send_response(403)
@@ -554,7 +555,7 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
             with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read()
 
-            file_type = "html" if ext in {'.html', '.htm'} else "svg" if ext == '.svg' else "code"
+            file_type = "html" if ext in {'.html', '.htm'} else "svg" if ext == '.svg' else "csv" if ext in {'.csv', '.tsv'} else "code"
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -583,13 +584,13 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         file_path = os.path.expanduser(file_path)
         file_path = os.path.abspath(file_path)
 
-        IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.ico', '.tiff', '.tif'}
+        ALLOWED_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.ico', '.tiff', '.tif', '.pdf'}
         ext = os.path.splitext(file_path)[1].lower()
-        if ext not in IMAGE_EXTS:
+        if ext not in ALLOWED_EXTS:
             self.send_response(403)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": f"Not an image type: '{ext}'"}).encode())
+            self.wfile.write(json.dumps({"error": f"File type not allowed: '{ext}'"}).encode())
             return
 
         if not os.path.isfile(file_path):

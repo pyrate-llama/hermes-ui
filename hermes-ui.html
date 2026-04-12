@@ -2046,13 +2046,19 @@ function TerminalPanel({ isOpen, onClose, localLogs, artifacts, onArtifactTab, o
           <div style={{display:'flex', justifyContent:'flex-end', marginBottom:'8px', gap:'6px', flexShrink:0}}>
             <label style={{display:'inline-flex', alignItems:'center', gap:'4px', background:'none', border:'1px solid var(--border)', color:'var(--text-secondary)', borderRadius:'4px', padding:'3px 10px', fontSize:'11px', cursor:'pointer', transition:'all 0.15s'}}>
               {'📂 Load File'}
-              <input type="file" accept=".html,.htm,.svg,.js,.jsx,.ts,.tsx,.py,.css,.json,.xml,.md,.txt,.yaml,.yml,.sh,.rs,.go,.c,.cpp" style={{display:'none'}} onChange={function(e) {
+              <input type="file" accept=".html,.htm,.svg,.js,.jsx,.ts,.tsx,.py,.css,.json,.xml,.md,.txt,.yaml,.yml,.sh,.rs,.go,.c,.cpp,.pdf,.csv,.tsv" style={{display:'none'}} onChange={function(e) {
                 var file = e.target.files[0];
                 if (!file) return;
+                var ext = file.name.split('.').pop().toLowerCase();
+                if (ext === 'pdf') {
+                  var art = { type: 'pdf', url: URL.createObjectURL(file), timestamp: Date.now(), fileName: file.name };
+                  if (onAddArtifact) onAddArtifact(art);
+                  e.target.value = '';
+                  return;
+                }
                 var reader = new FileReader();
                 reader.onload = function(ev) {
-                  var ext = file.name.split('.').pop().toLowerCase();
-                  var type = (ext === 'html' || ext === 'htm') ? 'html' : ext === 'svg' ? 'svg' : 'code';
+                  var type = (ext === 'html' || ext === 'htm') ? 'html' : ext === 'svg' ? 'svg' : (ext === 'csv' || ext === 'tsv') ? 'csv' : 'code';
                   var art = { type: type, content: ev.target.result, timestamp: Date.now(), fileName: file.name };
                   if (type === 'code') art.language = ext;
                   if (onAddArtifact) onAddArtifact(art);
@@ -2066,7 +2072,7 @@ function TerminalPanel({ isOpen, onClose, localLogs, artifacts, onArtifactTab, o
             <div style={{color:'var(--text-muted)', textAlign:'center', padding:'40px 20px', fontSize:'13px'}}>
               <div style={{fontSize:'28px', marginBottom:'12px'}}>{'🎨'}</div>
               <div style={{fontWeight:600, marginBottom:'6px'}}>No artifacts yet</div>
-              <div>When Hermes generates HTML, SVG, or code blocks, they will appear here as live previews.</div>
+              <div>When Hermes generates HTML, SVG, PDFs, CSVs, or code blocks, they will appear here as live previews.</div>
               <div style={{marginTop:'12px', fontSize:'11px'}}>Or use the Load File button above to open a local file.</div>
             </div>
           ) : (
@@ -2088,6 +2094,66 @@ function TerminalPanel({ isOpen, onClose, localLogs, artifacts, onArtifactTab, o
                       </div>
                     </div>
                     <iframe className="artifact-iframe" src={cachedUrl} style={{height:'calc(90vh - 100px)', maxHeight:'calc(90vh - 100px)'}} sandbox="allow-scripts allow-same-origin" />
+                  </div>
+                );
+              } else if (art.type === 'pdf') {
+                return (
+                  <div key={cacheKey} style={{marginBottom:'12px', position:'relative'}}>
+                    <div style={{fontSize:'11px', color:'var(--text-muted)', marginBottom:'4px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span>{'📄 ' + (art.fileName || 'PDF document')}</span>
+                      <div style={{display:'flex', gap:'4px'}}>
+                        <button style={{background:'none', border:'1px solid var(--border)', color:'var(--danger, #e55)', borderRadius:'4px', padding:'2px 6px', fontSize:'10px', cursor:'pointer', lineHeight:1}} onClick={function(){ if(onRemoveArtifact) onRemoveArtifact(idx); }}>✕</button>
+                      </div>
+                    </div>
+                    <iframe src={art.url} style={{width:'100%', height:'calc(90vh - 100px)', maxHeight:'calc(90vh - 100px)', border:'1px solid var(--border)', borderRadius:'6px', background:'white'}} />
+                  </div>
+                );
+              } else if (art.type === 'csv') {
+                var csvRows = (function() {
+                  var lines = (art.content || '').trim().split('\n');
+                  var sep = art.fileName && art.fileName.endsWith('.tsv') ? '\t' : ',';
+                  return lines.map(function(line) {
+                    var row = []; var cell = ''; var inQuotes = false;
+                    for (var ci = 0; ci < line.length; ci++) {
+                      var ch = line[ci];
+                      if (inQuotes) {
+                        if (ch === '"' && line[ci+1] === '"') { cell += '"'; ci++; }
+                        else if (ch === '"') { inQuotes = false; }
+                        else { cell += ch; }
+                      } else {
+                        if (ch === '"') { inQuotes = true; }
+                        else if (ch === sep) { row.push(cell.trim()); cell = ''; }
+                        else { cell += ch; }
+                      }
+                    }
+                    row.push(cell.trim());
+                    return row;
+                  });
+                })();
+                var csvHeader = csvRows[0] || [];
+                var csvData = csvRows.slice(1);
+                return (
+                  <div key={cacheKey} style={{marginBottom:'12px', position:'relative'}}>
+                    <div style={{fontSize:'11px', color:'var(--text-muted)', marginBottom:'4px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span>{'📊 ' + (art.fileName || 'CSV data') + ' (' + csvData.length + ' rows)'}</span>
+                      <div style={{display:'flex', gap:'4px'}}>
+                        <button style={{background:'none', border:'1px solid var(--border)', color:'var(--text-secondary)', borderRadius:'4px', padding:'2px 8px', fontSize:'10px', cursor:'pointer'}} onClick={function(){ navigator.clipboard.writeText(art.content); }}>Copy</button>
+                        <button style={{background:'none', border:'1px solid var(--border)', color:'var(--danger, #e55)', borderRadius:'4px', padding:'2px 6px', fontSize:'10px', cursor:'pointer', lineHeight:1}} onClick={function(){ if(onRemoveArtifact) onRemoveArtifact(idx); }}>✕</button>
+                      </div>
+                    </div>
+                    <div style={{maxHeight:'calc(90vh - 100px)', overflow:'auto', border:'1px solid var(--border)', borderRadius:'6px'}}>
+                      <table style={{width:'100%', borderCollapse:'collapse', fontSize:'12px', fontFamily:'Monaco, Menlo, monospace'}}>
+                        <thead>
+                          <tr>{csvHeader.map(function(h, hi) { return <th key={hi} style={{position:'sticky', top:0, background:'var(--bg-secondary)', padding:'6px 10px', borderBottom:'2px solid var(--border)', textAlign:'left', fontWeight:700, color:'var(--text-primary)', whiteSpace:'nowrap'}}>{h}</th>; })}</tr>
+                        </thead>
+                        <tbody>
+                          {csvData.slice(0, 500).map(function(row, ri) {
+                            return <tr key={ri} style={{background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)'}}>{row.map(function(cell, ci) { return <td key={ci} style={{padding:'4px 10px', borderBottom:'1px solid var(--border)', color:'var(--text-secondary)', whiteSpace:'nowrap'}}>{cell}</td>; })}</tr>;
+                          })}
+                          {csvData.length > 500 && <tr><td colSpan={csvHeader.length} style={{padding:'8px 10px', color:'var(--text-muted)', fontStyle:'italic', textAlign:'center'}}>Showing first 500 of {csvData.length} rows</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 );
               } else {
@@ -4669,8 +4735,8 @@ function App() {
             }
 
             // Detect file paths saved by Hermes (~/path/to/file.html, /Users/.../file.svg, etc.)
-            // Only auto-load HTML and SVG files into artifact panel — other file types stay in chat
-            var filePathRe = /(~\/[^\s`"'<>]+\.(?:html|htm|svg))|((\/Users\/[^\s`"'<>]+\.(?:html|htm|svg)))/gi;
+            // Auto-load renderable files into artifact panel: HTML, SVG, PDF, CSV
+            var filePathRe = /(~\/[^\s`"'<>]+\.(?:html|htm|svg|pdf|csv|tsv))|((\/(?:Users|tmp|home|var)[^\s`"'<>]+\.(?:html|htm|svg|pdf|csv|tsv)))/gi;
             var detectedFiles = [];
             while ((m = filePathRe.exec(text)) !== null) {
               var filePath = m[0];
@@ -4679,6 +4745,35 @@ function App() {
             // Fetch each detected file from the local file endpoint
             detectedFiles.forEach(function(fp) {
               console.log('[Artifacts] Auto-loading file: ' + fp);
+              var ext = fp.split('.').pop().toLowerCase();
+
+              // PDFs are binary — create artifact with URL reference, not content
+              if (ext === 'pdf') {
+                var art = { type: 'pdf', url: API_BASE + '/api/image?path=' + encodeURIComponent(fp), timestamp: Date.now(), fileName: fp.split('/').pop(), filePath: fp };
+                setArtifacts(function(prev) { return prev.concat([art]); });
+                setShowTerminal(true);
+                setArtifactPanelWide(true);
+                addLocalLog('INFO  Loaded PDF artifact: ' + art.fileName);
+                return;
+              }
+
+              // CSV/TSV — fetch as text and parse into table data
+              if (ext === 'csv' || ext === 'tsv') {
+                fetch('/api/localfile?path=' + encodeURIComponent(fp))
+                  .then(function(r) { return r.json(); })
+                  .then(function(data) {
+                    if (data.error) { console.warn('[Artifacts] Failed to load ' + fp + ': ' + data.error); return; }
+                    var art = { type: 'csv', content: data.content, timestamp: Date.now(), fileName: data.name, filePath: fp };
+                    setArtifacts(function(prev) { return prev.concat([art]); });
+                    setShowTerminal(true);
+                    setArtifactPanelWide(true);
+                    addLocalLog('INFO  Loaded CSV artifact: ' + data.name);
+                  })
+                  .catch(function(err) { console.warn('[Artifacts] Error loading ' + fp, err); });
+                return;
+              }
+
+              // HTML/SVG — existing behavior
               fetch('/api/localfile?path=' + encodeURIComponent(fp))
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
