@@ -4392,10 +4392,13 @@ function App() {
   };
 
   const selectConversation = (convId) => {
-    // 1. Save current messages to the old conversation
+    // 1. Save current messages to the old conversation —
+    //    BUT skip if it's currently streaming, because updateStreamMessages
+    //    already keeps it in sync and our snapshot may be stale due to React 18 batching.
     const prevConvId = activeConvRef.current;
     const snapshot = messagesRef.current;
-    if (prevConvId && snapshot.length > 0) {
+    var prevIsStreaming = !!(prevConvId && streamingMap.current[prevConvId]);
+    if (prevConvId && snapshot.length > 0 && !prevIsStreaming) {
       setConversations(prev =>
         prev.map(c => {
           if (c.id !== prevConvId) return c;
