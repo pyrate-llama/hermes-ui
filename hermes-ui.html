@@ -4525,7 +4525,8 @@ function App() {
   };
 
   // ── Send message ──
-  const sendMessage = async (text) => {
+  const sendMessage = async (text, _retryCount) => {
+    _retryCount = _retryCount || 0;
     if ((!text.trim() && !pendingImages.length)) return;
     // Block only if THIS conversation is already streaming
     var sessionId = activeConvId;
@@ -4890,6 +4891,25 @@ function App() {
       ThinkingBubble._latestThought = '';
       var totalTime = Math.round((Date.now() - thinkingStart) / 1000);
       addLocalLog('INFO  Response complete (' + toolCalls.length + ' tool calls, ' + fullContent.length + ' chars, ' + totalTime + 's total)');
+
+      // Auto-retry on empty response (no content AND no tool calls).
+      // This handles transient upstream failures (e.g. provider 529/timeout)
+      // that return an empty SSE stream.  Retry up to 2 times.
+      if (fullContent.length === 0 && toolCalls.length === 0 && _retryCount < 2 && !abortCtrl.signal.aborted) {
+        addLocalLog('WARN  Empty response detected — auto-retrying (' + (_retryCount + 1) + '/2)...');
+        // Remove the empty assistant message before retrying
+        updateStreamMessages(sessionId, function(prev) {
+          var updated = prev.slice();
+          if (updated.length && updated[updated.length - 1].role === 'assistant' && !updated[updated.length - 1].content) {
+            updated.pop();
+          }
+          return updated;
+        });
+        stopStreaming(sessionId);
+        await new Promise(function(r) { setTimeout(r, 1500); });
+        return sendMessage(text, _retryCount + 1);
+      }
+
       stopStreaming(sessionId);
       // Capture token usage from stream result
       var usage = streamResult && streamResult.usage;
