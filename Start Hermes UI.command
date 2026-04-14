@@ -30,8 +30,9 @@ done
 # changed ports or haven't bound yet
 pkill -f "hermes_cli.main gateway" 2>/dev/null
 pkill -f "hermes_cli\.main gateway" 2>/dev/null
-# Kill stale serve.py proxies
+# Kill stale serve.py / serve_lite.py proxies
 pkill -f "python3 serve.py" 2>/dev/null
+pkill -f "python3 serve_lite.py" 2>/dev/null
 sleep 1
 
 # Verify nothing is left on our ports
@@ -50,9 +51,9 @@ cd ~/.hermes
 nohup hermes-agent/venv/bin/python -m hermes_cli.main gateway run --replace > /tmp/hermes-webapi.log 2>&1 &
 sleep 3
 
-# Start Hermes UI proxy (port 3333)
+# Start Hermes UI lite proxy (port 3333)
 cd ~/hermes-ui
-nohup python3 serve.py > /tmp/hermes-ui.log 2>&1 &
+nohup python3 serve_lite.py > /tmp/hermes-ui.log 2>&1 &
 sleep 1
 
 # Open in browser
