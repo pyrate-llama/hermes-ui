@@ -1703,7 +1703,7 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
               </div>
               <div className="config-item">
                 <span>Hermes Host</span>
-                <span className="config-value">127.0.0.1:8642</span>
+                <span className="config-value">Direct (no gateway)</span>
               </div>
               <div className="config-item">
                 <span>Available Tools</span>
@@ -1751,7 +1751,7 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
               </div>
               <div className="config-item">
                 <span>Hermes WebAPI</span>
-                <span className="config-value">127.0.0.1:8642</span>
+                <span className="config-value">Direct (no gateway)</span>
               </div>
               <div className="config-item">
                 <span>Quick Refresh</span>
@@ -3508,15 +3508,34 @@ function TerminalView() {
         body: JSON.stringify({
           model: 'hermes-agent',
           messages: [{ role: 'user', content: cmd }],
-          stream: false,
+          stream: true,
         }),
       });
       if (!response.ok) throw new Error('Chat request failed: ' + response.status);
-      var chatData = await response.json();
+      var reader = response.body.getReader();
+      var decoder = new TextDecoder();
+      var sseBuffer = '';
       var fullText = '';
-      var choices = chatData.choices || [];
-      if (choices.length > 0) {
-        fullText = (choices[0].message && choices[0].message.content) || '';
+      while (true) {
+        var _ref = await reader.read();
+        if (_ref.done) break;
+        sseBuffer += decoder.decode(_ref.value, { stream: true });
+        var sseLines = sseBuffer.split('\n');
+        sseBuffer = sseLines.pop() || '';
+        for (var li = 0; li < sseLines.length; li++) {
+          var ln = sseLines[li].trim();
+          if (!ln || !ln.startsWith('data: ')) continue;
+          var d = ln.slice(6);
+          if (d === '[DONE]') continue;
+          try {
+            var chunk = JSON.parse(d);
+            var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content;
+            if (delta) {
+              fullText += delta;
+              setHermesHistory(function(prev) { return prev.map(function(h) { return h.id === responseId ? Object.assign({}, h, { content: fullText }) : h; }); });
+            }
+          } catch(_e) {}
+        }
       }
       if (!fullText) fullText = '(No response from Hermes)';
       setHermesHistory(function(prev) { return prev.map(function(h) { return h.id === responseId ? Object.assign({}, h, { content: fullText, streaming: false }) : h; }); });
@@ -4132,7 +4151,22 @@ function App() {
 
     async getSessionMessages(sessionId) { return []; },
 
-    async chatStream(sessionId, message, onChunk, onDone, onToolEvent, onThinking, signal) {
+    async chatStream(sessionId, message, onChunk, onDone, onToolEvent, onThinking, signal, messageHistory) {
+      // Build full conversation history for the API so context is never lost.
+      // messageHistory is the full messages array from React state.
+      var apiMessages = [];
+      if (messageHistory && messageHistory.length > 0) {
+        for (var mi = 0; mi < messageHistory.length; mi++) {
+          var m = messageHistory[mi];
+          if ((m.role === 'user' || m.role === 'assistant') && m.content) {
+            apiMessages.push({ role: m.role, content: m.content });
+          }
+        }
+      }
+      // Always ensure the latest user message is included at the end
+      if (apiMessages.length === 0 || apiMessages[apiMessages.length - 1].content !== message) {
+        apiMessages.push({ role: 'user', content: message });
+      }
       var _streamStart = Date.now();
       const r = await fetch(API_BASE + '/v1/chat/completions', {
         method: 'POST',
@@ -4142,7 +4176,7 @@ function App() {
         },
         body: JSON.stringify({
           model: 'hermes-agent',
-          messages: [{ role: 'user', content: message }],
+          messages: apiMessages,
           stream: true,
           stream_options: { include_usage: true },
         }),
@@ -4879,7 +4913,8 @@ function App() {
             ThinkingBubble._latestThought = thinkingText.replace(/^\[(?:reasoning|tool|timing)\] /, '');
           }
         },
-        abortCtrl.signal
+        abortCtrl.signal,
+        messagesRef.current
       );
     } catch (err) {
       if (err.name !== 'AbortError') {
