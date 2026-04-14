@@ -76,6 +76,11 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         for h in ("Content-Type", "Authorization", "Accept", "X-Hermes-Session-Id"):
             if self.headers.get(h):
                 req.add_header(h, self.headers[h])
+        # Inject API key for gateway auth if configured (browser never needs it)
+        if not req.has_header("Authorization"):
+            _api_key = os.environ.get("API_SERVER_KEY", "")
+            if _api_key:
+                req.add_header("Authorization", f"Bearer {_api_key}")
 
         try:
             resp = urllib.request.urlopen(req, timeout=300)
@@ -670,6 +675,9 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         )
         req.add_header("Content-Type", "application/json")
         req.add_header("Accept", "application/json")
+        _api_key = os.environ.get("API_SERVER_KEY", "")
+        if _api_key:
+            req.add_header("Authorization", f"Bearer {_api_key}")
 
         try:
             resp = urllib.request.urlopen(req, timeout=120)
@@ -729,6 +737,9 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
                 "Accept": "text/event-stream",
                 "X-Hermes-Session-Id": session_id,
             }
+            _api_key = os.environ.get("API_SERVER_KEY", "")
+            if _api_key:
+                hdrs["Authorization"] = f"Bearer {_api_key}"
             conn.request("POST", "/v1/chat/completions", body=forward_body, headers=hdrs)
             resp = conn.getresponse()
         except Exception as e:
@@ -1356,6 +1367,10 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         for h in ("Authorization", "Accept"):
             if self.headers.get(h):
                 req.add_header(h, self.headers[h])
+        if not req.has_header("Authorization"):
+            _api_key = os.environ.get("API_SERVER_KEY", "")
+            if _api_key:
+                req.add_header("Authorization", f"Bearer {_api_key}")
 
         try:
             resp = urllib.request.urlopen(req, timeout=300)
