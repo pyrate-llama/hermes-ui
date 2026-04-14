@@ -1451,7 +1451,51 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         self._proxy()
 
     def _server_restart(self):
-        """Restart serve.py by re-executing the current process."""
+        """Full restart — kill stale gateways, clear stale tasks, restart gateway + proxy."""
+        import subprocess, signal
+
+        # Kill any stale gateway processes by name
+        subprocess.run(["pkill", "-f", "hermes_cli.main gateway"], capture_output=True)
+        # Kill by port
+        for port in [8642, 9177]:
+            result = subprocess.run(["lsof", f"-ti:{port}"], capture_output=True, text=True)
+            for pid in result.stdout.strip().split("\n"):
+                if pid:
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                    except Exception:
+                        pass
+        time.sleep(2)
+        # Force kill survivors
+        for port in [8642, 9177]:
+            result = subprocess.run(["lsof", f"-ti:{port}"], capture_output=True, text=True)
+            for pid in result.stdout.strip().split("\n"):
+                if pid:
+                    try:
+                        os.kill(int(pid), signal.SIGKILL)
+                    except Exception:
+                        pass
+
+        # Clear stale PostgreSQL tasks
+        psql = os.path.expanduser("~/.pg0/installation/18.1.0/bin/psql")
+        if os.path.exists(psql):
+            subprocess.run(
+                [psql, "-h", "localhost", "-U", "hindsight", "-d", "hindsight",
+                 "-c", "UPDATE async_operations SET status = 'completed', completed_at = now() WHERE status IN ('pending', 'processing');"],
+                env={**os.environ, "PGPASSWORD": "hindsight"},
+                capture_output=True, timeout=10,
+            )
+
+        # Start fresh gateway
+        subprocess.Popen(
+            [os.path.expanduser("~/.hermes/hermes-agent/venv/bin/python"),
+             "-m", "hermes_cli.main", "gateway", "run", "--replace"],
+            cwd=os.path.expanduser("~/.hermes"),
+            stdout=open("/tmp/hermes-webapi.log", "w"),
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -1459,14 +1503,14 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps({"status": "restarting"}).encode())
 
         def _do_restart():
-            time.sleep(0.5)  # let the response flush
+            time.sleep(3)  # wait for gateway to start
             os.execv(sys.executable, [sys.executable] + sys.argv)
 
         threading.Thread(target=_do_restart, daemon=True).start()
 
     def _server_pull_restart(self):
-        """Git pull then restart serve.py."""
-        import subprocess
+        """Git pull then full restart (gateway + proxy)."""
+        import subprocess, signal
         try:
             result = subprocess.run(
                 ["git", "pull", "--rebase"],
@@ -1479,6 +1523,40 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             pull_output = f"git pull failed: {e}"
 
+        # Same full cleanup as _server_restart
+        subprocess.run(["pkill", "-f", "hermes_cli.main gateway"], capture_output=True)
+        for port in [8642, 9177]:
+            r = subprocess.run(["lsof", f"-ti:{port}"], capture_output=True, text=True)
+            for pid in r.stdout.strip().split("\n"):
+                if pid:
+                    try: os.kill(int(pid), signal.SIGTERM)
+                    except Exception: pass
+        time.sleep(2)
+        for port in [8642, 9177]:
+            r = subprocess.run(["lsof", f"-ti:{port}"], capture_output=True, text=True)
+            for pid in r.stdout.strip().split("\n"):
+                if pid:
+                    try: os.kill(int(pid), signal.SIGKILL)
+                    except Exception: pass
+
+        psql = os.path.expanduser("~/.pg0/installation/18.1.0/bin/psql")
+        if os.path.exists(psql):
+            subprocess.run(
+                [psql, "-h", "localhost", "-U", "hindsight", "-d", "hindsight",
+                 "-c", "UPDATE async_operations SET status = 'completed', completed_at = now() WHERE status IN ('pending', 'processing');"],
+                env={**os.environ, "PGPASSWORD": "hindsight"},
+                capture_output=True, timeout=10,
+            )
+
+        subprocess.Popen(
+            [os.path.expanduser("~/.hermes/hermes-agent/venv/bin/python"),
+             "-m", "hermes_cli.main", "gateway", "run", "--replace"],
+            cwd=os.path.expanduser("~/.hermes"),
+            stdout=open("/tmp/hermes-webapi.log", "w"),
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -1486,7 +1564,7 @@ class HermesProxy(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps({"status": "restarting", "pull": pull_output}).encode())
 
         def _do_restart():
-            time.sleep(0.5)
+            time.sleep(3)
             os.execv(sys.executable, [sys.executable] + sys.argv)
 
         threading.Thread(target=_do_restart, daemon=True).start()
