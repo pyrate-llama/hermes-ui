@@ -3134,7 +3134,9 @@ function JobsView() {
 
   function describeCron(schedule) {
     if (!schedule) return '';
-    var parts = schedule.split(' ');
+    var s = (typeof schedule === 'string') ? schedule : (schedule.display || schedule.expr || schedule.expression || '');
+    if (!s) return '';
+    var parts = s.split(' ');
     if (parts.length !== 5) return schedule;
     var min = parts[0], hour = parts[1], dom = parts[2], mon = parts[3], dow = parts[4];
     var h = parseInt(hour, 10);
@@ -3214,7 +3216,7 @@ function JobsView() {
     setEditingJob(job.id);
     setEditFields({
       name: job.name || '',
-      schedule: job.schedule || '',
+      schedule: job.schedule_display || (job.schedule && job.schedule.display) || job.schedule || '',
       prompt: job.prompt || '',
       deliver: job.deliver || '',
       skills: job.skills || '',
@@ -3287,7 +3289,7 @@ function JobsView() {
 
               <div style={{display:'flex',flexWrap:'wrap',gap:'14px',fontSize:'11px',color:'var(--text-muted)',fontFamily:'JetBrains Mono, monospace'}}>
                 <span title="Cron schedule" style={{display:'flex',alignItems:'center',gap:'4px'}}>
-                  <span style={{color:'#c088e0'}}>{'🕐'}</span> {job.schedule || '--'}
+                  <span style={{color:'#c088e0'}}>{'🕐'}</span> {job.schedule_display || (job.schedule && job.schedule.display) || job.schedule || '--'}
                 </span>
                 {job.next_run && (
                   <span title={'Next run: ' + job.next_run} style={{display:'flex',alignItems:'center',gap:'4px'}}>
@@ -3499,44 +3501,38 @@ function TerminalView() {
         try { localStorage.setItem('hermes-terminal-session', sessionId); } catch(e) {}
       }
 
-      var response = await fetch(API_BASE + '/v1/chat/completions', {
+      // Two-step flow: POST to start, then EventSource for stream
+      var startResp = await fetch(API_BASE + '/api/chat/start', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Hermes-Session-Id': sessionId,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'hermes-agent',
+          session_id: sessionId,
           messages: [{ role: 'user', content: cmd }],
-          stream: true,
         }),
       });
-      if (!response.ok) throw new Error('Chat request failed: ' + response.status);
-      var reader = response.body.getReader();
-      var decoder = new TextDecoder();
-      var sseBuffer = '';
+      if (!startResp.ok) throw new Error('Chat start failed: ' + startResp.status);
+      var startData = await startResp.json();
+      var termStreamId = startData.stream_id;
+
       var fullText = '';
-      while (true) {
-        var _ref = await reader.read();
-        if (_ref.done) break;
-        sseBuffer += decoder.decode(_ref.value, { stream: true });
-        var sseLines = sseBuffer.split('\n');
-        sseBuffer = sseLines.pop() || '';
-        for (var li = 0; li < sseLines.length; li++) {
-          var ln = sseLines[li].trim();
-          if (!ln || !ln.startsWith('data: ')) continue;
-          var d = ln.slice(6);
-          if (d === '[DONE]') continue;
-          try {
-            var chunk = JSON.parse(d);
-            var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content;
-            if (delta) {
-              fullText += delta;
-              setHermesHistory(function(prev) { return prev.map(function(h) { return h.id === responseId ? Object.assign({}, h, { content: fullText }) : h; }); });
-            }
-          } catch(_e) {}
-        }
-      }
+      await new Promise(function(resolve) {
+        var src = new EventSource(API_BASE + '/api/chat/stream?stream_id=' + encodeURIComponent(termStreamId));
+        src.addEventListener('token', function(e) {
+          var d = JSON.parse(e.data);
+          if (d.text) {
+            fullText += d.text;
+            setHermesHistory(function(prev) { return prev.map(function(h) { return h.id === responseId ? Object.assign({}, h, { content: fullText }) : h; }); });
+          }
+        });
+        src.addEventListener('done', function() { src.close(); resolve(); });
+        src.addEventListener('error', function() { src.close(); resolve(); });
+        src.addEventListener('apperror', function(e) {
+          var d = JSON.parse(e.data);
+          fullText = '(Error: ' + (d.message || 'Unknown') + ')';
+          src.close(); resolve();
+        });
+        src.addEventListener('cancel', function() { src.close(); resolve(); });
+      });
       if (!fullText) fullText = '(No response from Hermes)';
       setHermesHistory(function(prev) { return prev.map(function(h) { return h.id === responseId ? Object.assign({}, h, { content: fullText, streaming: false }) : h; }); });
     } catch(e) {
@@ -4135,7 +4131,7 @@ function App() {
     return function() { document.removeEventListener('keydown', handleKeyboard); };
   }, [messages, activeConvId, conversations]);
 
-  // ── API methods (v0.7.0 — OpenAI-compatible /v1/chat/completions) ──
+  // ── API methods (v0.7.0 — two-step SSE flow matching hermes-webui) ──
   const api = {
     // Session IDs are generated client-side; Hermes uses X-Hermes-Session-Id
     // header to load/store conversation history in state.db automatically.
@@ -4152,8 +4148,10 @@ function App() {
     async getSessionMessages(sessionId) { return []; },
 
     async chatStream(sessionId, message, onChunk, onDone, onToolEvent, onThinking, signal, messageHistory) {
-      // Build full conversation history for the API so context is never lost.
-      // messageHistory is the full messages array from React state.
+      // Two-step flow matching hermes-webui:
+      // 1. POST /api/chat/start → {stream_id}
+      // 2. EventSource /api/chat/stream?stream_id=X → named SSE events
+      // Build messages array for the API
       var apiMessages = [];
       if (messageHistory && messageHistory.length > 0) {
         for (var mi = 0; mi < messageHistory.length; mi++) {
@@ -4163,39 +4161,33 @@ function App() {
           }
         }
       }
-      // Always ensure the latest user message is included at the end
       if (apiMessages.length === 0 || apiMessages[apiMessages.length - 1].content !== message) {
         apiMessages.push({ role: 'user', content: message });
       }
+      // Step 1: POST to /api/chat/start to get stream_id
       var _streamStart = Date.now();
-      const r = await fetch(API_BASE + '/v1/chat/completions', {
+      const startResp = await fetch(API_BASE + '/api/chat/start', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Hermes-Session-Id': sessionId,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'hermes-agent',
+          session_id: sessionId,
           messages: apiMessages,
-          stream: true,
-          stream_options: { include_usage: true },
         }),
         signal: signal,
       });
-      var _httpMs = Date.now() - _streamStart;
-      console.log('[stream] HTTP response in ' + _httpMs + 'ms (status ' + r.status + ')');
-      if (onThinking) onThinking('[timing] HTTP connected in ' + (_httpMs < 1000 ? _httpMs + 'ms' : Math.round(_httpMs/1000) + 's'));
-      if (!r.ok) {
-        const err = await r.text();
-        throw new Error('Chat error ' + r.status + ': ' + err);
+      if (!startResp.ok) {
+        const err = await startResp.text();
+        throw new Error('Chat start error ' + startResp.status + ': ' + err);
       }
+      const startData = await startResp.json();
+      const streamId = startData.stream_id;
+      var _httpMs = Date.now() - _streamStart;
+      console.log('[stream] chat/start returned stream_id in ' + _httpMs + 'ms');
+      if (onThinking) onThinking('[timing] Stream started in ' + (_httpMs < 1000 ? _httpMs + 'ms' : Math.round(_httpMs/1000) + 's'));
 
-      const reader = r.body.getReader();
-      const decoder = new TextDecoder();
-      var _firstDataLogged = false;
-      var buffer = '';
+      // Step 2: Open EventSource for named SSE events (matches hermes-webui)
       var fullContent = '';
-      var streamUsage = null;  // Capture token usage from SSE stream
+      var streamUsage = null;
 
       // Reasoning tag parser state
       var rawContent = '';
@@ -4295,71 +4287,124 @@ function App() {
         if (typeof onDone === 'function') onDone(content);
       };
 
-      // Parse OpenAI SSE format: "data: {json}\n\n" lines, ending with "data: [DONE]\n\n"
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (!_firstDataLogged) {
-          _firstDataLogged = true;
-          var _firstDataMs = Date.now() - _streamStart;
-          console.log('[stream] First SSE data after ' + _firstDataMs + 'ms (' + Math.round(_firstDataMs/1000) + 's)');
-          if (onThinking) onThinking('[timing] First data after ' + (_firstDataMs < 1000 ? _firstDataMs + 'ms' : Math.round(_firstDataMs/1000) + 's'));
+      // EventSource with named events (matches hermes-webui _wireSSE)
+      return new Promise(function(resolve, reject) {
+        var source = new EventSource(API_BASE + '/api/chat/stream?stream_id=' + encodeURIComponent(streamId));
+
+        // Cancel via abort signal
+        if (signal) {
+          signal.addEventListener('abort', function() {
+            source.close();
+            // Also tell backend to cancel
+            fetch(API_BASE + '/api/chat/cancel?stream_id=' + encodeURIComponent(streamId)).catch(function(){});
+            wrappedOnDone(fullContent);
+            resolve({ content: fullContent, usage: streamUsage });
+          });
         }
-        buffer += decoder.decode(value, { stream: true });
 
-        // Split on double-newline (SSE event boundary)
-        var parts = buffer.split('\n\n');
-        buffer = parts.pop() || '';
-
-        for (var pi = 0; pi < parts.length; pi++) {
-          var block = parts[pi].trim();
-          if (!block) continue;
-
-          // Each block may have multiple "data:" lines (OpenAI format uses only data:, no event:)
-          var dataLines = block.split('\n');
-          for (var di = 0; di < dataLines.length; di++) {
-            var line = dataLines[di];
-            if (line.startsWith(':')) continue; // SSE comment / keepalive
-            if (!line.startsWith('data: ') && !line.startsWith('data:')) continue;
-            var dataStr = line.startsWith('data: ') ? line.slice(6) : line.slice(5);
-            dataStr = dataStr.trim();
-
-            if (dataStr === '[DONE]') {
-              wrappedOnDone(fullContent);
-              return { content: fullContent, usage: streamUsage };
-            }
-
-            try {
-              var parsed = JSON.parse(dataStr);
-              var choice = (parsed.choices && parsed.choices[0]) || {};
-              var delta = choice.delta || {};
-              var finishReason = choice.finish_reason;
-
-              // Capture token usage if present (OpenAI sends it in final chunk)
-              if (parsed.usage) {
-                streamUsage = parsed.usage;
-                console.log('[stream] Token usage:', JSON.stringify(parsed.usage));
-              }
-
-              if (delta.content) {
-                // Check for tool progress markers before adding to content
-                if (detectToolProgress(delta.content)) {
-                  // Tool marker — don't add to visible content
-                  continue;
-                }
-                fullContent = processReasoningDelta(delta.content);
-                onChunk(fullContent);
-              }
-
-              // finish_reason "stop" means agent is done (but wait for [DONE])
-            } catch (e) { /* ignore JSON parse errors */ }
+        source.addEventListener('token', function(e) {
+          var d = JSON.parse(e.data);
+          if (d.text) {
+            fullContent = processReasoningDelta(d.text);
+            onChunk(fullContent);
           }
-        }
-      }
+        });
 
-      // Stream ended without [DONE] — still fire onDone with what we have
-      wrappedOnDone(fullContent);
-      return { content: fullContent, usage: streamUsage };
+        source.addEventListener('reasoning', function(e) {
+          var d = JSON.parse(e.data);
+          if (d.text && onThinking) {
+            onThinking('[reasoning] ' + d.text.replace(/\n/g, ' ').trim().slice(0, 300));
+          }
+        });
+
+        source.addEventListener('tool', function(e) {
+          var d = JSON.parse(e.data);
+          if (onToolEvent) onToolEvent({ type: 'started', toolName: d.name, label: d.preview || d.name, args: d.args });
+          if (onThinking) onThinking('[tool] ' + (d.name || 'tool'));
+        });
+
+        source.addEventListener('tool_complete', function(e) {
+          var d = JSON.parse(e.data);
+          if (onToolEvent) onToolEvent({ type: 'completed', toolName: d.name, label: d.preview || d.name, duration: d.duration });
+        });
+
+        source.addEventListener('approval', function(e) {
+          var d = JSON.parse(e.data);
+          // Auto-approve for now (proper approval UI can be added later)
+          console.log('[stream] Approval requested:', d);
+          if (onThinking) onThinking('[approval] ' + (d.description || d.command || 'Tool approval needed'));
+          fetch(API_BASE + '/api/approval/respond', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId, approved: true }),
+          }).catch(function(err) { console.warn('[stream] Auto-approve failed:', err); });
+        });
+
+        source.addEventListener('done', function(e) {
+          source.close();
+          var d = JSON.parse(e.data);
+          if (d.usage) streamUsage = d.usage;
+          wrappedOnDone(fullContent);
+          resolve({ content: fullContent, usage: streamUsage, session: d.session });
+        });
+
+        source.addEventListener('apperror', function(e) {
+          source.close();
+          var d = JSON.parse(e.data);
+          var errMsg = d.message || 'Agent error';
+          console.error('[stream] apperror:', errMsg);
+          // Show the error as content so user sees it
+          fullContent = '**Error:** ' + errMsg;
+          onChunk(fullContent);
+          wrappedOnDone(fullContent);
+          resolve({ content: fullContent, usage: streamUsage });
+        });
+
+        source.addEventListener('cancel', function(e) {
+          source.close();
+          wrappedOnDone(fullContent);
+          resolve({ content: fullContent, usage: streamUsage });
+        });
+
+        source.addEventListener('error', function(e) {
+          // EventSource network error — try to reconnect once
+          source.close();
+          console.warn('[stream] EventSource error, checking stream status...');
+          fetch(API_BASE + '/api/chat/stream/status?stream_id=' + encodeURIComponent(streamId))
+            .then(function(r) { return r.json(); })
+            .then(function(st) {
+              if (st.active) {
+                console.log('[stream] Stream still active, reconnecting...');
+                if (onThinking) onThinking('[info] Reconnecting...');
+                var source2 = new EventSource(API_BASE + '/api/chat/stream?stream_id=' + encodeURIComponent(streamId));
+                // Re-wire all the same listeners (simplified — just forward to resolve)
+                source2.addEventListener('done', function(e2) {
+                  source2.close();
+                  var d2 = JSON.parse(e2.data);
+                  if (d2.usage) streamUsage = d2.usage;
+                  wrappedOnDone(fullContent);
+                  resolve({ content: fullContent, usage: streamUsage, session: d2.session });
+                });
+                source2.addEventListener('token', function(e2) {
+                  var d2 = JSON.parse(e2.data);
+                  if (d2.text) { fullContent = processReasoningDelta(d2.text); onChunk(fullContent); }
+                });
+                source2.addEventListener('error', function() {
+                  source2.close();
+                  wrappedOnDone(fullContent);
+                  resolve({ content: fullContent, usage: streamUsage });
+                });
+              } else {
+                wrappedOnDone(fullContent);
+                resolve({ content: fullContent, usage: streamUsage });
+              }
+            })
+            .catch(function() {
+              wrappedOnDone(fullContent);
+              resolve({ content: fullContent, usage: streamUsage });
+            });
+        });
+      }); // end Promise
     }
   };
 

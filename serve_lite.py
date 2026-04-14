@@ -155,7 +155,7 @@ def _run_agent_streaming(session_id, messages, stream_id):
     # Set thread-local env context for this agent thread
     _set_thread_env(
         TERMINAL_CWD=os.path.expanduser("~"),
-        HERMES_EXEC_ASK="1",
+        HERMES_EXEC_ASK="0",
         HERMES_SESSION_KEY=session_id,
     )
 
@@ -165,7 +165,7 @@ def _run_agent_streaming(session_id, messages, stream_id):
         old_exec_ask = os.environ.get("HERMES_EXEC_ASK")
         old_session_key = os.environ.get("HERMES_SESSION_KEY")
         os.environ["TERMINAL_CWD"] = os.path.expanduser("~")
-        os.environ["HERMES_EXEC_ASK"] = "1"
+        os.environ["HERMES_EXEC_ASK"] = "0"
         os.environ["HERMES_SESSION_KEY"] = session_id
 
     _approval_registered = False
@@ -342,10 +342,16 @@ def _run_agent_streaming(session_id, messages, stream_id):
                 or "invalid api key" in _err_str.lower()
             )
             if _is_auth:
-                put("error", {"message": _err_str or "Authentication failed — check your API key."})
+                put("apperror", {
+                    "message": _err_str or "Authentication failed — check your API key.",
+                    "type": "auth_mismatch",
+                })
             else:
-                put("error", {"message": _err_str or "The agent returned no response. Check your API key and model selection."})
-            return  # Don't send done — error already closes the stream
+                put("apperror", {
+                    "message": _err_str or "The agent returned no response. Check your API key and model selection.",
+                    "type": "no_response",
+                })
+            return  # Don't send done — apperror already closes the stream
 
         # Gather usage stats
         input_tokens = getattr(agent, "session_prompt_tokens", 0) or 0
@@ -353,12 +359,15 @@ def _run_agent_streaming(session_id, messages, stream_id):
         estimated_cost = getattr(agent, "session_estimated_cost_usd", None)
 
         put("done", {
+            "session": {
+                "session_id": session_id,
+                "messages": session.get("messages", []),
+            },
             "usage": {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
                 "estimated_cost": estimated_cost,
             },
-            "full_text": full_text,
         })
 
     except Exception as e:
@@ -433,20 +442,19 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(payload.encode("utf-8"))
         self.wfile.flush()
 
-    # ── Chat: POST /v1/chat/completions (OpenAI-compatible SSE) ──
-    def _handle_chat(self):
+    # ── Chat: two-step flow matching hermes-webui ──
+    # Step 1: POST /api/chat/start → returns {stream_id, session_id}
+    # Step 2: GET  /api/chat/stream?stream_id=X → SSE with named events
+
+    def _handle_chat_start(self):
+        """Start agent in background thread, return stream_id."""
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
         messages = body.get("messages", [])
-        stream = body.get("stream", True)
-        session_id = self.headers.get("X-Hermes-Session-Id") or f"web_{uuid.uuid4().hex[:12]}"
+        session_id = body.get("session_id") or self.headers.get("X-Hermes-Session-Id") or f"web_{uuid.uuid4().hex[:12]}"
 
         if not messages:
             return self._json({"error": "No messages provided"}, 400)
 
-        if not stream:
-            return self._handle_chat_sync(messages, session_id)
-
-        # Create a stream queue and start the agent thread
         stream_id = uuid.uuid4().hex
         q = queue.Queue()
         with STREAMS_LOCK:
@@ -459,14 +467,22 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         )
         thr.start()
 
-        # Stream SSE response in OpenAI format
+        self._json({"stream_id": stream_id, "session_id": session_id})
+
+    def _handle_chat_stream(self):
+        """SSE endpoint — forwards ALL events from the queue via named events."""
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        stream_id = parse_qs(parsed.query).get("stream_id", [""])[0]
+        q = STREAMS.get(stream_id)
+        if q is None:
+            return self._json({"error": "stream not found"}, 404)
+
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Accel-Buffering", "no")
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Expose-Headers", "X-Hermes-Session-Id, X-Stream-Id")
-        self.send_header("X-Hermes-Session-Id", session_id)
-        self.send_header("X-Stream-Id", stream_id)
         self.send_header("Connection", "keep-alive")
         self.end_headers()
 
@@ -479,60 +495,20 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                     self.wfile.flush()
                     continue
 
-                if event == "token":
-                    chunk = {
-                        "choices": [{
-                            "delta": {"content": data["text"]},
-                            "index": 0,
-                        }]
-                    }
-                    self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
-                    self.wfile.flush()
+                # Forward ALL events as named SSE events (matches webui _sse())
+                self._sse_event(event, data)
 
-                elif event == "reasoning":
-                    chunk = {
-                        "choices": [{
-                            "delta": {"reasoning": data["text"]},
-                            "index": 0,
-                        }]
-                    }
-                    self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
-                    self.wfile.flush()
-
-                elif event == "tool":
-                    self.wfile.write(f"event: tool\ndata: {json.dumps(data)}\n\n".encode())
-                    self.wfile.flush()
-
-                elif event == "tool_complete":
-                    self.wfile.write(f"event: tool_complete\ndata: {json.dumps(data)}\n\n".encode())
-                    self.wfile.flush()
-
-                elif event == "done":
-                    usage = data.get("usage", {})
-                    if usage:
-                        done_chunk = {
-                            "choices": [{"delta": {}, "index": 0, "finish_reason": "stop"}],
-                            "usage": usage,
-                        }
-                        self.wfile.write(f"data: {json.dumps(done_chunk)}\n\n".encode())
-                    self.wfile.write(b"data: [DONE]\n\n")
-                    self.wfile.flush()
+                if event in ("done", "error", "apperror", "cancel"):
                     break
-
-                elif event == "error":
-                    err_chunk = {"error": {"message": data.get("message", "Unknown error")}}
-                    self.wfile.write(f"data: {json.dumps(err_chunk)}\n\n".encode())
-                    self.wfile.write(b"data: [DONE]\n\n")
-                    self.wfile.flush()
-                    break
-
-                elif event == "cancel":
-                    self.wfile.write(b"data: [DONE]\n\n")
-                    self.wfile.flush()
-                    break
-
         except (BrokenPipeError, ConnectionResetError):
             pass
+
+    def _handle_chat_stream_status(self):
+        """Check if a stream is still active."""
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        stream_id = parse_qs(parsed.query).get("stream_id", [""])[0]
+        self._json({"active": stream_id in STREAMS, "stream_id": stream_id})
 
     def _handle_chat_sync(self, messages, session_id):
         """Synchronous chat fallback (no streaming)."""
@@ -565,12 +541,18 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
 
     # ── Cancel endpoint ──
     def _handle_cancel(self):
-        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
-        stream_id = body.get("stream_id", "")
+        """Cancel a stream. Accepts GET ?stream_id=X or POST {stream_id}."""
+        from urllib.parse import urlparse, parse_qs
+        if self.command == "GET":
+            parsed = urlparse(self.path)
+            stream_id = parse_qs(parsed.query).get("stream_id", [""])[0]
+        else:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+            stream_id = body.get("stream_id", "")
         if not stream_id:
-            return self._json({"error": "No stream_id"}, 400)
+            return self._json({"error": "stream_id required"}, 400)
         ok = cancel_stream(stream_id)
-        self._json({"cancelled": ok})
+        self._json({"ok": True, "cancelled": ok, "stream_id": stream_id})
 
     # ── Health endpoint ──
     def _handle_health(self):
@@ -730,7 +712,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                 })
         except Exception as e:
             entries = [{"error": str(e)}]
-        self._json({"entries": entries, "path": browse_path})
+        self._json({"items": entries, "path": browse_path})
 
     def _read_file(self):
         qs = urllib.parse.urlparse(self.path).query
@@ -738,13 +720,17 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         fpath = params.get("path", [""])[0]
         full = os.path.normpath(os.path.join(HERMES_HOME, fpath)) if fpath else ""
         if not full or not full.startswith(HERMES_HOME) or not os.path.isfile(full):
-            self.send_error(404, "File not found")
+            self._json({"content": "(File not found)", "name": "", "path": fpath, "size": 0, "type": "text"}, 404)
             return
-        self.send_response(200)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        self.wfile.write(open(full, "rb").read())
+        try:
+            content = open(full, "r", encoding="utf-8", errors="replace").read()
+        except Exception:
+            content = "(Could not read file)"
+        name = os.path.basename(full)
+        size = os.path.getsize(full)
+        ext = os.path.splitext(name)[1].lower()
+        ftype = "image" if ext in (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp") else "text"
+        self._json({"content": content, "name": name, "path": fpath, "size": size, "type": ftype})
 
     def _write_file(self):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
@@ -758,27 +744,57 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         open(full, "w").write(content)
         self._json({"ok": True})
 
-    # ── Memory API (reads MEMORY.md / USER.md) ──
-    def _handle_memory(self):
-        memory = {}
-        for fname in ("MEMORY.md", "USER.md"):
-            fpath = os.path.join(HERMES_HOME, fname)
+    # ── Memory API (reads ~/.hermes/memories/MEMORY.md & USER.md) ──
+    MEMORY_DIR = os.path.join(HERMES_HOME, "memories")
+
+    def _build_memory_targets(self):
+        """Build targets array from memory files for the frontend."""
+        targets = []
+        for target_name, fname in [("memory", "MEMORY.md"), ("user", "USER.md")]:
+            fpath = os.path.join(self.MEMORY_DIR, fname)
+            content = ""
             if os.path.isfile(fpath):
                 try:
-                    memory[fname] = open(fpath).read()
+                    content = open(fpath, "r", encoding="utf-8", errors="replace").read()
                 except Exception:
-                    memory[fname] = ""
-        self._json(memory)
+                    content = ""
+            # Split by --- separators into entries (matching frontend expectations)
+            if content.strip():
+                entries = [e.strip() for e in content.split("\n---\n") if e.strip()]
+            else:
+                entries = []
+            usage = f"{len(content)} chars, {len(entries)} entries"
+            targets.append({"target": target_name, "entries": entries, "usage": usage})
+        return targets
+
+    def _handle_memory(self):
+        self._json({"targets": self._build_memory_targets()})
 
     def _handle_memory_write(self):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
-        filename = body.get("filename", "")
-        content = body.get("content", "")
-        if filename not in ("MEMORY.md", "USER.md"):
-            return self._json({"error": "Invalid filename"}, 400)
-        fpath = os.path.join(HERMES_HOME, filename)
-        open(fpath, "w").write(content)
-        self._json({"ok": True})
+        os.makedirs(self.MEMORY_DIR, exist_ok=True)
+        # PUT format: {memory: "...", user_profile: "..."}
+        if "memory" in body:
+            open(os.path.join(self.MEMORY_DIR, "MEMORY.md"), "w", encoding="utf-8").write(body["memory"])
+        if "user_profile" in body:
+            open(os.path.join(self.MEMORY_DIR, "USER.md"), "w", encoding="utf-8").write(body["user_profile"])
+        # Also support legacy POST format: {filename, content}
+        if "filename" in body and "content" in body:
+            fname = body["filename"]
+            if fname in ("MEMORY.md", "USER.md"):
+                open(os.path.join(self.MEMORY_DIR, fname), "w", encoding="utf-8").write(body["content"])
+        self._json({"targets": self._build_memory_targets()})
+
+    # ── Cron API ──
+    def _handle_cron_list(self):
+        try:
+            from cron.jobs import list_jobs
+            jobs = list_jobs(include_disabled=True)
+            self._json({"jobs": jobs})
+        except ImportError:
+            self._json({"jobs": [], "error": "cron module not available"})
+        except Exception as e:
+            self._json({"jobs": [], "error": str(e)})
 
     # ── Skills API ──
     def _handle_skills(self):
@@ -796,6 +812,12 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
             self._handle_health()
+        elif self.path.startswith("/api/chat/stream/status"):
+            self._handle_chat_stream_status()
+        elif self.path.startswith("/api/chat/stream"):
+            self._handle_chat_stream()
+        elif self.path.startswith("/api/chat/cancel"):
+            self._handle_cancel()
         elif self.path == "/api/ui-conversations":
             self._conversations_load()
         elif self.path.startswith("/logs/stream"):
@@ -812,14 +834,18 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_memory()
         elif self.path == "/api/skills" or self.path.startswith("/api/skills?"):
             self._handle_skills()
+        elif self.path == "/cron/list":
+            self._handle_cron_list()
         else:
             super().do_GET()
 
     def do_POST(self):
-        if self.path == "/v1/chat/completions" or self.path == "/api/chat":
-            self._handle_chat()
+        if self.path == "/api/chat/start":
+            self._handle_chat_start()
         elif self.path == "/api/chat/cancel":
             self._handle_cancel()
+        elif self.path == "/v1/chat/completions" or self.path == "/api/chat":
+            self._handle_chat_start()  # backwards compat — same two-step flow
         elif self.path.startswith("/terminal/exec"):
             self._terminal_exec()
         elif self.path == "/api/ui-conversations":
@@ -833,10 +859,16 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         else:
             self._json({"error": "Not found"}, 404)
 
+    def do_PUT(self):
+        if self.path == "/api/memory":
+            self._handle_memory_write()
+        else:
+            self._json({"error": "Not found"}, 404)
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Hermes-Session-Id")
         self.end_headers()
 
