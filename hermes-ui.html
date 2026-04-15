@@ -1966,7 +1966,7 @@ function TerminalPanel({ isOpen, onClose, localLogs, artifacts, onArtifactTab, o
       return;
     }
 
-    var url = '/logs/stream?logs=gateway,errors&tail=80';
+    var url = '/logs/stream?logs=errors&tail=80';
     var es = new EventSource(url);
     eventSourceRef.current = es;
 
@@ -2025,7 +2025,6 @@ function TerminalPanel({ isOpen, onClose, localLogs, artifacts, onArtifactTab, o
     <div className={"terminal-panel " + (isOpen ? '' : 'hidden')}>
       <div className="terminal-panel-header">
         <div style={{display:'flex', gap:'4px'}}>
-          <button className={"terminal-tab " + (activeTab === 'gateway' ? 'active' : '')} onClick={function(){setActiveTab('gateway'); if(onArtifactTab) onArtifactTab(false);}}>Gateway</button>
           <button className={"terminal-tab " + (activeTab === 'errors' ? 'active' : '')} onClick={function(){setActiveTab('errors'); if(onArtifactTab) onArtifactTab(false);}}>Errors</button>
           <button className={"terminal-tab " + (activeTab === 'webui' ? 'active' : '')} onClick={function(){setActiveTab('webui'); if(onArtifactTab) onArtifactTab(false);}}>Web UI</button>
           <button className={"terminal-tab " + (activeTab === 'all' ? 'active' : '')} onClick={function(){setActiveTab('all'); if(onArtifactTab) onArtifactTab(false);}}>All</button>
