@@ -4344,6 +4344,19 @@ function App() {
           source.close();
           var d = JSON.parse(e.data);
           if (d.usage) streamUsage = d.usage;
+          // Use server's authoritative messages (matches webui: S.messages = d.session.messages)
+          if (d.session && d.session.messages && d.session.messages.length) {
+            var lastAssistant = null;
+            for (var i = d.session.messages.length - 1; i >= 0; i--) {
+              if (d.session.messages[i].role === 'assistant') {
+                var c = d.session.messages[i].content || '';
+                if (typeof c === 'string') lastAssistant = c;
+                else if (Array.isArray(c)) lastAssistant = c.filter(function(p){return p&&p.type==='text';}).map(function(p){return p.text||'';}).join('\n');
+                break;
+              }
+            }
+            if (lastAssistant && lastAssistant.trim()) fullContent = lastAssistant;
+          }
           wrappedOnDone(fullContent);
           resolve({ content: fullContent, usage: streamUsage, session: d.session });
         });

@@ -155,7 +155,6 @@ def _run_agent_streaming(session_id, messages, stream_id):
     # Set thread-local env context for this agent thread
     _set_thread_env(
         TERMINAL_CWD=os.path.expanduser("~"),
-        HERMES_EXEC_ASK="0",
         HERMES_SESSION_KEY=session_id,
     )
 
@@ -165,7 +164,7 @@ def _run_agent_streaming(session_id, messages, stream_id):
         old_exec_ask = os.environ.get("HERMES_EXEC_ASK")
         old_session_key = os.environ.get("HERMES_SESSION_KEY")
         os.environ["TERMINAL_CWD"] = os.path.expanduser("~")
-        os.environ["HERMES_EXEC_ASK"] = "0"
+        os.environ.pop("HERMES_EXEC_ASK", None)
         os.environ["HERMES_SESSION_KEY"] = session_id
 
     _approval_registered = False
