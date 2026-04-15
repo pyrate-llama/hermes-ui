@@ -4906,6 +4906,7 @@ function App() {
               role: 'assistant',
               content: displayContent,
               streaming: false,
+              thinking: false,
               toolCalls: toolCalls.map(tc => ({ ...tc, done: true })),
             };
             return updated;
