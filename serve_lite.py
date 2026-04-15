@@ -303,16 +303,20 @@ def _run_agent_streaming(session_id, messages, stream_id):
             "file operations."
         )
 
-        # Build conversation history (everything except the last user message)
-        history = []
+        # Build conversation history — keep ALL message types (user, assistant, tool)
+        # so the agent retains awareness of prior tool calls. Matches webui's
+        # _sanitize_messages_for_api(): strip display-only metadata, keep API fields.
+        safe_keys = {"role", "content", "tool_calls", "tool_call_id", "name", "refusal"}
+        clean_history = []
         for m in messages:
-            if m.get("role") in ("user", "assistant") and m.get("content"):
-                history.append({"role": m["role"], "content": m["content"]})
-        if history and history[-1]["role"] == "user":
-            history.pop()
-
-        safe_keys = {"role", "content", "tool_calls", "tool_call_id", "name"}
-        clean_history = [{k: v for k, v in m.items() if k in safe_keys} for m in history]
+            if not isinstance(m, dict):
+                continue
+            sanitized = {k: v for k, v in m.items() if k in safe_keys}
+            if sanitized.get("role"):
+                clean_history.append(sanitized)
+        # Remove the last user message — it goes in user_message param instead
+        if clean_history and clean_history[-1].get("role") == "user":
+            clean_history.pop()
 
         result = agent.run_conversation(
             user_message=workspace_ctx + user_msg,
