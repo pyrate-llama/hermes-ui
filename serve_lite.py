@@ -303,20 +303,20 @@ def _run_agent_streaming(session_id, messages, stream_id):
             "file operations."
         )
 
-        # Build conversation history — keep ALL message types (user, assistant, tool)
-        # so the agent retains awareness of prior tool calls. Matches webui's
-        # _sanitize_messages_for_api(): strip display-only metadata, keep API fields.
+        # Build conversation history from SERVER-SIDE session (not frontend messages).
+        # The server session includes tool_calls and tool results from prior turns;
+        # the frontend only sends {role, content} pairs which strips tool context
+        # and makes the agent forget it has tools.  Matches webui's approach:
+        #   conversation_history=_sanitize_messages_for_api(s.messages)
+        session = _get_or_create_session(session_id)
         safe_keys = {"role", "content", "tool_calls", "tool_call_id", "name", "refusal"}
         clean_history = []
-        for m in messages:
+        for m in (session.get("messages") or []):
             if not isinstance(m, dict):
                 continue
             sanitized = {k: v for k, v in m.items() if k in safe_keys}
             if sanitized.get("role"):
                 clean_history.append(sanitized)
-        # Remove the last user message — it goes in user_message param instead
-        if clean_history and clean_history[-1].get("role") == "user":
-            clean_history.pop()
 
         result = agent.run_conversation(
             user_message=workspace_ctx + user_msg,
@@ -326,8 +326,7 @@ def _run_agent_streaming(session_id, messages, stream_id):
             persist_user_message=user_msg,
         )
 
-        # Update session with agent's messages
-        session = _get_or_create_session(session_id)
+        # Update session with agent's messages (includes tool_calls + tool results)
         session["messages"] = result.get("messages", session["messages"])
 
         # Detect silent agent failure (no assistant reply produced)
