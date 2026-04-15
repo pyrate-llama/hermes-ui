@@ -349,13 +349,23 @@ def _run_agent_streaming(session_id, messages, stream_id):
         #   conversation_history=_sanitize_messages_for_api(s.messages)
         session = _get_or_create_session(session_id)
         safe_keys = {"role", "content", "tool_calls", "tool_call_id", "name", "refusal"}
+
+        # Use server-side session messages; fall back to frontend messages if
+        # server has none (e.g. first run after adding persistence, or old sessions)
+        history_source = session.get("messages") or []
+        if not history_source and messages:
+            history_source = messages
+
         clean_history = []
-        for m in (session.get("messages") or []):
+        for m in history_source:
             if not isinstance(m, dict):
                 continue
             sanitized = {k: v for k, v in m.items() if k in safe_keys}
             if sanitized.get("role"):
                 clean_history.append(sanitized)
+        # Remove the last user message — it goes in user_message param instead
+        if clean_history and clean_history[-1].get("role") == "user":
+            clean_history.pop()
 
         result = agent.run_conversation(
             user_message=workspace_ctx + user_msg,
