@@ -121,17 +121,56 @@ STREAMS_LOCK = threading.Lock()
 CANCEL_FLAGS = {}   # stream_id -> threading.Event
 AGENT_INSTANCES = {} # stream_id -> agent instance (for cancel/interrupt)
 
-# session_id -> list of message dicts (in-memory conversation store)
+# session_id -> dict (in-memory cache, persisted to disk like webui)
 SESSIONS = {}
 SESSIONS_LOCK = threading.Lock()
 
+# Disk persistence — matches webui SESSION_DIR pattern
+SESSION_DIR = os.path.join(HERMES_HOME, "hermes-ui", "sessions")
+os.makedirs(SESSION_DIR, exist_ok=True)
+
+
+def _save_session(session_id, session_data):
+    """Persist session to disk as JSON (matches webui Session.save())."""
+    try:
+        path = os.path.join(SESSION_DIR, f"{session_id}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(session_data, f, ensure_ascii=False)
+    except Exception as e:
+        print(f"[serve] WARNING: Failed to save session {session_id}: {e}", flush=True)
+
+
+def _load_session(session_id):
+    """Load session from disk (matches webui Session.load())."""
+    if not session_id or not all(c in "0123456789abcdefghijklmnopqrstuvwxyz_" for c in session_id):
+        return None
+    path = os.path.join(SESSION_DIR, f"{session_id}.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[serve] WARNING: Failed to load session {session_id}: {e}", flush=True)
+        return None
+
 
 def _get_or_create_session(session_id):
-    """Get or create an in-memory session with conversation history."""
+    """Get or create session — checks memory first, then disk (matches webui get_session())."""
     with SESSIONS_LOCK:
-        if session_id not in SESSIONS:
-            SESSIONS[session_id] = {"messages": [], "model": None}
-        return SESSIONS[session_id]
+        if session_id in SESSIONS:
+            return SESSIONS[session_id]
+    # Try loading from disk
+    loaded = _load_session(session_id)
+    if loaded:
+        with SESSIONS_LOCK:
+            SESSIONS[session_id] = loaded
+        return loaded
+    # Create new
+    new_session = {"messages": [], "model": None}
+    with SESSIONS_LOCK:
+        SESSIONS[session_id] = new_session
+    return new_session
 
 
 def _run_agent_streaming(session_id, messages, stream_id):
@@ -328,6 +367,7 @@ def _run_agent_streaming(session_id, messages, stream_id):
 
         # Update session with agent's messages (includes tool_calls + tool results)
         session["messages"] = result.get("messages", session["messages"])
+        _save_session(session_id, session)  # Persist to disk (matches webui s.save())
 
         # Detect silent agent failure (no assistant reply produced)
         _assistant_added = any(
