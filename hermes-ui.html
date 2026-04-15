@@ -1622,11 +1622,10 @@ function MessageBubble({ message, onImageClick, onEdit }) {
         </div>
       )}
 
-      {message.thinking ? (
-        <ThinkingBubble />
-      ) : (
+      {message.content && (
         <div ref={contentRef} className={"message-content " + (message.streaming ? 'streaming-cursor' : '')} dangerouslySetInnerHTML={renderMarkdown(message.content)} />
       )}
+      {message.thinking && <ThinkingBubble />}
 
       {isUser && onEdit && (
         <div className="message-actions">
@@ -4969,6 +4968,18 @@ function App() {
               addLocalLog('INFO  [thinking] ' + thinkingText.replace(/\n/g, ' ').slice(0, 300));
             }
             ThinkingBubble._latestThought = thinkingText.replace(/^\[(?:reasoning|tool|timing)\] /, '');
+            // Restore thinking bubble if it was removed by a tool event
+            // (matches webui: appendThinking() recreates thinkingRow on each reasoning event)
+            if (thinkingText.startsWith('[reasoning] ')) {
+              updateStreamMessages(sessionId, function(prev) {
+                var updated = [...prev];
+                var last = updated[updated.length - 1];
+                if (last && last.role === 'assistant' && last.streaming && !last.thinking) {
+                  updated[updated.length - 1] = { ...last, thinking: true };
+                }
+                return updated;
+              });
+            }
           }
         },
         abortCtrl.signal,
