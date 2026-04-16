@@ -860,6 +860,43 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self._json({"error": str(e)}, 500)
 
+    def _handle_skill_content(self):
+        """GET /api/skills/content?name=X — load skill SKILL.md (matches webui)."""
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(self.path).query)
+        name = qs.get("name", [""])[0]
+        if not name:
+            return self._json({"error": "name required"}, 400)
+        try:
+            from tools.skills_tool import skill_view
+            raw = skill_view(name)
+            data = json.loads(raw) if isinstance(raw, str) else raw
+            self._json(data)
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+
+    def _handle_skill_save(self):
+        """POST /api/skills/save — save skill content (matches webui)."""
+        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+        name = body.get("name", "").strip().lower().replace(" ", "-")
+        content = body.get("content", "")
+        if not name or "/" in name or ".." in name:
+            return self._json({"error": "Invalid skill name"}, 400)
+        try:
+            from tools.skills_tool import SKILLS_DIR
+            category = body.get("category", "").strip()
+            if category:
+                skill_dir = SKILLS_DIR / category / name
+            else:
+                skill_dir = SKILLS_DIR / name
+            skill_dir.resolve().relative_to(SKILLS_DIR.resolve())
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            skill_file = skill_dir / "SKILL.md"
+            skill_file.write_text(content, encoding="utf-8")
+            self._json({"success": True, "name": name, "path": str(skill_file)})
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+
     # ── Request routing ──
     def do_GET(self):
         if self.path == "/health":
@@ -884,6 +921,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._serve_image()
         elif self.path == "/api/memory" or self.path.startswith("/api/memory?"):
             self._handle_memory()
+        elif self.path.startswith("/api/skills/content"):
+            self._handle_skill_content()
         elif self.path == "/api/skills" or self.path.startswith("/api/skills?"):
             self._handle_skills()
         elif self.path == "/cron/list":
@@ -906,6 +945,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._write_file()
         elif self.path == "/api/memory":
             self._handle_memory_write()
+        elif self.path == "/api/skills/save":
+            self._handle_skill_save()
         elif self.path.startswith("/server/restart"):
             self._server_restart()
         else:
