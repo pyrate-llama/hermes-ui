@@ -11,6 +11,7 @@ Usage:
 import http.server
 import json
 import os
+import signal
 import sys
 import queue
 import threading
@@ -154,6 +155,23 @@ def _load_session(session_id):
         print(f"[serve] WARNING: Failed to load session {session_id}: {e}", flush=True)
         return None
 
+
+def _flush_all_sessions():
+    """Save all in-memory sessions to disk. Called on shutdown/restart."""
+    with SESSIONS_LOCK:
+        ids = list(SESSIONS.keys())
+    saved = 0
+    for sid in ids:
+        try:
+            with SESSIONS_LOCK:
+                data = SESSIONS.get(sid)
+            if data:
+                _save_session(sid, data)
+                saved += 1
+        except Exception as e:
+            print(f"[serve] WARNING: flush failed for {sid}: {e}", flush=True)
+    if saved:
+        print(f"[serve] Flushed {saved} session(s) to disk.", flush=True)
 
 def _get_or_create_session(session_id):
     """Get or create session — checks memory first, then disk (matches webui get_session())."""
@@ -351,10 +369,20 @@ def _run_agent_streaming(session_id, messages, stream_id):
         safe_keys = {"role", "content", "tool_calls", "tool_call_id", "name", "refusal"}
 
         # Use server-side session messages; fall back to frontend messages if
-        # server has none (e.g. first run after adding persistence, or old sessions)
-        history_source = session.get("messages") or []
-        if not history_source and messages:
-            history_source = messages
+        # server has none (e.g. first run after adding persistence, or old sessions).
+        # Also prefer frontend messages when they have more content — this handles
+        # cases where the server session was compacted/truncated (e.g. after a
+        # restart) but the frontend still has the full conversation.
+        server_msgs = session.get("messages") or []
+        frontend_msgs = messages or []
+        server_user_count = sum(1 for m in server_msgs if isinstance(m, dict) and m.get("role") == "user")
+        frontend_user_count = sum(1 for m in frontend_msgs if isinstance(m, dict) and m.get("role") == "user")
+        if frontend_user_count > server_user_count:
+            history_source = frontend_msgs
+        elif server_msgs:
+            history_source = server_msgs
+        else:
+            history_source = frontend_msgs
 
         clean_history = []
         for m in history_source:
@@ -969,6 +997,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         self._json({"ok": True, "message": "Restarting..."})
         def _do_restart():
             time.sleep(0.5)
+            _flush_all_sessions()
             os.execv(sys.executable, [sys.executable] + sys.argv)
         threading.Thread(target=_do_restart, daemon=True).start()
 
@@ -984,6 +1013,17 @@ class ThreadedServer(http.server.ThreadingHTTPServer):
 
 
 _START_TIME = time.time()
+
+def _shutdown_handler(signum, frame):
+    """Graceful shutdown — flush sessions before exiting."""
+    sig_name = signal.Signals(signum).name if hasattr(signal, 'Signals') else str(signum)
+    print(f"\n[serve] Received {sig_name}, flushing sessions...", flush=True)
+    _flush_all_sessions()
+    print("[serve] Goodbye.", flush=True)
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, _shutdown_handler)
+signal.signal(signal.SIGINT, _shutdown_handler)
 
 if __name__ == "__main__":
     import argparse
