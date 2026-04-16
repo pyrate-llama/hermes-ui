@@ -925,6 +925,33 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self._json({"error": str(e)}, 500)
 
+    # ── Skills dates API ──
+    def _handle_skills_dates(self):
+        """GET /skills/dates — return mtime of each SKILL.md for newest-first sorting."""
+        try:
+            from tools.skills_tool import SKILLS_DIR
+            dates = {}
+            if SKILLS_DIR.exists():
+                for skill_md in SKILLS_DIR.rglob("SKILL.md"):
+                    try:
+                        content = skill_md.read_text(encoding="utf-8")[:500]
+                        # Extract name from frontmatter
+                        name = skill_md.parent.name
+                        if content.startswith("---"):
+                            for line in content.split("\n")[1:]:
+                                if line.strip() == "---":
+                                    break
+                                if line.startswith("name:"):
+                                    parsed = line.split(":", 1)[1].strip().strip('"').strip("'")
+                                    if parsed:
+                                        name = parsed
+                        dates[name] = int(skill_md.stat().st_mtime)
+                    except Exception:
+                        continue
+            self._json({"dates": dates})
+        except Exception as e:
+            self._json({"dates": {}})
+
     # ── Request routing ──
     def do_GET(self):
         if self.path == "/health":
@@ -949,6 +976,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._serve_image()
         elif self.path == "/api/memory" or self.path.startswith("/api/memory?"):
             self._handle_memory()
+        elif self.path == "/skills/dates" or self.path.startswith("/skills/dates?"):
+            self._handle_skills_dates()
         elif self.path.startswith("/api/skills/content"):
             self._handle_skill_content()
         elif self.path == "/api/skills" or self.path.startswith("/api/skills?"):
