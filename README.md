@@ -107,11 +107,13 @@ git clone https://github.com/pyrate-llama/hermes-ui.git
 cd hermes-ui
 
 # Start the proxy server
-python3 serve.py
+python3 serve_lite.py
 
 # Or specify a custom port
-python3 serve.py 8080
+python3 serve_lite.py --port 8080
 ```
+
+> **Note:** `serve.py` still exists as a backwards-compatibility shim that prints a deprecation notice and execs `serve_lite.py`. Existing systemd units and launchers that reference `serve.py` will keep working, but new setups should invoke `serve_lite.py` directly.
 
 Open **http://localhost:3333/hermes-ui.html** in your browser.
 
@@ -119,7 +121,7 @@ That's it — no `npm install`, no build step, no dependencies beyond Python's s
 
 ### Configuration
 
-The proxy server connects to Hermes at `http://127.0.0.1:8642` by default. To change this, edit the `HERMES` variable at the top of `serve.py`.
+The proxy server connects to Hermes at `http://127.0.0.1:8642` by default. To change this, edit the `HERMES` variable at the top of `serve_lite.py`.
 
 For image analysis (paste/drop images in chat), add your Gemini API key in the Settings modal within the UI.
 
@@ -171,16 +173,17 @@ A built-in setup guide is also available in the app under **Settings > Remote Ac
 ## Architecture
 
 ```
-┌─────────────┐    ┌──────────────┐    ┌──────────────────┐
-│  Browser     │───▶│  serve.py    │───▶│  Hermes Agent    │
-│  (React 18)  │    │  port 3333   │    │  port 8642       │
-│              │◀───│  proxy +     │◀───│  (WebAPI)        │
-│  Single HTML │    │  log stream  │    │                  │
-└─────────────┘    └──────────────┘    └──────────────────┘
+┌─────────────┐    ┌────────────────┐    ┌──────────────────┐
+│  Browser     │───▶│  serve_lite.py │───▶│  Hermes Agent    │
+│  (React 18)  │    │  port 3333     │    │  port 8642       │
+│              │◀───│  proxy +       │◀───│  (WebAPI)        │
+│  Single HTML │    │  log stream    │    │                  │
+└─────────────┘    └────────────────┘    └──────────────────┘
 ```
 
 - **`hermes-ui.html`** — The entire frontend in a single file: React components, CSS, and markup. Uses Babel standalone for JSX compilation in the browser.
-- **`serve.py`** — A lightweight Python proxy (stdlib only, no pip dependencies) that serves static files, proxies API calls to Hermes, streams logs via SSE, provides shell/Claude CLI execution, and enables file browsing/editing within `~/.hermes`.
+- **`serve_lite.py`** — A lightweight Python proxy (stdlib only, no pip dependencies) that serves static files, proxies the `/api/chat/*` two-step SSE flow to the Hermes agent, streams logs via SSE, provides shell/Claude CLI execution, and enables file browsing/editing within `~/.hermes`. This is the canonical server.
+- **`serve.py`** — Backwards-compatibility shim. Prints a deprecation notice and execs `serve_lite.py`. Kept so existing systemd units and launchers don't break.
 
 ### CDN Dependencies
 
@@ -245,13 +248,19 @@ Then restart Hermes: `hermes restart`
 
 ---
 
-**Chat is stuck in streaming state / can't send a second message**
+**Chat hangs, times out silently, or returns 404 on `/api/chat/start`**
 
-This happens if you're running Hermes v0.7.0+ with an older version of hermes-ui. The v0.7.0 API uses `/v1/chat/completions` (OpenAI-compatible) instead of the old `/api/sessions` routes. Make sure you're on the latest hermes-ui by pulling the repo:
+Two common causes:
 
-```bash
-git pull
-```
+1. **You're running the old `serve.py` directly from a stale checkout or a systemd unit.** The current client (`hermes-ui.html`) talks to the two-step `/api/chat/*` SSE API, which only `serve_lite.py` implements. If your launcher calls `python3 serve.py`, pull the repo — the new `serve.py` is a shim that forwards to `serve_lite.py` and will keep working. If you're on an older checkout, update your unit to call `serve_lite.py` directly:
+
+   ```
+   ExecStart=/usr/bin/python3 /path/to/hermes-ui/serve_lite.py
+   ```
+
+2. **The Hermes agent itself (port 8642) isn't reachable.** `serve_lite.py` on 3333 is only a proxy — it needs the agent running on 8642. Check `curl http://127.0.0.1:8642/health`.
+
+If you still see silent hangs, open the browser console — the client now surfaces SSE errors as visible chat messages rather than stalling.
 
 ---
 
