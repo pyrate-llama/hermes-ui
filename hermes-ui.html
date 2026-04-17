@@ -1754,7 +1754,7 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
             <div style={{display:'flex',gap:'10px',marginBottom:'16px'}}>
               <button onClick={handleRestart} style={{flex:1,background:'var(--bg-tertiary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
                 <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'🔄'} Restart Server</div>
-                <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>Restart serve.py without pulling updates</div>
+                <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>Restart serve_lite.py without pulling updates</div>
               </button>
               <button onClick={handlePullRestart} style={{flex:1,background:'var(--accent)',color:'white',border:'none',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
                 <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'⬆'} Update &amp; Restart</div>
@@ -1772,7 +1772,7 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
               <div className="config-section-title">Server Info</div>
               <div className="config-item">
                 <span>Proxy Server</span>
-                <span className="config-value">serve.py on port {window.location.port || '3333'}</span>
+                <span className="config-value">serve_lite.py on port {window.location.port || '3333'}</span>
               </div>
               <div className="config-item">
                 <span>Hermes WebAPI</span>
@@ -3471,7 +3471,7 @@ function TerminalView() {
       });
 
       if (!r.ok) {
-        setShellHistory(function(prev) { return prev.concat([{ type: 'output', text: '(Server error: ' + r.status + '. Make sure serve.py is restarted.)', id: Date.now() + 1, exitCode: -1 }]); });
+        setShellHistory(function(prev) { return prev.concat([{ type: 'output', text: '(Server error: ' + r.status + '. Make sure serve_lite.py is restarted.)', id: Date.now() + 1, exitCode: -1 }]); });
         setShellRunning(false);
         return;
       }
@@ -3499,7 +3499,7 @@ function TerminalView() {
         setShellHistory(function(prev) { return prev.concat([{ type: 'output', text: output, id: Date.now() + 1, exitCode: exitCode }]); });
       }
     } catch(e) {
-      setShellHistory(function(prev) { return prev.concat([{ type: 'output', text: '(Error: ' + e.message + '. Is serve.py running with the terminal endpoint?)', id: Date.now() + 1, exitCode: -1 }]); });
+      setShellHistory(function(prev) { return prev.concat([{ type: 'output', text: '(Error: ' + e.message + '. Is serve_lite.py running with the terminal endpoint?)', id: Date.now() + 1, exitCode: -1 }]); });
     }
     setShellRunning(false);
   }
@@ -3549,7 +3549,26 @@ function TerminalView() {
           }
         });
         src.addEventListener('done', function() { src.close(); resolve(); });
-        src.addEventListener('error', function() { src.close(); resolve(); });
+        src.addEventListener('error', function() {
+          // Network/HTTP error on the SSE. Probe the status endpoint so we
+          // can tell transient drops apart from "proxy is 404-ing us" and
+          // surface the latter clearly instead of an empty bubble.
+          src.close();
+          fetch(API_BASE + '/api/chat/stream/status?stream_id=' + encodeURIComponent(termStreamId))
+            .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('status ' + r.status)); })
+            .then(function(st) {
+              if (!st.active && !fullText) {
+                fullText = '(Stream ended without a response — check serve_lite.py and the Hermes agent on port 8642.)';
+              }
+              resolve();
+            })
+            .catch(function(err) {
+              if (!fullText) {
+                fullText = '(Stream error: ' + (err && err.message || 'unknown') + ' — if you see 404, update your launcher to run serve_lite.py.)';
+              }
+              resolve();
+            });
+        });
         src.addEventListener('apperror', function(e) {
           var d = JSON.parse(e.data);
           fullText = '(Error: ' + (d.message || 'Unknown') + ')';
@@ -3585,7 +3604,7 @@ function TerminalView() {
       claudeHasSent.current = true;
       if (!r.ok) {
         setClaudeHistory(function(prev) {
-          return prev.filter(function(h) { return h.type !== 'thinking'; }).concat([{ type: 'output', text: '(Server error: ' + r.status + '. Make sure serve.py is restarted.)', id: Date.now() + 1 }]);
+          return prev.filter(function(h) { return h.type !== 'thinking'; }).concat([{ type: 'output', text: '(Server error: ' + r.status + '. Make sure serve_lite.py is restarted.)', id: Date.now() + 1 }]);
         });
         setClaudeRunning(false);
         return;
@@ -3600,7 +3619,7 @@ function TerminalView() {
       });
     } catch(e) {
       setClaudeHistory(function(prev) {
-        return prev.filter(function(h) { return h.type !== 'thinking'; }).concat([{ type: 'output', text: '(Error: ' + e.message + '. Is serve.py running with the terminal endpoint?)', id: Date.now() + 1 }]);
+        return prev.filter(function(h) { return h.type !== 'thinking'; }).concat([{ type: 'output', text: '(Error: ' + e.message + '. Is serve_lite.py running with the terminal endpoint?)', id: Date.now() + 1 }]);
       });
     }
     setClaudeRunning(false);
@@ -4407,11 +4426,32 @@ function App() {
         });
 
         source.addEventListener('error', function(e) {
-          // EventSource network error — try to reconnect once
+          // EventSource network error — probe the stream-status endpoint
+          // so we can tell "server is alive, stream still running, just
+          // reconnect" apart from "server returned a real HTTP error".
+          //
+          // This mirrors hermes-webui's streamChat pattern: any non-OK
+          // response is surfaced as a visible chat error rather than
+          // silently resolving (which used to look like a stuck "thinking"
+          // state forever).
           source.close();
           console.warn('[stream] EventSource error, checking stream status...');
           fetch(API_BASE + '/api/chat/stream/status?stream_id=' + encodeURIComponent(streamId))
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+              if (!r.ok) {
+                // e.g. 404 if the proxy is missing this route (running
+                // the old serve.py, or serve_lite.py isn't up). Pull the
+                // body for context and throw so the catch branch can
+                // surface it in the chat.
+                return r.text().then(function(body) {
+                  var hint = (r.status === 404)
+                    ? ' — this usually means you are running the old serve.py; use serve_lite.py'
+                    : '';
+                  throw new Error('stream status ' + r.status + hint + (body ? ': ' + body.slice(0, 200) : ''));
+                });
+              }
+              return r.json();
+            })
             .then(function(st) {
               if (st.active) {
                 console.log('[stream] Stream still active, reconnecting...');
@@ -4431,15 +4471,38 @@ function App() {
                 });
                 source2.addEventListener('error', function() {
                   source2.close();
+                  // Reconnect also failed — show a real error instead of
+                  // resolving silently with whatever partial content we had.
+                  if (!fullContent) {
+                    fullContent = '**Error:** Stream reconnect failed. ' +
+                      'Check that serve_lite.py is running on port 3333 and the Hermes agent is reachable on 8642.';
+                    onChunk(fullContent);
+                  }
                   wrappedOnDone(fullContent);
                   resolve({ content: fullContent, usage: streamUsage });
                 });
               } else {
+                // Stream ended before we saw a 'done' event. If we have
+                // no content at all, treat it as an error so the user
+                // sees something actionable instead of an empty bubble.
+                if (!fullContent) {
+                  fullContent = '**Error:** Stream ended without a completion event. ' +
+                    'The agent may have crashed or the connection dropped. Check the Hermes agent logs on port 8642.';
+                  onChunk(fullContent);
+                }
                 wrappedOnDone(fullContent);
                 resolve({ content: fullContent, usage: streamUsage });
               }
             })
-            .catch(function() {
+            .catch(function(err) {
+              // Either the status endpoint returned non-OK (e.g. 404 from
+              // old serve.py) or the fetch itself failed (proxy down).
+              // Either way: surface it so the user isn't staring at a
+              // silent timeout.
+              var errMsg = (err && err.message) || 'stream error';
+              console.error('[stream] ' + errMsg);
+              fullContent = '**Error:** ' + errMsg;
+              onChunk(fullContent);
               wrappedOnDone(fullContent);
               resolve({ content: fullContent, usage: streamUsage });
             });

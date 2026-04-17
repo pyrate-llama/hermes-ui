@@ -10,6 +10,7 @@ Do NOT use sandbox tools (Bash, Read, Write, Edit, Grep, Glob). Use Desktop Comm
 
 ## Architecture
 - hermes-ui.html: Single-file React 18 + Babel standalone app
-- serve.py: Python proxy server on port 3333 (stdlib only)
+- serve_lite.py: Python proxy server on port 3333 (stdlib only) — canonical server
+- serve.py: Deprecation shim that execs serve_lite.py (kept for backwards compatibility with old systemd units)
 - Hermes Agent runs at localhost:8642
 - GitHub: pyrate-llama/hermes-ui
