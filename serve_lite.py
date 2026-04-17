@@ -357,16 +357,7 @@ def _run_agent_streaming(session_id, messages, stream_id):
             f"Active workspace: {_workspace}\n"
             "Every user message is prefixed with [Workspace: /path] indicating the "
             "active workspace. Use this as the default working directory for all "
-            "file operations.\n"
-            "\n"
-            "EXECUTION PROTOCOL: If your response mentions that you will do "
-            "something (load a skill, run a command, read a file, download a "
-            "file, call any tool), you MUST emit the matching tool call in the "
-            "same turn. Never write phrases like \"Loading...\", \"Let me check...\", "
-            "\"I'll now...\", or \"Downloading it now\" without immediately "
-            "following with the actual tool call. Do not end a turn with only "
-            "narrated intent. If you cannot act for any reason, say why and "
-            "ask one specific clarifying question instead."
+            "file operations."
         )
 
         # Build conversation history from SERVER-SIDE session (not frontend messages).
