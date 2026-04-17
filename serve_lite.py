@@ -248,19 +248,24 @@ def _run_agent_streaming(session_id, messages, stream_id):
         except Exception:
             pass
 
-        # Read toolsets from config
-        toolsets = ["cli"]
+        # Resolve toolsets via the agent's own function so MCP server toolsets
+        # are included — matches nesquena/hermes-webui api/streaming.py.
+        # Our previous raw config read returned ['hermes-cli'] which skipped MCP
+        # discovery entirely, so the model had no MCP tools to call and narrated
+        # tool use instead of emitting tool_calls.
         try:
+            from hermes_cli.tools_config import _get_platform_tools
+            from tools.mcp_tool import discover_mcp_tools
+            discover_mcp_tools()  # idempotent; lazy MCP server init
             import yaml
             cfg_path = os.path.join(HERMES_HOME, "config.yaml")
-            if os.path.exists(cfg_path):
-                with open(cfg_path) as f:
-                    cfg = yaml.safe_load(f) or {}
-                pt = cfg.get("platform_toolsets", {})
-                if isinstance(pt, dict) and "cli" in pt:
-                    toolsets = pt["cli"]
-        except Exception:
-            pass
+            with open(cfg_path) as f:
+                cfg = yaml.safe_load(f) or {}
+            toolsets = list(_get_platform_tools(cfg, "cli"))
+            print(f"[serve] resolved cli toolsets ({len(toolsets)}): {toolsets}", flush=True)
+        except Exception as _e:
+            print(f"[serve] WARNING: toolset resolution fallback ({_e})", flush=True)
+            toolsets = ["hermes-cli"]
 
         full_text = ""
         _token_sent = False
@@ -443,14 +448,14 @@ def _run_agent_streaming(session_id, messages, stream_id):
         _compressed = False
         if _agent_sid and _agent_sid != session_id:
             old_sid, new_sid = session_id, _agent_sid
-            old_path = SESSION_DIR / f"{old_sid}.json"
-            new_path = SESSION_DIR / f"{new_sid}.json"
+            old_path = os.path.join(SESSION_DIR, f"{old_sid}.json")
+            new_path = os.path.join(SESSION_DIR, f"{new_sid}.json")
             with SESSIONS_LOCK:
                 if old_sid in SESSIONS:
                     SESSIONS[new_sid] = SESSIONS.pop(old_sid)
-            if old_path.exists() and not new_path.exists():
+            if os.path.exists(old_path) and not os.path.exists(new_path):
                 try:
-                    old_path.rename(new_path)
+                    os.rename(old_path, new_path)
                 except OSError:
                     print(f"[serve] WARNING: rename {old_sid}->{new_sid} failed", flush=True)
             session_id = new_sid  # so 'done' event reports the new id
