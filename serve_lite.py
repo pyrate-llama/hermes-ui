@@ -433,6 +433,35 @@ def _run_agent_streaming(session_id, messages, stream_id):
                 })
             return  # Don't send done — apperror already closes the stream
 
+        # ── Handle context compression side effects ──
+        # Mirrors nesquena/hermes-webui api/streaming.py lines 1160-1192.
+        # If compression fired inside run_conversation, the agent rotated its
+        # session_id. Rename the session file and remap SESSIONS so subsequent
+        # turns keep writing to the correct file. Also emit a 'compressed'
+        # SSE event so the frontend can show a toast.
+        _agent_sid = getattr(agent, "session_id", None)
+        _compressed = False
+        if _agent_sid and _agent_sid != session_id:
+            old_sid, new_sid = session_id, _agent_sid
+            old_path = SESSION_DIR / f"{old_sid}.json"
+            new_path = SESSION_DIR / f"{new_sid}.json"
+            with SESSIONS_LOCK:
+                if old_sid in SESSIONS:
+                    SESSIONS[new_sid] = SESSIONS.pop(old_sid)
+            if old_path.exists() and not new_path.exists():
+                try:
+                    old_path.rename(new_path)
+                except OSError:
+                    print(f"[serve] WARNING: rename {old_sid}->{new_sid} failed", flush=True)
+            session_id = new_sid  # so 'done' event reports the new id
+            _compressed = True
+        if not _compressed:
+            _compressor = getattr(agent, "context_compressor", None)
+            if _compressor and getattr(_compressor, "compression_count", 0) > 0:
+                _compressed = True
+        if _compressed:
+            put("compressed", {"message": "Context auto-compressed to continue the conversation"})
+
         # Gather usage stats
         input_tokens = getattr(agent, "session_prompt_tokens", 0) or 0
         output_tokens = getattr(agent, "session_completion_tokens", 0) or 0
@@ -1004,6 +1033,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_memory_write()
         elif self.path == "/api/skills/save":
             self._handle_skill_save()
+        elif self.path.startswith("/server/pull-restart"):
+            self._server_pull_restart()
         elif self.path.startswith("/server/restart"):
             self._server_restart()
         else:
@@ -1024,6 +1055,27 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
 
     def _server_restart(self):
         self._json({"ok": True, "message": "Restarting..."})
+        def _do_restart():
+            time.sleep(0.5)
+            _flush_all_sessions()
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        threading.Thread(target=_do_restart, daemon=True).start()
+
+    def _server_pull_restart(self):
+        """Run `git pull --ff-only` in the hermes-ui repo, then restart.
+        Response includes the pull output so the UI can display it."""
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        try:
+            result = subprocess.run(
+                ["git", "-C", repo_dir, "pull", "--ff-only"],
+                capture_output=True, text=True, timeout=30,
+            )
+            pull_output = ((result.stdout or "") + (result.stderr or "")).strip() or "ok"
+            if result.returncode != 0:
+                pull_output = f"error (rc={result.returncode}): {pull_output}"
+        except Exception as e:
+            pull_output = f"error: {e}"
+        self._json({"ok": True, "pull": pull_output, "message": "Restarting..."})
         def _do_restart():
             time.sleep(0.5)
             _flush_all_sessions()

@@ -874,7 +874,7 @@
   }
   .terminal-tab.active { background: var(--bg-active); color: var(--accent); }
   .terminal-tab:hover { color: var(--text-primary); }
-  .terminal-controls { display: flex; gap: 6px; align-items: center; }
+  .terminal-controls { display: flex; gap: 6px; align-items: center; flex-shrink: 0; margin-left: auto; }
   .terminal-close-btn {
     background: none; border: none; color: var(--text-muted);
     cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px;
@@ -908,7 +908,9 @@
   .terminal-status {
     font-size: 11px; color: var(--text-muted);
     display: flex; align-items: center; gap: 6px;
+    min-width: 0; overflow: hidden; white-space: nowrap;
   }
+  .terminal-close-btn { flex-shrink: 0; }
   .terminal-status .live-dot {
     width: 6px; height: 6px; border-radius: 50%;
     background: var(--success); animation: pulse 1.5s ease-in-out infinite;
@@ -2050,7 +2052,7 @@ function TerminalPanel({ isOpen, onClose, localLogs, artifacts, onArtifactTab, o
   return (
     <div className={"terminal-panel " + (isOpen ? '' : 'hidden')}>
       <div className="terminal-panel-header">
-        <div style={{display:'flex', gap:'4px'}}>
+        <div style={{display:'flex', gap:'4px', minWidth:0, overflowX:'auto', overflowY:'hidden', flexShrink:1, scrollbarWidth:'none'}}>
           <button className={"terminal-tab " + (activeTab === 'errors' ? 'active' : '')} onClick={function(){setActiveTab('errors'); if(onArtifactTab) onArtifactTab(false);}}>Errors</button>
           <button className={"terminal-tab " + (activeTab === 'webui' ? 'active' : '')} onClick={function(){setActiveTab('webui'); if(onArtifactTab) onArtifactTab(false);}}>Web UI</button>
           <button className={"terminal-tab " + (activeTab === 'all' ? 'active' : '')} onClick={function(){setActiveTab('all'); if(onArtifactTab) onArtifactTab(false);}}>All</button>
@@ -4386,6 +4388,15 @@ function App() {
           }).catch(function(err) { console.warn('[stream] Auto-approve failed:', err); });
         });
 
+        source.addEventListener('compressed', function(e) {
+          // Mirrors nesquena/hermes-webui: context auto-compression notification.
+          var d = {};
+          try { d = JSON.parse(e.data); } catch(err) {}
+          var msg = d.message || 'Context auto-compressed to continue the conversation';
+          console.log('[stream] ' + msg);
+          if (onThinking) onThinking('[compressed] ' + msg);
+        });
+
         source.addEventListener('done', function(e) {
           source.close();
           var d = JSON.parse(e.data);
@@ -5175,6 +5186,35 @@ function App() {
       }
 
       stopStreaming(sessionId);
+
+      // ── Handle backend session-id rotation from context compression ──
+      // Mirrors nesquena/hermes-webui messages.js: S.session = d.session.
+      // When compression fires, the backend rotates session_id and emits
+      // the new one in the 'done' event's session object. Rename the
+      // conversation in React state so subsequent turns use the new id.
+      var _rotatedSid = streamResult && streamResult.session && streamResult.session.session_id;
+      if (_rotatedSid && _rotatedSid !== sessionId) {
+        console.log('[stream] Session rotated by compression:', sessionId, '->', _rotatedSid);
+        var _oldSid = sessionId;
+        setConversations(function(prev) {
+          return prev.map(function(c) {
+            if (c.id !== _oldSid) return c;
+            return Object.assign({}, c, { id: _rotatedSid });
+          });
+        });
+        // Update active id so next send uses the new id (handles ref, state, localStorage)
+        if (activeConvRef.current === _oldSid) {
+          setActiveConvId(_rotatedSid);
+        }
+        // Rekey streaming map if old id was tracked
+        if (streamingMap.current && streamingMap.current[_oldSid]) {
+          streamingMap.current[_rotatedSid] = streamingMap.current[_oldSid];
+          delete streamingMap.current[_oldSid];
+        }
+        // Update local sessionId so the rest of this function sees the new id
+        sessionId = _rotatedSid;
+      }
+
       // Capture token usage from stream result
       var usage = streamResult && streamResult.usage;
       // If API didn't provide usage, don't estimate — show nothing rather than wrong numbers
