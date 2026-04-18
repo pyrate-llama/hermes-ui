@@ -8,6 +8,12 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
+> [!IMPORTANT]
+> **Karpathy-style behavioral guidelines are ON by default.**
+> New chats automatically get a system-prompt appendix enforcing four coding principles: *Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution*. This tightens Hermes into a careful, scoped code collaborator rather than a chatty generalist.
+>
+> If this isn't what you want, turn it off in **Settings → General → Apply Karpathy behavioral guidelines**. The change applies to new chats only — existing chats keep whatever setting they started with. The prompt text lives in [`behavioral_guidelines.md`](behavioral_guidelines.md) and is fully editable.
+
 ### Artifact Panel
 ![Artifact Panel](screenshots/screenshot-artifacts.png)
 

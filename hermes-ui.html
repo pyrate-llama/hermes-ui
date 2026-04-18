@@ -1670,11 +1670,12 @@ function MessageBubble({ message, onImageClick, onEdit }) {
 function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
   const [geminiKey, setGeminiKey] = useState(config.geminiKey || '');
   const [baseSystemPrompt, setBaseSystemPrompt] = useState(config.baseSystemPrompt || '');
+  const [applyBehavioralGuidelines, setApplyBehavioralGuidelines] = useState(!config || config.applyBehavioralGuidelines !== false);
   const [settingsTab, setSettingsTab] = useState('general');
   const [serverStatus, setServerStatus] = useState(null);
 
   const handleSave = () => {
-    onSave({ apiUrl: config.apiUrl, geminiKey, baseSystemPrompt });
+    onSave({ apiUrl: config.apiUrl, geminiKey, baseSystemPrompt, applyBehavioralGuidelines });
     onClose();
   };
 
@@ -1701,15 +1702,23 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth:'560px',maxHeight:'85vh',overflow:'auto'}}>
         <div className="modal-title">Settings</div>
-        <div style={{display:'flex',gap:'4px',marginBottom:'16px'}}>
-          {['general','server','remote'].map(function(tab) {
-            return (
-              <button key={tab} onClick={function(){ setSettingsTab(tab); }}
-                style={{background: settingsTab === tab ? 'var(--accent)' : 'var(--bg-tertiary)', color: settingsTab === tab ? 'white' : 'var(--text-secondary)', border:'1px solid ' + (settingsTab === tab ? 'var(--accent)' : 'var(--border)'), borderRadius:'8px', padding:'6px 14px', fontSize:'12px', cursor:'pointer', fontWeight: settingsTab === tab ? '600' : '400', textTransform:'capitalize'}}>
-                {tab === 'general' ? 'General' : tab === 'server' ? 'Server' : 'Remote Access'}
-              </button>
-            );
-          })}
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',gap:'12px'}}>
+          <div style={{display:'flex',gap:'4px'}}>
+            {['general','server','remote'].map(function(tab) {
+              return (
+                <button key={tab} onClick={function(){ setSettingsTab(tab); }}
+                  style={{background: settingsTab === tab ? 'var(--accent)' : 'var(--bg-tertiary)', color: settingsTab === tab ? 'white' : 'var(--text-secondary)', border:'1px solid ' + (settingsTab === tab ? 'var(--accent)' : 'var(--border)'), borderRadius:'8px', padding:'6px 14px', fontSize:'12px', cursor:'pointer', fontWeight: settingsTab === tab ? '600' : '400', textTransform:'capitalize'}}>
+                  {tab === 'general' ? 'General' : tab === 'server' ? 'Server' : 'Remote Access'}
+                </button>
+              );
+            })}
+          </div>
+          {settingsTab === 'general' && (
+            <button className="modal-btn primary" onClick={handleSave}
+              style={{padding:'6px 14px',fontSize:'12px',fontWeight:'600',borderRadius:'8px'}}>
+              Save
+            </button>
+          )}
         </div>
 
         {settingsTab === 'general' ? (
@@ -1721,6 +1730,17 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
             <div className="modal-section">
               <label className="modal-label">Base System Prompt</label>
               <textarea className="modal-input" style={{ minHeight: '120px', resize: 'vertical' }} value={baseSystemPrompt} onChange={e => setBaseSystemPrompt(e.target.value)} placeholder="Optional system prompt to include with all messages" />
+            </div>
+            <div className="modal-section">
+              <label className="modal-label" style={{display:'flex',alignItems:'center',gap:'8px',cursor:'pointer',marginBottom:'4px'}}>
+                <input type="checkbox" checked={applyBehavioralGuidelines} onChange={e => setApplyBehavioralGuidelines(e.target.checked)} style={{cursor:'pointer',margin:0}} />
+                <span>Apply Karpathy behavioral guidelines</span>
+              </label>
+              <div style={{fontSize:'11px',color:'var(--text-secondary)',marginTop:'6px',lineHeight:'1.5',paddingLeft:'22px'}}>
+                Adds four coding principles: <em>Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution</em>.
+                <br />
+                <strong style={{color:'var(--text-primary)'}}>Open a new chat to apply changes.</strong> Existing chats keep the setting they started with.
+              </div>
             </div>
             <div className="config-panel">
               <div className="config-section-title">Hermes Configuration</div>
@@ -1869,7 +1889,6 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
 
         <div className="modal-buttons" style={{marginTop:'16px'}}>
           <button className="modal-btn secondary" onClick={onClose}>Cancel</button>
-          {settingsTab === 'general' && <button className="modal-btn primary" onClick={handleSave}>Save</button>}
         </div>
       </div>
     </div>
@@ -3921,9 +3940,9 @@ function App() {
   const [config, setConfig] = useState(() => {
     try {
       const saved = localStorage.getItem('hermes-config');
-      return saved ? JSON.parse(saved) : { apiUrl: API_BASE, geminiKey: '', baseSystemPrompt: '' };
+      return saved ? JSON.parse(saved) : { apiUrl: API_BASE, geminiKey: '', baseSystemPrompt: '', applyBehavioralGuidelines: true };
     } catch(e) {
-      return { apiUrl: API_BASE, geminiKey: '', baseSystemPrompt: '' };
+      return { apiUrl: API_BASE, geminiKey: '', baseSystemPrompt: '', applyBehavioralGuidelines: true };
     }
   });
 
@@ -4199,7 +4218,7 @@ function App() {
       // Two-step flow matching hermes-webui:
       // 1. POST /api/chat/start → {stream_id}
       // 2. EventSource /api/chat/stream?stream_id=X → named SSE events
-      // options: { baseSystemPrompt?: string }
+      // options: { baseSystemPrompt?: string, applyBehavioralGuidelines?: boolean }
       var opts = options || {};
       // Build messages array for the API
       var apiMessages = [];
@@ -4223,6 +4242,7 @@ function App() {
           session_id: sessionId,
           messages: apiMessages,
           base_system_prompt: opts.baseSystemPrompt || '',
+          apply_behavioral_guidelines: !!opts.applyBehavioralGuidelines,
         }),
         signal: signal,
       });
@@ -5158,7 +5178,7 @@ function App() {
         },
         abortCtrl.signal,
         messagesRef.current,
-        { baseSystemPrompt: (config && config.baseSystemPrompt) || '' }
+        { baseSystemPrompt: (config && config.baseSystemPrompt) || '', applyBehavioralGuidelines: !config || config.applyBehavioralGuidelines !== false }
       );
     } catch (err) {
       if (err.name !== 'AbortError') {

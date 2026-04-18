@@ -585,6 +585,41 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                 flush=True,
             )
 
+        # Behavioral guidelines toggle from Settings → General.  When ON, we
+        # read behavioral_guidelines.md fresh (no cache) and append it to the
+        # base_system_prompt with a clear separator.  File lives alongside
+        # serve_lite.py so it's version-controlled and editable without
+        # touching code.  Changes take effect on new chats — existing chats
+        # keep the setting they started with.
+        if bool(body.get("apply_behavioral_guidelines")):
+            guidelines_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "behavioral_guidelines.md",
+            )
+            try:
+                with open(guidelines_path, "r", encoding="utf-8") as _gf:
+                    _guidelines = _gf.read().strip()
+                if _guidelines:
+                    _separator = "\n\n---\n\n" if base_system_prompt else ""
+                    base_system_prompt = (base_system_prompt + _separator + _guidelines).strip()
+                    print(
+                        f"[serve] /api/chat/start behavioral_guidelines appended "
+                        f"({len(_guidelines)} chars)",
+                        flush=True,
+                    )
+            except FileNotFoundError:
+                print(
+                    f"[serve] /api/chat/start apply_behavioral_guidelines=True "
+                    f"but {guidelines_path} not found — skipping",
+                    flush=True,
+                )
+            except Exception as _bg_err:
+                print(
+                    f"[serve] /api/chat/start behavioral_guidelines read failed: "
+                    f"{_bg_err!r} — skipping",
+                    flush=True,
+                )
+
         if not messages:
             return self._json({"error": "No messages provided"}, 400)
 
