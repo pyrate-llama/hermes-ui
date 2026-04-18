@@ -158,33 +158,64 @@
 
   .header {
     display: flex; align-items: center; justify-content: space-between;
-    background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    background: var(--glass); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
     border-bottom: 1px solid var(--glass-border);
-    padding: 12px 20px; gap: 12px;
-    height: 48px; min-height: 48px; max-height: 48px; overflow: hidden; flex-shrink: 0;
+    padding: 10px 18px 10px 18px; gap: 14px;
+    height: 52px; min-height: 52px; max-height: 52px; overflow: hidden; flex-shrink: 0;
+    position: relative;
   }
-  .header-title { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 200px; }
+  /* Subtle gradient accent line under the header */
+  .header::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(124,111,224,0.25) 30%, rgba(68,216,138,0.15) 70%, transparent 100%);
+    pointer-events: none; opacity: 0.8;
+  }
+  /* When sidebar is collapsed, reserve space for the floating sidebar toggle */
+  .header.sidebar-collapsed { padding-left: 56px; }
+  .header-title {
+    font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+    color: var(--text-primary);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0; flex: 1 1 auto;
+  }
   .header-status {
     font-size: 12px; color: var(--text-muted);
     display: flex; align-items: center; gap: 6px;
     white-space: nowrap; flex-shrink: 0;
   }
   .status-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--success); opacity: 0.7;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--success); opacity: 0.9;
+    box-shadow: 0 0 8px rgba(68,216,138,0.5);
   }
-  .status-dot.disconnected { background: var(--danger); }
+  .status-dot.disconnected { background: var(--danger); box-shadow: 0 0 8px rgba(224,85,85,0.5); }
 
   .header-controls {
-    display: flex; align-items: center; gap: 8px; margin-left: auto;
+    display: flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0;
+  }
+  /* Visual divider between theme swatches and action buttons */
+  .header-controls-divider {
+    width: 1px; height: 20px; background: var(--glass-border);
+    margin: 0 6px; flex-shrink: 0;
   }
   .header-btn {
-    background: none; border: 1px solid transparent; color: var(--text-secondary);
-    cursor: pointer; padding: 6px 10px; border-radius: 8px;
-    font-size: 14px; transition: all 0.2s ease;
+    background: transparent; border: 1px solid transparent; color: var(--text-secondary);
+    cursor: pointer; padding: 0; border-radius: 8px;
+    font-size: 14px; transition: all 0.15s ease;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; flex-shrink: 0;
   }
-  .header-btn:hover { background: var(--glass-hover); color: var(--text-primary); border-color: var(--glass-border); }
-  .header-btn.active { background: var(--accent-dim); color: var(--accent); border-color: rgba(124,111,224,0.2); box-shadow: 0 0 12px rgba(124,111,224,0.15); }
+  .header-btn:hover {
+    background: var(--glass-hover); color: var(--text-primary);
+    border-color: var(--glass-border);
+    transform: translateY(-1px);
+  }
+  .header-btn:active { transform: translateY(0); }
+  .header-btn.active {
+    background: linear-gradient(135deg, var(--accent-dim), rgba(124,111,224,0.04));
+    color: var(--accent); border-color: rgba(124,111,224,0.25);
+    box-shadow: 0 0 16px rgba(124,111,224,0.18), inset 0 1px 0 rgba(255,255,255,0.04);
+  }
 
   .messages {
     flex: 1; overflow-y: auto; display: flex; flex-direction: column;
@@ -564,15 +595,16 @@
   }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   .modal-content {
-    background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    background: var(--glass); backdrop-filter: blur(24px) saturate(1.3); -webkit-backdrop-filter: blur(24px) saturate(1.3);
     border: 1px solid var(--glass-border);
     border-radius: 16px; padding: 24px; max-width: 500px; width: 90%;
     max-height: 80vh; overflow-y: auto;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.02), inset 0 1px 0 rgba(255,255,255,0.04);
     animation: modalSlide 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
   }
   @keyframes modalSlide { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
-  .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+  .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; padding-right: 40px; letter-spacing: -0.01em; }
   .modal-section { margin-bottom: 20px; }
   .modal-label {
     display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary);
@@ -941,11 +973,16 @@
     color: var(--text-secondary); border-left: 2px solid transparent;
     font-size: 13px;
   }
-  .nav-item:hover { background: var(--glass-hover); color: var(--text-primary); }
+  .nav-item:hover {
+    background: var(--glass-hover); color: var(--text-primary);
+    transform: translateX(1px);
+  }
   .nav-item.active {
-    background: var(--accent-dim); color: var(--accent);
+    background: linear-gradient(90deg, var(--accent-dim), rgba(124,111,224,0.04) 80%, transparent);
+    color: var(--accent);
     border-left-color: var(--accent);
-    box-shadow: inset 0 0 20px rgba(124,111,224,0.06);
+    box-shadow: inset 0 0 20px rgba(124,111,224,0.08), 0 1px 0 rgba(255,255,255,0.02);
+    font-weight: 600;
   }
   .nav-item-icon { font-size: 14px; flex-shrink: 0; }
   .nav-item-label { font-size: 13px; font-weight: 500; }
@@ -1228,18 +1265,58 @@
 
   /* ── Theme switcher button ── */
   .theme-switcher {
-    display: flex; gap: 4px; align-items: center;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 9px; border-radius: 10px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--glass-border);
+    flex-shrink: 0;
   }
   .theme-dot {
-    width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
+    width: 14px; height: 14px; border-radius: 50%; cursor: pointer;
     border: 2px solid transparent; transition: all 0.2s ease;
     position: relative;
   }
-  .theme-dot:hover { transform: scale(1.15); }
-  .theme-dot.active { border-color: var(--text-primary); box-shadow: 0 0 8px var(--accent-glow); }
-  .theme-dot.midnight { background: linear-gradient(135deg, #7c6fe0, #08080e); }
-  .theme-dot.twilight { background: linear-gradient(135deg, #d4a044, #0e0a08); }
-  .theme-dot.dawn { background: linear-gradient(135deg, #6050b0, #f4f2f0); }
+  .theme-dot:hover { transform: scale(1.2); }
+  .theme-dot.active {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 10px var(--accent-glow), inset 0 0 0 1px rgba(0,0,0,0.2);
+  }
+  .theme-dot.midnight { background: linear-gradient(135deg, #9488f0 0%, #7c6fe0 50%, #08080e 100%); }
+  .theme-dot.twilight { background: linear-gradient(135deg, #e8b860 0%, #d4a044 50%, #0e0a08 100%); }
+  .theme-dot.dawn { background: linear-gradient(135deg, #7d6de0 0%, #6050b0 50%, #f4f2f0 100%); }
+
+  /* Floating sidebar toggle (shown when sidebar is collapsed) */
+  .floating-sidebar-btn {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, rgba(124,111,224,0.12), rgba(16,16,28,0.75));
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 16px; z-index: 10;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  .floating-sidebar-btn:hover {
+    color: var(--text-primary); border-color: rgba(124,111,224,0.3);
+    box-shadow: 0 2px 12px rgba(124,111,224,0.2);
+    transform: translateY(-50%) translateX(1px);
+  }
+
+  /* Modal close button (X in top-right corner of modals) */
+  .modal-close-btn {
+    position: absolute; top: 14px; right: 14px;
+    width: 32px; height: 32px; border-radius: 8px;
+    background: transparent; border: 1px solid transparent;
+    color: var(--text-muted); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 18px; line-height: 1; transition: all 0.15s ease;
+  }
+  .modal-close-btn:hover {
+    background: rgba(224,85,85,0.08); border-color: rgba(224,85,85,0.18);
+    color: var(--danger);
+  }
 
   /* ── Keyboard shortcuts modal ── */
   .shortcuts-modal {
@@ -1489,6 +1566,7 @@ function ShortcutsModal({ onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content shortcuts-modal" onClick={function(e) { e.stopPropagation(); }}>
+        <button className="modal-close-btn" onClick={onClose} title="Close (Esc)" aria-label="Close">{'×'}</button>
         <div className="modal-title">{'Keyboard Shortcuts'}</div>
         <div>
           {shortcuts.map(function(s, i) {
@@ -1701,6 +1779,7 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth:'560px',maxHeight:'85vh',overflow:'auto'}}>
+        <button className="modal-close-btn" onClick={onClose} title="Close (Esc)" aria-label="Close">{'×'}</button>
         <div className="modal-title">Settings</div>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',gap:'12px'}}>
           <div style={{display:'flex',gap:'4px'}}>
@@ -5421,8 +5500,7 @@ function App() {
       {/* Sidebar */}
       {/* Floating sidebar toggle when collapsed */}
       {sidebarCollapsed && (
-        <button onClick={() => setSidebarCollapsed(false)} title="Show sidebar"
-          style={{position:'absolute',left:'8px',top:'12px',zIndex:10,background:'var(--glass)',backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',border:'1px solid var(--glass-border)',color:'var(--text-secondary)',borderRadius:'8px',padding:'6px 10px',cursor:'pointer',fontSize:'16px',transition:'all 0.2s',boxShadow:'0 2px 12px rgba(0,0,0,0.3)'}}>
+        <button className="floating-sidebar-btn" onClick={() => setSidebarCollapsed(false)} title="Show sidebar">
           {'☰'}
         </button>
       )}
@@ -5516,7 +5594,7 @@ function App() {
       <div className={"main " + (currentView !== 'chat' ? 'non-chat-view' : '')}>
         {currentView === 'chat' ? (
           <React.Fragment>
-            <div className="header">
+            <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">{activeConvId ? (conversations.find(c => c.id === activeConvId)?.title || 'Hermes') : 'Hermes'}</div>
               <div className="header-status">
                 <div className={"status-dot " + (connected === false ? 'disconnected' : '')}></div>
@@ -5529,6 +5607,7 @@ function App() {
                     return <div key={key} className={"theme-dot " + t.className + (currentTheme === key ? ' active' : '')} title={t.label} onClick={function() { setCurrentTheme(key); }} />;
                   })}
                 </div>
+                <div className="header-controls-divider"></div>
                 <button className="header-btn hide-mobile" onClick={exportChat} title="Export as PDF/HTML">{'📄'}</button>
                 <button className="header-btn hide-mobile" onClick={function() { if (messages.length > 0) { var t = activeConvId ? (conversations.find(function(c){return c.id===activeConvId;})||{}).title : 'Chat'; exportChatAsMarkdown(messages, t || 'Chat'); } }} title="Export as Markdown">{'📝'}</button>
                 <button className={"header-btn hide-mobile " + (showTerminal ? 'active' : '')} onClick={function(){ setShowTerminal(!showTerminal); }} title="Live terminal logs">{'>_'}</button>
@@ -5536,7 +5615,6 @@ function App() {
                 <button className="header-btn" onClick={toggleSearchMode} title="Search content">{'🔍'}</button>
                 <button className="header-btn hide-mobile" onClick={function(){ setShowShortcuts(true); }} title="Keyboard shortcuts (?)">{'⌨'}</button>
                 <button className="header-btn" onClick={() => setShowSettings(true)} title="Settings">{'⚙'}</button>
-                <button className="header-btn" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title="Toggle sidebar">{'☰'}</button>
               </div>
             </div>
 
@@ -5681,7 +5759,7 @@ function App() {
           </React.Fragment>
         ) : (
           <React.Fragment>
-            <div className="header">
+            <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">
                 {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : 'Skills'}
               </div>
@@ -5691,9 +5769,9 @@ function App() {
                     return <div key={key} className={"theme-dot " + t.className + (currentTheme === key ? ' active' : '')} title={t.label} onClick={function() { setCurrentTheme(key); }} />;
                   })}
                 </div>
+                <div className="header-controls-divider"></div>
                 <button className="header-btn hide-mobile" onClick={function(){ setShowShortcuts(true); }} title="Keyboard shortcuts (?)">{'⌨'}</button>
                 <button className="header-btn" onClick={() => setShowSettings(true)} title="Settings">{'⚙'}</button>
-                <button className="header-btn" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title="Toggle sidebar">{'☰'}</button>
               </div>
             </div>
             {currentView === 'dashboard' && <DashboardView />}
