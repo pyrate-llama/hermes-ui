@@ -4195,10 +4195,12 @@ function App() {
 
     async getSessionMessages(sessionId) { return []; },
 
-    async chatStream(sessionId, message, onChunk, onDone, onToolEvent, onThinking, signal, messageHistory) {
+    async chatStream(sessionId, message, onChunk, onDone, onToolEvent, onThinking, signal, messageHistory, options) {
       // Two-step flow matching hermes-webui:
       // 1. POST /api/chat/start → {stream_id}
       // 2. EventSource /api/chat/stream?stream_id=X → named SSE events
+      // options: { baseSystemPrompt?: string }
+      var opts = options || {};
       // Build messages array for the API
       var apiMessages = [];
       if (messageHistory && messageHistory.length > 0) {
@@ -4220,6 +4222,7 @@ function App() {
         body: JSON.stringify({
           session_id: sessionId,
           messages: apiMessages,
+          base_system_prompt: opts.baseSystemPrompt || '',
         }),
         signal: signal,
       });
@@ -5154,7 +5157,8 @@ function App() {
           }
         },
         abortCtrl.signal,
-        messagesRef.current
+        messagesRef.current,
+        { baseSystemPrompt: (config && config.baseSystemPrompt) || '' }
       );
     } catch (err) {
       if (err.name !== 'AbortError') {

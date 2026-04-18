@@ -191,7 +191,7 @@ def _get_or_create_session(session_id):
     return new_session
 
 
-def _run_agent_streaming(session_id, messages, stream_id):
+def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt=""):
     """Run AIAgent in a background thread, pushing SSE events to the queue."""
     q = STREAMS.get(stream_id)
     if q is None:
@@ -319,6 +319,15 @@ def _run_agent_streaming(session_id, messages, stream_id):
             reasoning_callback=on_reasoning,
             tool_progress_callback=on_tool,
         )
+
+        # User-configurable base system prompt from Settings → General.
+        # Passed via agent.ephemeral_system_prompt — the library's sanctioned
+        # slot for per-session personality/style injection.  Matches the
+        # personality-injection pattern in nesquena/hermes-webui api/streaming.py
+        # (which pulls from config.yaml agent.personalities; we read from a
+        # UI field instead, but use the same agent attribute).
+        if base_system_prompt:
+            agent.ephemeral_system_prompt = base_system_prompt
 
         # Store agent instance for cancel/interrupt
         with STREAMS_LOCK:
@@ -590,6 +599,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
         messages = body.get("messages", [])
         session_id = body.get("session_id") or self.headers.get("X-Hermes-Session-Id") or f"web_{uuid.uuid4().hex[:12]}"
+        # User-configurable base system prompt from Settings → General
+        base_system_prompt = (body.get("base_system_prompt") or "").strip()
 
         if not messages:
             return self._json({"error": "No messages provided"}, 400)
@@ -601,7 +612,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
 
         thr = threading.Thread(
             target=_run_agent_streaming,
-            args=(session_id, messages, stream_id),
+            args=(session_id, messages, stream_id, base_system_prompt),
             daemon=True,
         )
         thr.start()
