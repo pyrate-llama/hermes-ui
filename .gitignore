@@ -21,3 +21,11 @@ venv/
 
 # Node (in case)
 node_modules/
+
+# Local-only: backups of third-party code (not ours to redistribute)
+backups/
+
+# Local-only: debug screenshots from dev sessions
+not_updated.png
+updated.png
+third.png
