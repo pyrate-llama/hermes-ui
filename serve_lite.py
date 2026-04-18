@@ -601,6 +601,14 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         session_id = body.get("session_id") or self.headers.get("X-Hermes-Session-Id") or f"web_{uuid.uuid4().hex[:12]}"
         # User-configurable base system prompt from Settings → General
         base_system_prompt = (body.get("base_system_prompt") or "").strip()
+        if base_system_prompt:
+            # Log only when a prompt is actually set, so the default-empty case
+            # stays quiet.  Useful when debugging "is my personality arriving?".
+            print(
+                f"[serve] /api/chat/start base_system_prompt="
+                f"{len(base_system_prompt)} chars: {base_system_prompt[:80]!r}",
+                flush=True,
+            )
 
         if not messages:
             return self._json({"error": "No messages provided"}, 400)
