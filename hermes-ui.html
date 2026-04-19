@@ -1242,6 +1242,12 @@
     cursor: pointer; border-radius: 4px; transition: background 0.1s;
   }
   .file-item:hover { background: var(--bg-hover); }
+  .file-item.active {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    color: var(--text-primary);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+  .file-item.active .file-name { font-weight: 600; }
   .file-icon { font-size: 14px; flex-shrink: 0; }
   .file-name { flex: 1; }
   .file-toggle {
@@ -1467,27 +1473,76 @@
   [data-theme="dawn"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
   [data-theme="dawn"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.15); }
 
-  /* ── Theme switcher button ── */
-  .theme-switcher {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 5px 9px; border-radius: 10px;
+  /* ── Theme menu (palette button + dropdown) ── */
+  .theme-menu { position: relative; flex-shrink: 0; }
+  .theme-menu-btn {
+    width: 32px; height: 32px; border-radius: 8px;
     background: rgba(255,255,255,0.02);
     border: 1px solid var(--glass-border);
+    color: var(--text-secondary); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all 0.15s ease;
+  }
+  .theme-menu-btn:hover {
+    color: var(--text-primary);
+    border-color: rgba(124,111,224,0.35);
+    background: rgba(124,111,224,0.08);
+  }
+  .theme-menu-btn.open {
+    color: var(--text-primary);
+    border-color: var(--accent);
+    background: rgba(124,111,224,0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .theme-menu-btn svg { width: 16px; height: 16px; }
+  .theme-menu-panel {
+    position: absolute; top: calc(100% + 6px); right: 0;
+    min-width: 180px;
+    background: linear-gradient(180deg, rgba(22,22,34,0.96) 0%, rgba(16,16,26,0.96) 100%);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow:
+      0 14px 40px rgba(0,0,0,0.55),
+      0 2px 8px rgba(0,0,0,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.04);
+    backdrop-filter: blur(18px) saturate(1.25);
+    -webkit-backdrop-filter: blur(18px) saturate(1.25);
+    z-index: 200;
+    animation: theme-menu-in 140ms cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes theme-menu-in {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  [data-theme="dawn"] .theme-menu-panel {
+    background: linear-gradient(180deg, rgba(252,250,248,0.98) 0%, rgba(246,243,240,0.98) 100%);
+  }
+  .theme-menu-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px;
+    cursor: pointer; transition: background 0.12s ease;
+    color: var(--text-secondary); font-size: 13px;
+  }
+  .theme-menu-item:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
+  [data-theme="dawn"] .theme-menu-item:hover { background: rgba(0,0,0,0.04); }
+  .theme-menu-item.active { color: var(--text-primary); font-weight: 600; }
+  .theme-menu-item-swatch {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.1);
     flex-shrink: 0;
   }
-  .theme-dot {
-    width: 14px; height: 14px; border-radius: 50%; cursor: pointer;
-    border: 2px solid transparent; transition: all 0.2s ease;
-    position: relative;
+  [data-theme="dawn"] .theme-menu-item-swatch { border-color: rgba(0,0,0,0.1); }
+  .theme-menu-item-swatch.midnight { background: linear-gradient(135deg, #9488f0 0%, #7c6fe0 50%, #08080e 100%); }
+  .theme-menu-item-swatch.twilight { background: linear-gradient(135deg, #e8b860 0%, #d4a044 50%, #0e0a08 100%); }
+  .theme-menu-item-swatch.dawn { background: linear-gradient(135deg, #7d6de0 0%, #6050b0 50%, #f4f2f0 100%); }
+  .theme-menu-item-label { flex: 1; }
+  .theme-menu-item-check {
+    width: 14px; height: 14px;
+    color: var(--accent);
+    opacity: 0;
   }
-  .theme-dot:hover { transform: scale(1.2); }
-  .theme-dot.active {
-    border-color: var(--text-primary);
-    box-shadow: 0 0 10px var(--accent-glow), inset 0 0 0 1px rgba(0,0,0,0.2);
-  }
-  .theme-dot.midnight { background: linear-gradient(135deg, #9488f0 0%, #7c6fe0 50%, #08080e 100%); }
-  .theme-dot.twilight { background: linear-gradient(135deg, #e8b860 0%, #d4a044 50%, #0e0a08 100%); }
-  .theme-dot.dawn { background: linear-gradient(135deg, #7d6de0 0%, #6050b0 50%, #f4f2f0 100%); }
+  .theme-menu-item.active .theme-menu-item-check { opacity: 1; }
 
   /* Floating sidebar toggle (shown when sidebar is collapsed) — anchored to header */
   .floating-sidebar-btn {
@@ -1627,7 +1682,7 @@
     /* Slim down header controls */
     .header-controls { gap: 2px; flex-wrap: nowrap; }
     .token-counter { display: none; }
-    .theme-switcher { display: none; }
+    .theme-menu { display: none; }
     /* Hide input hint on mobile */
     .input-hint { display: none; }
     /* Input area */
@@ -1706,6 +1761,8 @@ function Icon({ name, size, className, strokeWidth }) {
     case 'mail': return (<svg {...common}><rect x="3" y="5" width="18" height="14" rx="2" ry="2"/><polyline points="3 7 12 13 21 7"/></svg>);
     case 'cog': return (<svg {...common}><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/></svg>);
     case 'activity': return (<svg {...common}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>);
+    case 'palette': return (<svg {...common}><circle cx="13.5" cy="6.5" r=".8" fill="currentColor" stroke="none"/><circle cx="17.5" cy="10.5" r=".8" fill="currentColor" stroke="none"/><circle cx="8.5" cy="7.5" r=".8" fill="currentColor" stroke="none"/><circle cx="6.5" cy="12.5" r=".8" fill="currentColor" stroke="none"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.96 0 1.75-.78 1.75-1.75 0-.45-.17-.86-.45-1.17-.27-.31-.45-.72-.45-1.17 0-.96.79-1.75 1.75-1.75H17c2.76 0 5-2.24 5-5C22 6.01 17.52 2 12 2z"/></svg>);
+    case 'check': return (<svg {...common}><polyline points="20 6 9 17 4 12"/></svg>);
     default: return (<svg {...common}><circle cx="12" cy="12" r="4"/></svg>);
   }
 }
@@ -2732,7 +2789,12 @@ function FilesView() {
     fetch(API_BASE + '/browse?path=' + encodeURIComponent(path))
       .then(function(r) { return r.ok ? r.json() : { items: [] }; })
       .then(function(data) {
-        var items = data.items || [];
+        var raw = data.items || [];
+        // /browse returns {name,type,size} only; synthesize item.path from parent
+        var items = raw.map(function(it) {
+          var childPath = path ? (path.replace(/\/+$/, '') + '/' + it.name) : it.name;
+          return Object.assign({}, it, { path: it.path || childPath });
+        });
         if (path === '') {
           setRootItems(items);
         }
@@ -3553,7 +3615,8 @@ function JobsView() {
 
   var handleToggle = async function(job) {
     setActionLoading(job.id + '-toggle');
-    var cmd = job.status === 'active' ? 'hermes cron pause ' + job.id : 'hermes cron resume ' + job.id;
+    var _isActive = job.enabled !== false && job.state !== 'paused';
+    var cmd = _isActive ? 'hermes cron pause ' + job.id : 'hermes cron resume ' + job.id;
     await runCronCmd(cmd);
     await fetchJobs();
     setActionLoading(null);
@@ -3623,7 +3686,7 @@ function JobsView() {
           <span style={{fontSize:'14px',fontWeight:600,color:'var(--text-primary)'}}>Scheduled Cron Jobs</span>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
-          <span style={{fontSize:'11px',color:'var(--text-muted)'}}>{jobs.filter(function(j){return j.status==='active';}).length} active</span>
+          <span style={{fontSize:'11px',color:'var(--text-muted)'}}>{jobs.filter(function(j){return j.enabled !== false && j.state !== 'paused';}).length} active</span>
           <button onClick={function(){setLoading(true);fetchJobs();}} style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'4px 10px',fontSize:'11px',color:'var(--text-secondary)',cursor:'pointer'}}>Refresh</button>
         </div>
       </div>
@@ -3633,7 +3696,7 @@ function JobsView() {
 
       <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
         {jobs.map(function(job) {
-          var isActive = job.status === 'active';
+          var isActive = job.enabled !== false && job.state !== 'paused';
           return (
             <div key={job.id} className="info-card" style={{padding:'16px 20px',transition:'all 0.2s',borderLeft: isActive ? '2px solid var(--success)' : '2px solid var(--error)',opacity: isActive ? 1 : 0.6}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
@@ -3645,7 +3708,7 @@ function JobsView() {
                   )}
                   <span style={{fontSize:'14px',fontWeight:600,color:'var(--text-primary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{job.name || 'Unnamed Job'}</span>
                 </div>
-                <span style={{fontSize:'10px',fontFamily:'JetBrains Mono, monospace',color:'var(--text-muted)',background:'var(--bg-tertiary)',padding:'2px 8px',borderRadius:'4px',flexShrink:0,marginLeft:'12px'}}>{job.status}</span>
+                <span style={{fontSize:'10px',fontFamily:'JetBrains Mono, monospace',color:'var(--text-muted)',background:'var(--bg-tertiary)',padding:'2px 8px',borderRadius:'4px',flexShrink:0,marginLeft:'12px'}}>{job.state || (job.enabled === false ? 'disabled' : 'active')}</span>
               </div>
 
               <div style={{fontSize:'12px',color:'var(--accent)',marginBottom:'8px',fontFamily:'JetBrains Mono, monospace'}}>{describeCron(job.schedule)}</div>
@@ -4249,6 +4312,61 @@ function StatusBar({ connected, conversations }) {
       <div className="status-bar-item" style={{opacity:0.5}}>
         <span>Hermes v1.0</span>
       </div>
+    </div>
+  );
+}
+
+function ThemeMenu({ currentTheme, setCurrentTheme }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(function() {
+    if (!open) return;
+    function onDoc(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    }
+    function onEsc(e) { if (e.key === 'Escape') setOpen(false); }
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onEsc);
+    return function() {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [open]);
+
+  return (
+    <div className="theme-menu" ref={wrapRef}>
+      <button
+        type="button"
+        className={"theme-menu-btn " + (open ? 'open' : '')}
+        onClick={function() { setOpen(function(v) { return !v; }); }}
+        title="Theme"
+        aria-label="Theme"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <Icon name="palette" size={16}/>
+      </button>
+      {open && (
+        <div className="theme-menu-panel" role="menu">
+          {Object.entries(THEMES).map(function([key, t]) {
+            var active = currentTheme === key;
+            return (
+              <div
+                key={key}
+                role="menuitemradio"
+                aria-checked={active}
+                className={"theme-menu-item " + (active ? 'active' : '')}
+                onClick={function() { setCurrentTheme(key); setOpen(false); }}
+              >
+                <span className={"theme-menu-item-swatch " + t.className}></span>
+                <span className="theme-menu-item-label">{t.label}</span>
+                <span className="theme-menu-item-check"><Icon name="check" size={14}/></span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -5845,11 +5963,7 @@ function App() {
               </div>
 
               <div className="header-controls">
-                <div className="theme-switcher">
-                  {Object.entries(THEMES).map(function([key, t]) {
-                    return <div key={key} className={"theme-dot " + t.className + (currentTheme === key ? ' active' : '')} title={t.label} onClick={function() { setCurrentTheme(key); }} />;
-                  })}
-                </div>
+                <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
                 <div className="toolbar-pill">
                   <button className="header-btn hide-mobile" onClick={exportChat} title="Export as PDF/HTML"><Icon name="file-text"/></button>
                   <button className="header-btn hide-mobile" onClick={function() { if (messages.length > 0) { var t = activeConvId ? (conversations.find(function(c){return c.id===activeConvId;})||{}).title : 'Chat'; exportChatAsMarkdown(messages, t || 'Chat'); } }} title="Export as Markdown"><Icon name="file-pen"/></button>
@@ -6019,11 +6133,7 @@ function App() {
                 {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : 'Skills'}
               </div>
               <div className="header-controls">
-                <div className="theme-switcher">
-                  {Object.entries(THEMES).map(function([key, t]) {
-                    return <div key={key} className={"theme-dot " + t.className + (currentTheme === key ? ' active' : '')} title={t.label} onClick={function() { setCurrentTheme(key); }} />;
-                  })}
-                </div>
+                <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
                 <div className="toolbar-pill">
                   <button className="header-btn hide-mobile" onClick={function(){ setShowShortcuts(true); }} title="Keyboard shortcuts (?)"><Icon name="keyboard"/></button>
                   <button className="header-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="settings"/></button>
