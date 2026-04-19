@@ -964,6 +964,36 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self._json({"jobs": [], "error": str(e)})
 
+    # ── Toolsets API (mirrors nesq webui /api/tools/toolsets) ──
+    def _handle_toolsets(self):
+        """GET /api/tools/toolsets — return per-toolset info matching nesq shape."""
+        try:
+            from hermes_cli.tools_config import (
+                _get_effective_configurable_toolsets,
+                _get_platform_tools,
+                _toolset_has_keys,
+            )
+            from toolsets import resolve_toolset
+            from hermes_cli.config import load_config
+            cfg = load_config()
+            enabled = _get_platform_tools(cfg, "cli", include_default_mcp_servers=False)
+            result = []
+            for name, label, desc in _get_effective_configurable_toolsets():
+                try:
+                    tools = sorted(set(resolve_toolset(name)))
+                except Exception:
+                    tools = []
+                is_enabled = name in enabled
+                result.append({
+                    "name": name, "label": label, "description": desc,
+                    "enabled": is_enabled, "available": is_enabled,
+                    "configured": _toolset_has_keys(name, cfg),
+                    "tools": tools,
+                })
+            self._json(result)
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+
     # ── Skills API ──
     def _handle_skills(self):
         try:
@@ -1102,6 +1132,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_skill_content()
         elif self.path == "/api/skills" or self.path.startswith("/api/skills?"):
             self._handle_skills()
+        elif self.path == "/api/tools/toolsets" or self.path.startswith("/api/tools/toolsets?"):
+            self._handle_toolsets()
         elif self.path == "/cron/list":
             self._handle_cron_list()
         else:
