@@ -5488,6 +5488,8 @@ function App() {
     setMessages((targetConv && targetConv.messages) || []);
     setActiveConvId(convId);
     setInput('');
+    // Jump back to chat view if currently on Memory/Skills/etc
+    setCurrentView('chat');
   };
 
   const deleteConversation = (convId) => {
@@ -6261,10 +6263,10 @@ function App() {
           <div style={{borderTop:'1px solid var(--border)',margin:'2px 8px'}} />
         </div>
 
-        <div className="sidebar-search" style={{display: currentView === 'chat' ? 'block' : 'none'}}>
+        <div className="sidebar-search">
           <input type="text" placeholder="Filter chats..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
         </div>
-        <div className="conversation-list" style={{display: currentView === 'chat' ? 'block' : 'none'}}>
+        <div className="conversation-list">
           {filteredConvs.map(conv => (
             <div key={conv.id} className={"conv-item " + (conv.id === activeConvId ? 'active' : '')} onClick={() => selectConversation(conv.id)}>
               <div className="conv-item-icon">{streamingSessionIds.includes(conv.id) ? '⚡' : conv.source === 'telegram' ? '✈️' : '💬'}</div>
