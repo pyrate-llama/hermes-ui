@@ -1084,7 +1084,7 @@
 
   /* Navigation Section */
   .sidebar-nav {
-    padding: 4px 6px; margin-bottom: 2px; border-bottom: 1px solid var(--border);
+    padding: 2px 6px; margin-bottom: 0; border-bottom: 1px solid var(--border);
   }
   .nav-section-label {
     font-size: 10px; font-weight: 700; color: var(--text-muted);
@@ -1099,7 +1099,7 @@
     opacity: 0.6;
   }
   .nav-item {
-    padding: 5px 10px 5px 14px; border-radius: 8px; cursor: pointer; margin: 1px 0;
+    padding: 3px 10px 3px 14px; border-radius: 8px; cursor: pointer; margin: 0;
     display: flex; align-items: center; gap: 10px; transition: all 0.2s ease;
     color: var(--text-secondary);
     font-size: 13px;
@@ -6179,17 +6179,6 @@ function App() {
         {/* Navigation */}
         <div className="sidebar-nav">
           {/* section labels removed for density */}
-          <div className="nav-item" onClick={function() { setShowMCPBrowser(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Browse connected MCP tools">
-            <span className="nav-item-icon"><Icon name="wrench" size={14}/></span>
-            <span className="nav-item-label">MCP Tools</span>
-          </div>
-          <div className="nav-item" onClick={function() { setShowShortcuts(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Keyboard shortcuts (?)">
-            <span className="nav-item-icon"><Icon name="keyboard" size={14}/></span>
-            <span className="nav-item-label">Shortcuts</span>
-          </div>
-
-          <div style={{borderTop:'1px solid var(--border)',margin:'4px 8px'}} />
-
           <div className={"nav-item " + (currentView === 'dashboard' ? 'active' : '')} onClick={function() { setCurrentView('dashboard'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon">{'📊'}</span>
             <span className="nav-item-label">Dashboard</span>
@@ -6211,7 +6200,7 @@ function App() {
             <span className="nav-item-label">Cron Jobs</span>
           </div>
 
-          <div style={{borderTop:'1px solid var(--border)',margin:'4px 8px'}} />
+          <div style={{borderTop:'1px solid var(--border)',margin:'2px 8px'}} />
           <div className={"nav-item " + (currentView === 'memory' ? 'active' : '')} onClick={function() { setCurrentView('memory'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon">{'🧠'}</span>
             <span className="nav-item-label">Memory</span>
@@ -6220,8 +6209,18 @@ function App() {
             <span className="nav-item-icon">{'✨'}</span>
             <span className="nav-item-label">Skills</span>
           </div>
+          <div className="nav-item" onClick={function() { setShowMCPBrowser(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Browse connected MCP tools">
+            <span className="nav-item-icon"><Icon name="wrench" size={14}/></span>
+            <span className="nav-item-label">MCP Tools</span>
+          </div>
 
-          <div style={{borderTop:'1px solid var(--border)',margin:'4px 8px'}} />
+          <div style={{borderTop:'1px solid var(--border)',margin:'2px 8px'}} />
+          <div className="nav-item" onClick={function() { setShowShortcuts(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Keyboard shortcuts (?)">
+            <span className="nav-item-icon"><Icon name="keyboard" size={14}/></span>
+            <span className="nav-item-label">Shortcuts</span>
+          </div>
+
+          <div style={{borderTop:'1px solid var(--border)',margin:'2px 8px'}} />
         </div>
 
         <div className="sidebar-search" style={{display: currentView === 'chat' ? 'block' : 'none'}}>
