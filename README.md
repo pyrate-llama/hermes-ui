@@ -1,5 +1,7 @@
 # Hermes UI
 
+**English** · [简体中文](README.zh-CN.md)
+
 A sleek, glassmorphic web interface for [Hermes Agent](https://github.com/pyrate-llama/hermes-agent) — your self-hosted AI assistant.
 
 Built as a single-file HTML application with React 18, Hermes UI provides a full-featured chat interface, real-time log streaming, file browsing, memory inspection, and more — all through a lightweight Python proxy server.
