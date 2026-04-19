@@ -12,7 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<link id="hljs-theme" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1901,6 +1901,7 @@ function Icon({ name, size, className, strokeWidth }) {
     case 'activity': return (<svg {...common}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>);
     case 'palette': return (<svg {...common}><circle cx="13.5" cy="6.5" r=".8" fill="currentColor" stroke="none"/><circle cx="17.5" cy="10.5" r=".8" fill="currentColor" stroke="none"/><circle cx="8.5" cy="7.5" r=".8" fill="currentColor" stroke="none"/><circle cx="6.5" cy="12.5" r=".8" fill="currentColor" stroke="none"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.96 0 1.75-.78 1.75-1.75 0-.45-.17-.86-.45-1.17-.27-.31-.45-.72-.45-1.17 0-.96.79-1.75 1.75-1.75H17c2.76 0 5-2.24 5-5C22 6.01 17.52 2 12 2z"/></svg>);
     case 'check': return (<svg {...common}><polyline points="20 6 9 17 4 12"/></svg>);
+    case 'trash': return (<svg {...common}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>);
     default: return (<svg {...common}><circle cx="12" cy="12" r="4"/></svg>);
   }
 }
@@ -1952,6 +1953,14 @@ function applyTheme(themeName) {
     document.documentElement.removeAttribute('data-theme');
   } else {
     document.documentElement.setAttribute('data-theme', themeName);
+  }
+  // Swap highlight.js stylesheet so code blocks stay readable on light themes
+  var hljsLink = document.getElementById('hljs-theme');
+  if (hljsLink) {
+    var targetHref = (themeName === 'dawn')
+      ? 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css'
+      : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css';
+    if (hljsLink.getAttribute('href') !== targetHref) hljsLink.setAttribute('href', targetHref);
   }
   try { localStorage.setItem('hermes-theme', themeName); } catch(e) {}
 }
@@ -2448,7 +2457,7 @@ function MCPBrowserModal({ tools, onClose }) {
 }
 
 /* ── Terminal / Live Logs Panel ── */
-function TerminalPanel({ isOpen, onClose, localLogs, artifacts, onArtifactTab, onAddArtifact, onRemoveArtifact }) {
+function TerminalPanel({ isOpen, onClose, onClear, localLogs, artifacts, onArtifactTab, onAddArtifact, onRemoveArtifact }) {
   const [logLines, setLogLines] = useState([]);
   const [activeTab, setActiveTab] = useState('webui');
   const [isConnected, setIsConnected] = useState(false);
@@ -2588,15 +2597,14 @@ function TerminalPanel({ isOpen, onClose, localLogs, artifacts, onArtifactTab, o
           <button className={"terminal-tab " + (activeTab === 'errors' ? 'active' : '')} onClick={function(){setActiveTab('errors'); if(onArtifactTab) onArtifactTab(false);}}>Errors</button>
           <button className={"terminal-tab " + (activeTab === 'webui' ? 'active' : '')} onClick={function(){setActiveTab('webui'); if(onArtifactTab) onArtifactTab(false);}}>Web UI</button>
           <button className={"terminal-tab " + (activeTab === 'all' ? 'active' : '')} onClick={function(){setActiveTab('all'); if(onArtifactTab) onArtifactTab(false);}}>All</button>
-          <button className={"terminal-tab " + (activeTab === 'artifacts' ? 'active' : '')} style={artifacts && artifacts.length > 0 ? {borderColor:'var(--accent)',color: activeTab === 'artifacts' ? 'white' : 'var(--accent)'} : {}} onClick={function(){setActiveTab('artifacts'); if(onArtifactTab) onArtifactTab(true);}}>Artifacts{artifacts && artifacts.length > 0 ? ' (' + artifacts.length + ')' : ''}</button>
+          <button title={artifacts && artifacts.length > 0 ? 'Artifacts (' + artifacts.length + ')' : 'Artifacts'} className={"terminal-tab " + (activeTab === 'artifacts' ? 'active' : '')} style={{display:'inline-flex', alignItems:'center', gap:'4px', ...(artifacts && artifacts.length > 0 ? {borderColor:'var(--accent)', color: activeTab === 'artifacts' ? 'white' : 'var(--accent)'} : {})}} onClick={function(){setActiveTab('artifacts'); if(onArtifactTab) onArtifactTab(true);}}><Icon name="paperclip" size={13} />{artifacts && artifacts.length > 0 ? <span style={{background:'var(--accent)', color:'white', borderRadius:'8px', padding:'0 5px', fontSize:'10px', fontWeight:600, minWidth:'14px', textAlign:'center', lineHeight:'14px'}}>{artifacts.length}</span> : null}</button>
         </div>
         <div className="terminal-controls">
-          <div className="terminal-status">
+          <div className="terminal-status" title={(isConnected ? 'Live' : 'Disconnected') + ' · ' + filtered.length + ' lines'}>
             {isConnected && <div className="live-dot"></div>}
-            {isConnected ? 'Live' : 'Disconnected'}
-            <span style={{color:'var(--text-muted)'}}>{'(' + filtered.length + ' lines)'}</span>
+            {isConnected ? 'Live' : 'Off'}
           </div>
-          <button className="terminal-close-btn" onClick={function(){setLogLines([])} } title="Clear">{'C'}</button>
+          <button className="terminal-close-btn" onClick={function(){setLogLines([]); if (onClear) onClear();}} title="Clear logs"><Icon name="trash" size={14} /></button>
           <button className="terminal-close-btn" onClick={onClose} title="Close">{'✕'}</button>
         </div>
       </div>
@@ -3383,7 +3391,7 @@ function SkillsView() {
     setLoadingDetails(true);
     setExpandedSkillDetails(null);
     try {
-      var r = await fetch(API_BASE + '/api/skills/' + encodeURIComponent(skillName));
+      var r = await fetch(API_BASE + '/api/skills/content?name=' + encodeURIComponent(skillName));
       if (r.ok) {
         var data = await r.json();
         if (data.success !== false && data.name) {
@@ -3416,6 +3424,28 @@ function SkillsView() {
       next[skillName] = !next[skillName];
       return next;
     });
+  };
+
+  var handleDeleteClick = async function(skillName) {
+    if (!window.confirm('Delete skill "' + skillName + '"? This permanently removes the skill directory and cannot be undone.')) return;
+    try {
+      var r = await fetch(API_BASE + '/api/skills/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: skillName }),
+      });
+      var data = {};
+      try { data = await r.json(); } catch (e) {}
+      if (r.ok && data.success) {
+        setSkills(function(prev) { return prev.filter(function(s) { return s.name !== skillName; }); });
+        if (expandedSkillName === skillName) { setExpandedSkillName(null); setExpandedSkillDetails(null); }
+        if (editingSkill === skillName) { setEditingSkill(null); setEditContent(''); }
+      } else {
+        alert('Delete failed: ' + (data.error || 'HTTP ' + r.status));
+      }
+    } catch (e) {
+      alert('Delete error: ' + e.message);
+    }
   };
 
   var handleEditClick = function(skillName) {
@@ -3515,7 +3545,7 @@ function SkillsView() {
           <div className="skills-subtitle">{skills.length} skills installed</div>
         </div>
       </div>
-      <div style={{display:'flex',gap:'8px',marginBottom:'16px',alignItems:'center'}}>
+      <div style={{display:'flex',gap:'8px',marginBottom:'16px',alignItems:'center',flexWrap:'wrap'}}>
         {['installed', 'marketplace', 'featured'].map(function(tab) {
           return (
             <button key={tab} onClick={function() { setActiveTab(tab); }}
@@ -3549,7 +3579,7 @@ function SkillsView() {
         )}
         <input type="text" className="skills-search" placeholder="Search..."
           value={searchTerm} onChange={function(e) { setSearchTerm(e.target.value); }}
-          style={{width:'250px'}} />
+          style={{flex:'1 1 200px',minWidth:'140px',maxWidth:'320px'}} />
       </div>
       {activeTab === 'installed' ? (
         <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
@@ -3576,6 +3606,7 @@ function SkillsView() {
                     <button className="skill-btn" onClick={function() { handleDetailsClick(skill.name); }} style={{background:isExpanded ? 'var(--accent)' : 'var(--bg-secondary)',color:isExpanded ? 'white' : 'var(--text-secondary)',borderColor:isExpanded ? 'var(--accent)' : 'var(--border)'}}>Details</button>
                     <button className="skill-btn" onClick={function() { handleEditClick(skill.name); }} style={{background:editingSkill === skill.name ? 'var(--warning)' : 'var(--bg-secondary)',color:editingSkill === skill.name ? 'white' : 'var(--text-secondary)',borderColor:editingSkill === skill.name ? 'var(--warning)' : 'var(--border)'}}>Edit</button>
                     <button className="skill-btn" onClick={function() { handleEnabledToggle(skill.name); }} style={{background:isEnabled ? 'var(--success)' : 'var(--bg-secondary)',color:isEnabled ? 'white' : 'var(--text-secondary)',borderColor:isEnabled ? 'var(--success)' : 'var(--border)'}}>{isEnabled ? 'Enabled' : 'Disabled'}</button>
+                    <button className="skill-btn" onClick={function() { handleDeleteClick(skill.name); }} title={'Delete ' + skill.name} style={{background:'var(--bg-secondary)',color:'var(--danger, #dc2626)',borderColor:'var(--border)',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'6px'}}><Icon name="trash" size={13} />Delete</button>
                   </div>
                 </div>
                 {isExpanded && (
@@ -4859,6 +4890,13 @@ function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isStreaming]);
+
+  // Snap to bottom when returning to chat view from another view
+  useEffect(() => {
+    if (currentView === 'chat' && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+    }
+  }, [currentView]);
 
   // Auto-scroll activity log
   useEffect(() => {
@@ -6458,7 +6496,7 @@ function App() {
 
       {/* Right column: Live Terminal */}
       <div className={"right-column" + (artifactPanelWide ? ' wide' : '') + (showTerminal ? '' : ' closed')}>
-        <TerminalPanel isOpen={showTerminal} onClose={function(){setShowTerminal(false); setArtifactPanelWide(false);}} localLogs={localLogs} artifacts={artifacts} onArtifactTab={function(isWide){ setArtifactPanelWide(isWide); if(isWide && !showTerminal) setShowTerminal(true); }} onAddArtifact={function(art){ setArtifacts(function(prev){ return prev.concat([art]); }); }} onRemoveArtifact={function(idx){ setArtifacts(function(prev){ return prev.filter(function(_,i){ return i !== idx; }); }); }} />
+        <TerminalPanel isOpen={showTerminal} onClose={function(){setShowTerminal(false); setArtifactPanelWide(false);}} onClear={function(){ setLocalLogs([]); }} localLogs={localLogs} artifacts={artifacts} onArtifactTab={function(isWide){ setArtifactPanelWide(isWide); if(isWide && !showTerminal) setShowTerminal(true); }} onAddArtifact={function(art){ setArtifacts(function(prev){ return prev.concat([art]); }); }} onRemoveArtifact={function(idx){ setArtifacts(function(prev){ return prev.filter(function(_,i){ return i !== idx; }); }); }} />
       </div>
 
       {/* Modals */}

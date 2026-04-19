@@ -991,6 +991,38 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self._json({"error": str(e)}, 500)
 
+    def _handle_skill_delete(self):
+        """POST /api/skills/delete — remove a skill directory tree."""
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+        except Exception:
+            return self._json({"error": "Invalid JSON body"}, 400)
+        name = (body.get("name") or "").strip()
+        if not name or "/" in name or ".." in name:
+            return self._json({"error": "Invalid skill name"}, 400)
+        try:
+            import shutil
+            from tools.skills_tool import SKILLS_DIR
+            target = None
+            if SKILLS_DIR.exists():
+                direct = SKILLS_DIR / name
+                if direct.exists() and direct.is_dir():
+                    target = direct
+                else:
+                    for child in SKILLS_DIR.iterdir():
+                        if child.is_dir():
+                            nested = child / name
+                            if nested.exists() and nested.is_dir():
+                                target = nested
+                                break
+            if target is None:
+                return self._json({"error": "Skill not found", "name": name}, 404)
+            target.resolve().relative_to(SKILLS_DIR.resolve())
+            shutil.rmtree(target)
+            self._json({"success": True, "name": name, "path": str(target)})
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+
     def _handle_skill_save(self):
         """POST /api/skills/save — save skill content (matches webui)."""
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
@@ -1092,6 +1124,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_memory_write()
         elif self.path == "/api/skills/save":
             self._handle_skill_save()
+        elif self.path == "/api/skills/delete":
+            self._handle_skill_delete()
         elif self.path.startswith("/server/pull-restart"):
             self._server_pull_restart()
         elif self.path.startswith("/server/restart"):
@@ -1117,27 +1151,67 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         def _do_restart():
             time.sleep(0.5)
             _flush_all_sessions()
+            # Restart hermes-agent gateway too — the UI-side restart on its own
+            # only re-execs serve_lite and leaves the launchd-managed gateway
+            # (port 8642) running the old code.  `hermes gateway restart` asks
+            # launchd to stop + start the service cleanly.  Fire-and-forget;
+            # launchd handles the respawn while we re-exec below.
+            try:
+                subprocess.Popen(
+                    [sys.executable, "-m", "hermes_cli.main", "gateway", "restart"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+            except Exception as _e:
+                print(f"[serve] gateway restart failed: {_e!r}", flush=True)
             os.execv(sys.executable, [sys.executable] + sys.argv)
         threading.Thread(target=_do_restart, daemon=True).start()
 
     def _server_pull_restart(self):
-        """Run `git pull --ff-only` in the hermes-ui repo, then restart.
-        Response includes the pull output so the UI can display it."""
-        repo_dir = os.path.dirname(os.path.abspath(__file__))
-        try:
-            result = subprocess.run(
-                ["git", "-C", repo_dir, "pull", "--ff-only"],
-                capture_output=True, text=True, timeout=30,
-            )
-            pull_output = ((result.stdout or "") + (result.stderr or "")).strip() or "ok"
-            if result.returncode != 0:
-                pull_output = f"error (rc={result.returncode}): {pull_output}"
-        except Exception as e:
-            pull_output = f"error: {e}"
+        """Pull hermes-ui and hermes-agent, then restart both.
+        Response includes the pull output so the UI can display it.
+
+        hermes-ui is fast-forward only (user shouldn't have local commits
+        there — it's a clone of our repo).  hermes-agent uses --rebase
+        --autostash since the user may have local cherry-picks on top of
+        upstream main; that matches how the repo is actually maintained.
+        """
+        ui_dir = os.path.dirname(os.path.abspath(__file__))
+        agent_dir = os.path.expanduser("~/.hermes/hermes-agent")
+        outputs = []
+        for name, d, args in [
+            ("hermes-ui", ui_dir, ["pull", "--ff-only"]),
+            ("hermes-agent", agent_dir, ["pull", "--rebase", "--autostash"]),
+        ]:
+            try:
+                result = subprocess.run(
+                    ["git", "-C", d] + args,
+                    capture_output=True, text=True, timeout=60,
+                )
+                out = ((result.stdout or "") + (result.stderr or "")).strip() or "ok"
+                if result.returncode != 0:
+                    out = f"error (rc={result.returncode}): {out}"
+                outputs.append(f"{name}: {out}")
+            except Exception as e:
+                outputs.append(f"{name}: error: {e}")
+        pull_output = "\n\n".join(outputs)
         self._json({"ok": True, "pull": pull_output, "message": "Restarting..."})
         def _do_restart():
             time.sleep(0.5)
             _flush_all_sessions()
+            # Restart hermes-agent gateway via launchd so the code we just
+            # pulled takes effect.  Fire-and-forget — launchd handles the
+            # respawn while serve_lite re-execs itself below.
+            try:
+                subprocess.Popen(
+                    [sys.executable, "-m", "hermes_cli.main", "gateway", "restart"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+            except Exception as _e:
+                print(f"[serve] gateway restart failed: {_e!r}", flush=True)
             os.execv(sys.executable, [sys.executable] + sys.argv)
         threading.Thread(target=_do_restart, daemon=True).start()
 
