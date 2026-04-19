@@ -18,6 +18,7 @@ import threading
 import subprocess
 import time
 import pathlib
+import tempfile
 import uuid
 import traceback
 import urllib.parse
@@ -153,6 +154,72 @@ def _get_session_lock(session_id):
         if session_id not in _SESSION_LOCKS:
             _SESSION_LOCKS[session_id] = threading.Lock()
         return _SESSION_LOCKS[session_id]
+
+
+# ── API-safe message sanitization (ported from nesquena/hermes-webui) ──────
+# Matches api/streaming.py: _API_SAFE_MSG_KEYS, _sanitize_messages_for_api,
+# _restore_reasoning_metadata. Keeps tool_calls/tool_call_id intact so weak
+# tool-callers (MiniMax) keep seeing real tool-use precedent in history.
+_API_SAFE_MSG_KEYS = {"role", "content", "tool_calls", "tool_call_id", "name", "refusal"}
+
+
+def _sanitize_messages_for_api(messages):
+    """Return a list of messages with only API-safe fields, dropping orphaned tool results.
+
+    Strictly-conformant providers (Mercury-2, newer OpenAI) 400 when a tool-role
+    message has no matching assistant tool_call_id, so we drop orphans before send.
+    """
+    if not messages:
+        return []
+    valid_tool_call_ids = set()
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        if msg.get("role") == "assistant":
+            for tc in msg.get("tool_calls") or []:
+                if isinstance(tc, dict):
+                    tid = tc.get("id") or tc.get("call_id") or ""
+                    if tid:
+                        valid_tool_call_ids.add(tid)
+    clean = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        if msg.get("role") == "tool":
+            tid = msg.get("tool_call_id") or ""
+            if not tid or tid not in valid_tool_call_ids:
+                continue  # orphaned tool result — drop
+        sanitized = {k: v for k, v in msg.items() if k in _API_SAFE_MSG_KEYS}
+        if sanitized.get("role"):
+            clean.append(sanitized)
+    return clean
+
+
+def _restore_reasoning_metadata(previous_messages, updated_messages):
+    """Carry forward assistant `reasoning` lost during API-safe sanitization.
+
+    The provider-facing history strips WebUI-only fields like `reasoning`. When the
+    agent returns its new full message history, prior assistant messages come back
+    without that metadata unless we merge it back in by position.
+    """
+    if not previous_messages or not updated_messages:
+        return list(updated_messages) if updated_messages else []
+    updated = list(updated_messages)
+    prev_safe = [m for m in previous_messages
+                 if isinstance(m, dict) and m.get("role") in ("user", "assistant", "tool")]
+    for i, cur in enumerate(updated):
+        if i >= len(prev_safe):
+            break
+        prev = prev_safe[i]
+        if not isinstance(prev, dict) or not isinstance(cur, dict):
+            continue
+        if prev.get("role") != cur.get("role"):
+            continue
+        if (prev.get("role") == "assistant"
+                and prev.get("reasoning")
+                and not cur.get("reasoning")):
+            cur["reasoning"] = prev["reasoning"]
+    return updated
 
 
 # ── Streaming infrastructure ────────────────────────────────────────────────
@@ -414,37 +481,21 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
             "file operations."
         )
 
-        # Build conversation history from SERVER-SIDE session (not frontend messages).
-        # The server session includes tool_calls and tool results from prior turns;
-        # the frontend only sends {role, content} pairs which strips tool context
-        # and makes the agent forget it has tools.  Matches webui's approach:
+        # Build conversation history from SERVER-SIDE session only — always.
+        # Matches nesquena/hermes-webui api/streaming.py:1109-1118:
         #   conversation_history=_sanitize_messages_for_api(s.messages)
+        #
+        # We previously had a frontend-fallback branch ("prefer frontend when it
+        # has more user messages") to handle server-side compaction/restart edge
+        # cases, but frontend messages only carry {role, content} pairs. Selecting
+        # them permanently strips tool_calls/tool_result from the saved session
+        # once result.get('messages') gets written back. MiniMax (and any weak
+        # tool-caller) then loses all tool-use precedent and falls into narration
+        # mode for the rest of the session. Always using server history prevents
+        # that cascade.
         session = _get_or_create_session(session_id)
-        safe_keys = {"role", "content", "tool_calls", "tool_call_id", "name", "refusal"}
-
-        # Use server-side session messages; fall back to frontend messages if
-        # server has none (e.g. first run after adding persistence, or old sessions).
-        # Also prefer frontend messages when they have more content — this handles
-        # cases where the server session was compacted/truncated (e.g. after a
-        # restart) but the frontend still has the full conversation.
-        server_msgs = session.get("messages") or []
-        frontend_msgs = messages or []
-        server_user_count = sum(1 for m in server_msgs if isinstance(m, dict) and m.get("role") == "user")
-        frontend_user_count = sum(1 for m in frontend_msgs if isinstance(m, dict) and m.get("role") == "user")
-        if frontend_user_count > server_user_count:
-            history_source = frontend_msgs
-        elif server_msgs:
-            history_source = server_msgs
-        else:
-            history_source = frontend_msgs
-
-        clean_history = []
-        for m in history_source:
-            if not isinstance(m, dict):
-                continue
-            sanitized = {k: v for k, v in m.items() if k in safe_keys}
-            if sanitized.get("role"):
-                clean_history.append(sanitized)
+        _previous_messages = list(session.get("messages") or [])
+        clean_history = _sanitize_messages_for_api(_previous_messages)
         # Remove the last user message — it goes in user_message param instead
         if clean_history and clean_history[-1].get("role") == "user":
             clean_history.pop()
@@ -457,8 +508,13 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
             persist_user_message=user_msg,
         )
 
-        # Update session with agent's messages (includes tool_calls + tool results)
-        session["messages"] = result.get("messages", session["messages"])
+        # Update session with agent's messages (includes tool_calls + tool results).
+        # Merge reasoning metadata back from the prior turn, since API-safe
+        # sanitization stripped it before send (matches webui's _restore_reasoning_metadata).
+        session["messages"] = _restore_reasoning_metadata(
+            _previous_messages,
+            result.get("messages") or session.get("messages") or [],
+        )
         _save_session(session_id, session)  # Persist to disk (matches webui s.save())
 
         # Detect silent agent failure (no assistant reply produced)
@@ -952,6 +1008,50 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         open(full, "w").write(content)
         self._json({"ok": True})
 
+    # ── RTF → plain-text conversion (macOS textutil) ──
+    # Used by the composer drop/file-picker so users can attach Rich Text
+    # Format files directly — Hermes reads the plain text, no RTF control
+    # codes. Accepts raw RTF bytes in the request body, returns {ok,text}.
+    def _handle_rtf_to_txt(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            if length <= 0:
+                return self._json({"error": "empty body"}, 400)
+            if length > 10 * 1024 * 1024:  # 10 MB ceiling, matches UI
+                return self._json({"error": "file too large"}, 413)
+            raw = self.rfile.read(length)
+            # Quick sniff — reject obvious non-RTF so we don't shell out on random bytes.
+            if not raw.lstrip().startswith(b"{\\rtf"):
+                return self._json({"error": "not an RTF file"}, 400)
+            with tempfile.TemporaryDirectory() as td:
+                src = os.path.join(td, "in.rtf")
+                dst = os.path.join(td, "out.txt")
+                with open(src, "wb") as fh:
+                    fh.write(raw)
+                try:
+                    subprocess.run(
+                        ["textutil", "-convert", "txt",
+                         "-encoding", "UTF-8",
+                         src, "-output", dst],
+                        check=True,
+                        timeout=20,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
+                except FileNotFoundError:
+                    return self._json(
+                        {"error": "textutil not available (macOS only)"}, 500)
+                except subprocess.TimeoutExpired:
+                    return self._json({"error": "conversion timed out"}, 504)
+                except subprocess.CalledProcessError as e:
+                    msg = (e.stderr or b"").decode("utf-8", "replace") or str(e)
+                    return self._json({"error": f"textutil failed: {msg}"}, 500)
+                with open(dst, "r", encoding="utf-8", errors="replace") as fh:
+                    text = fh.read()
+            self._json({"ok": True, "text": text, "bytes": len(raw)})
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+
     # ── Memory API (reads ~/.hermes/memories/MEMORY.md & USER.md) ──
     MEMORY_DIR = os.path.join(HERMES_HOME, "memories")
 
@@ -1192,6 +1292,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._conversations_save()
         elif self.path.startswith("/writefile"):
             self._write_file()
+        elif self.path == "/api/convert/rtf-to-txt":
+            self._handle_rtf_to_txt()
         elif self.path == "/api/memory":
             self._handle_memory_write()
         elif self.path == "/api/skills/save":

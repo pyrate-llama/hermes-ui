@@ -5415,7 +5415,7 @@ function App() {
   };
 
   // ── File attachment helpers (matching webui pattern) ──
-  var TEXT_EXTENSIONS = { md: 'text/markdown', txt: 'text/plain', json: 'application/json', csv: 'text/csv', ts: 'text/plain', tsx: 'text/plain', js: 'text/plain', py: 'text/plain', pdf: 'application/pdf' };
+  var TEXT_EXTENSIONS = { md: 'text/markdown', txt: 'text/plain', json: 'application/json', csv: 'text/csv', ts: 'text/plain', tsx: 'text/plain', js: 'text/plain', py: 'text/plain', pdf: 'application/pdf', rtf: 'application/rtf' };
   function isTextFile(file) {
     var mime = (file.type || '').toLowerCase();
     if (mime.startsWith('text/') || mime === 'application/json') return true;
@@ -5438,14 +5438,38 @@ function App() {
     for (var i = 0; i < files.length; i++) {
       var file = files[i];
       if (file.size > MAX_FILE_SIZE) { continue; }
+      var ext = (file.name || '').split('.').pop().toLowerCase();
       try {
-        var content = await new Promise(function(resolve, reject) {
-          var reader = new FileReader();
-          reader.onload = function() { resolve(reader.result); };
-          reader.onerror = function() { reject(reader.error); };
-          reader.readAsText(file);
-        });
-        results.push({ id: Date.now() + '-' + i, name: file.name, size: file.size, content: content });
+        var content, displayName = file.name, displaySize = file.size;
+        if (ext === 'rtf') {
+          // Convert RTF → plain text via server (macOS textutil).
+          // Rename to .txt so Hermes reads it as plain text.
+          var resp = await fetch('/api/convert/rtf-to-txt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/rtf' },
+            body: file,
+          });
+          if (!resp.ok) {
+            console.error('RTF conversion failed:', resp.status, await resp.text());
+            continue;
+          }
+          var data = await resp.json();
+          if (!data || !data.ok) {
+            console.error('RTF conversion error:', data && data.error);
+            continue;
+          }
+          content = data.text || '';
+          displayName = file.name.replace(/\.rtf$/i, '') + '.txt';
+          displaySize = content.length;
+        } else {
+          content = await new Promise(function(resolve, reject) {
+            var reader = new FileReader();
+            reader.onload = function() { resolve(reader.result); };
+            reader.onerror = function() { reject(reader.error); };
+            reader.readAsText(file);
+          });
+        }
+        results.push({ id: Date.now() + '-' + i, name: displayName, size: displaySize, content: content });
       } catch (e) { console.error('Failed to read file:', file.name, e); }
     }
     if (results.length) setPendingFiles(function(prev) { return prev.concat(results); });
@@ -6445,7 +6469,7 @@ function App() {
                     disabled={connected === false}
                   />
                   <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { if (e.target.files.length) processImages(e.target.files); e.target.value = ''; }} />
-                  <input ref={fileInputRef2} type="file" accept=".md,.txt,.json,.csv,.ts,.tsx,.js,.py,.pdf" multiple style={{ display: 'none' }} onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value = ''; }} />
+                  <input ref={fileInputRef2} type="file" accept=".md,.txt,.json,.csv,.ts,.tsx,.js,.py,.pdf,.rtf" multiple style={{ display: 'none' }} onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value = ''; }} />
                   <div className="input-btn-group">
                     <button className="attach-btn" onClick={() => fileInputRef2.current?.click()} title="Attach file">
                       <Icon name="paperclip" size={16}/>
