@@ -6179,6 +6179,17 @@ function App() {
         {/* Navigation */}
         <div className="sidebar-nav">
           {/* section labels removed for density */}
+          <div className="nav-item" onClick={function() { setShowMCPBrowser(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Browse connected MCP tools">
+            <span className="nav-item-icon"><Icon name="wrench" size={14}/></span>
+            <span className="nav-item-label">MCP Tools</span>
+          </div>
+          <div className="nav-item" onClick={function() { setShowShortcuts(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Keyboard shortcuts (?)">
+            <span className="nav-item-icon"><Icon name="keyboard" size={14}/></span>
+            <span className="nav-item-label">Shortcuts</span>
+          </div>
+
+          <div style={{borderTop:'1px solid var(--border)',margin:'4px 8px'}} />
+
           <div className={"nav-item " + (currentView === 'dashboard' ? 'active' : '')} onClick={function() { setCurrentView('dashboard'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon">{'📊'}</span>
             <span className="nav-item-label">Dashboard</span>
@@ -6266,9 +6277,7 @@ function App() {
                   <button className="header-btn hide-mobile" onClick={exportChat} title="Export as PDF/HTML"><Icon name="file-text"/></button>
                   <button className="header-btn hide-mobile" onClick={function() { if (messages.length > 0) { var t = activeConvId ? (conversations.find(function(c){return c.id===activeConvId;})||{}).title : 'Chat'; exportChatAsMarkdown(messages, t || 'Chat'); } }} title="Export as Markdown"><Icon name="file-pen"/></button>
                   <button className={"header-btn hide-mobile " + (showTerminal ? 'active' : '')} onClick={function(){ setShowTerminal(!showTerminal); }} title="Live terminal logs"><Icon name="terminal"/></button>
-                  <button className="header-btn hide-mobile" onClick={() => setShowMCPBrowser(true)} title="MCP Tools"><Icon name="wrench"/></button>
                   <button className={"header-btn " + (showSearchModal ? 'active' : '')} onClick={openSearchModal} title="Search (⌘K)"><Icon name="search"/></button>
-                  <button className="header-btn hide-mobile" onClick={function(){ setShowShortcuts(true); }} title="Keyboard shortcuts (?)"><Icon name="keyboard"/></button>
                   <button className="header-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="settings"/></button>
                 </div>
               </div>
@@ -6433,7 +6442,7 @@ function App() {
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
                 <div className="toolbar-pill">
-                  <button className="header-btn hide-mobile" onClick={function(){ setShowShortcuts(true); }} title="Keyboard shortcuts (?)"><Icon name="keyboard"/></button>
+                  <button className={"header-btn " + (showSearchModal ? 'active' : '')} onClick={openSearchModal} title="Search (⌘K)"><Icon name="search"/></button>
                   <button className="header-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="settings"/></button>
                 </div>
               </div>
