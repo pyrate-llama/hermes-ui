@@ -1496,7 +1496,7 @@
   }
   .theme-menu-btn svg { width: 16px; height: 16px; }
   .theme-menu-panel {
-    position: absolute; top: calc(100% + 6px); right: 0;
+    position: fixed;
     min-width: 180px;
     background: linear-gradient(180deg, rgba(22,22,34,0.96) 0%, rgba(16,16,26,0.96) 100%);
     border: 1px solid var(--glass-border);
@@ -4318,25 +4318,47 @@ function StatusBar({ connected, conversations }) {
 
 function ThemeMenu({ currentTheme, setCurrentTheme }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
   const wrapRef = useRef(null);
+  const btnRef = useRef(null);
+  const panelRef = useRef(null);
+
+  const reposition = useCallback(function() {
+    if (!btnRef.current) return;
+    var r = btnRef.current.getBoundingClientRect();
+    setPos({
+      top: Math.round(r.bottom + 6),
+      right: Math.round(window.innerWidth - r.right),
+    });
+  }, []);
 
   useEffect(function() {
     if (!open) return;
+    reposition();
     function onDoc(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+      var t = e.target;
+      var inBtn = wrapRef.current && wrapRef.current.contains(t);
+      var inPanel = panelRef.current && panelRef.current.contains(t);
+      if (!inBtn && !inPanel) setOpen(false);
     }
     function onEsc(e) { if (e.key === 'Escape') setOpen(false); }
+    function onResize() { reposition(); }
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onEsc);
+    window.addEventListener('resize', onResize);
+    window.addEventListener('scroll', onResize, true);
     return function() {
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onEsc);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', onResize, true);
     };
-  }, [open]);
+  }, [open, reposition]);
 
   return (
     <div className="theme-menu" ref={wrapRef}>
       <button
+        ref={btnRef}
         type="button"
         className={"theme-menu-btn " + (open ? 'open' : '')}
         onClick={function() { setOpen(function(v) { return !v; }); }}
@@ -4347,8 +4369,13 @@ function ThemeMenu({ currentTheme, setCurrentTheme }) {
       >
         <Icon name="palette" size={16}/>
       </button>
-      {open && (
-        <div className="theme-menu-panel" role="menu">
+      {open && ReactDOM.createPortal(
+        <div
+          className="theme-menu-panel"
+          role="menu"
+          ref={panelRef}
+          style={{ top: pos.top + 'px', right: pos.right + 'px' }}
+        >
           {Object.entries(THEMES).map(function([key, t]) {
             var active = currentTheme === key;
             return (
@@ -4365,7 +4392,8 @@ function ThemeMenu({ currentTheme, setCurrentTheme }) {
               </div>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
