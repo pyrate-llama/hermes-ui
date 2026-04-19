@@ -53,19 +53,39 @@
   .app-wrapper { display: flex; flex-direction: column; height: 100vh; }
   .app { display: flex; flex: 1; min-height: 0; position: relative; }
 
-  /* ── Ambient background glow ── */
+  /* ── Ambient background: 3 drifting gradients + vignette + noise ── */
   .app::before {
-    content: ''; position: fixed; top: -30%; left: -10%; width: 50%; height: 70%;
-    background: radial-gradient(ellipse, rgba(124,111,224,0.08) 0%, transparent 65%);
-    pointer-events: none; z-index: 0; animation: ambientDrift1 12s ease-in-out infinite alternate;
+    content: ''; position: fixed; top: -30%; left: -10%; width: 55%; height: 75%;
+    background: radial-gradient(ellipse, rgba(124,111,224,0.10) 0%, transparent 65%);
+    pointer-events: none; z-index: 0; animation: ambientDrift1 14s ease-in-out infinite alternate;
   }
   .app::after {
-    content: ''; position: fixed; bottom: -20%; right: -5%; width: 45%; height: 60%;
-    background: radial-gradient(ellipse, rgba(68,216,138,0.06) 0%, transparent 65%);
-    pointer-events: none; z-index: 0; animation: ambientDrift2 15s ease-in-out infinite alternate;
+    content: ''; position: fixed; bottom: -20%; right: -5%; width: 50%; height: 65%;
+    background: radial-gradient(ellipse, rgba(68,216,138,0.07) 0%, transparent 65%);
+    pointer-events: none; z-index: 0; animation: ambientDrift2 17s ease-in-out infinite alternate;
+  }
+  .ambient-glow-3 {
+    content: ''; position: fixed; top: 40%; left: 30%; width: 40%; height: 50%;
+    background: radial-gradient(ellipse, rgba(200,160,255,0.05) 0%, transparent 70%);
+    pointer-events: none; z-index: 0; animation: ambientDrift3 20s ease-in-out infinite alternate;
+  }
+  /* Vignette edges — subtle darker corners for depth */
+  .app-vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(ellipse 120% 90% at 50% 0%, transparent 40%, rgba(0,0,0,0.35) 100%),
+      radial-gradient(ellipse 100% 80% at 50% 100%, transparent 50%, rgba(0,0,0,0.25) 100%);
+  }
+  /* Faint noise overlay — data-URI SVG fractal noise, very low opacity */
+  .app-noise {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    opacity: 0.025; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    background-size: 180px 180px;
   }
   @keyframes ambientDrift1 { from { transform: translate(0,0); } to { transform: translate(5%,3%); } }
   @keyframes ambientDrift2 { from { transform: translate(0,0); } to { transform: translate(-3%,-2%); } }
+  @keyframes ambientDrift3 { from { transform: translate(-4%,0); } to { transform: translate(4%,-3%); } }
   .app > * { position: relative; z-index: 1; }
 
   .sidebar {
@@ -173,10 +193,11 @@
   /* When sidebar is collapsed, reserve space for the floating sidebar toggle */
   .header.sidebar-collapsed { padding-left: 56px; }
   .header-title {
-    font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+    font-size: 14px; font-weight: 600; letter-spacing: -0.015em;
     color: var(--text-primary);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     min-width: 0; flex: 1 1 auto;
+    font-feature-settings: 'ss01' 1;
   }
   .header-status {
     font-size: 12px; color: var(--text-muted);
@@ -191,13 +212,27 @@
   .status-dot.disconnected { background: var(--danger); box-shadow: 0 0 8px rgba(224,85,85,0.5); }
 
   .header-controls {
-    display: flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0;
+    display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0;
   }
-  /* Visual divider between theme swatches and action buttons */
-  .header-controls-divider {
-    width: 1px; height: 20px; background: var(--glass-border);
-    margin: 0 6px; flex-shrink: 0;
+  /* Segmented pill groups header action buttons (Linear-style) */
+  .toolbar-pill {
+    display: inline-flex; align-items: center;
+    padding: 3px; gap: 1px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid var(--glass-border);
+    border-radius: 11px;
+    backdrop-filter: blur(8px) saturate(1.2); -webkit-backdrop-filter: blur(8px) saturate(1.2);
+    flex-shrink: 0;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
   }
+  .toolbar-pill .header-btn {
+    width: 30px; height: 30px; border-radius: 8px;
+  }
+  .toolbar-pill .header-btn:hover { transform: none; }
+  /* Icon base styling */
+  .icon { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+  .header-btn .icon { opacity: 0.85; transition: opacity 0.15s ease; }
+  .header-btn:hover .icon, .header-btn.active .icon { opacity: 1; }
   .header-btn {
     background: transparent; border: 1px solid transparent; color: var(--text-secondary);
     cursor: pointer; padding: 0; border-radius: 8px;
@@ -238,13 +273,39 @@
     display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
   }
   .message-avatar {
-    width: 32px; height: 32px; border-radius: 50%; display: flex;
+    width: 30px; height: 30px; border-radius: 9px; display: flex;
     align-items: center; justify-content: center; font-weight: 700;
-    font-size: 14px;
+    font-size: 12px; letter-spacing: -0.02em; flex-shrink: 0;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 2px 6px rgba(0,0,0,0.25);
   }
-  .message-avatar.user { background: var(--accent-dim); color: var(--accent); }
-  .message-avatar.assistant { background: rgba(85,192,136,0.15); color: var(--success); }
-  .message-role { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+  .message-avatar.user {
+    background: linear-gradient(135deg, var(--accent) 0%, #9488f0 100%);
+    color: white;
+  }
+  .message-avatar.assistant {
+    background: linear-gradient(135deg, var(--success) 0%, #6eea9f 100%);
+    color: #0a1410;
+  }
+  .message-role { font-size: 13px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em; }
+  /* Message content gets a soft accent stripe on the left */
+  .message .message-content { position: relative; }
+  .message .message-content::before {
+    content: ''; position: absolute; left: 0; top: 14px; bottom: 14px;
+    width: 2px; border-radius: 2px;
+    pointer-events: none;
+  }
+  .message.user-msg .message-content {
+    background: linear-gradient(180deg, rgba(124,111,224,0.07), rgba(124,111,224,0.02));
+    border-color: rgba(124,111,224,0.22);
+  }
+  .message.user-msg .message-content::before {
+    background: linear-gradient(180deg, #9488f0, var(--accent));
+    opacity: 0.85;
+  }
+  .message.assistant-msg .message-content::before {
+    background: linear-gradient(180deg, var(--success), rgba(68,216,138,0.1));
+    opacity: 0.7;
+  }
 
   .tool-calls-list {
     display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;
@@ -555,10 +616,28 @@
 
   .input-wrapper {
     display: flex; gap: 10px; align-items: flex-end;
-    background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);
-    border-radius: 14px; padding: 12px 14px; transition: all 0.25s ease;
+    background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.01));
+    border: 1px solid var(--glass-border);
+    border-radius: 16px; padding: 12px 12px 12px 16px;
+    transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+    position: relative;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 4px 14px rgba(0,0,0,0.15);
   }
-  .input-wrapper:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim), 0 4px 24px rgba(124,111,224,0.1); }
+  /* Animated gradient focus ring using ::before */
+  .input-wrapper::before {
+    content: ''; position: absolute; inset: -1px; border-radius: 17px;
+    padding: 1px; pointer-events: none;
+    background: linear-gradient(135deg, rgba(124,111,224,0) 0%, rgba(124,111,224,0.6) 35%, rgba(148,136,240,0.8) 50%, rgba(68,216,138,0.5) 70%, rgba(124,111,224,0) 100%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    opacity: 0; transition: opacity 0.3s ease;
+  }
+  .input-wrapper:focus-within {
+    border-color: transparent;
+    box-shadow: 0 0 0 3px rgba(124,111,224,0.12), 0 8px 32px rgba(124,111,224,0.18), inset 0 1px 0 rgba(255,255,255,0.05);
+    background: linear-gradient(180deg, rgba(124,111,224,0.04), rgba(255,255,255,0.01));
+  }
+  .input-wrapper:focus-within::before { opacity: 1; }
   textarea {
     flex: 1; background: transparent; border: none; color: var(--text-primary);
     outline: none; font-family: inherit; font-size: 14px; line-height: 1.4;
@@ -566,25 +645,68 @@
   }
   textarea::placeholder { color: var(--text-muted); }
 
-  .input-btn-group { display: flex; gap: 8px; flex-shrink: 0; }
-  .attach-btn, .send-btn {
-    background: none; border: none; color: var(--text-secondary);
-    cursor: pointer; padding: 6px; display: flex; align-items: center;
-    justify-content: center; border-radius: 4px; transition: all 0.15s;
-    width: 28px; height: 28px;
+  .input-btn-group { display: flex; gap: 6px; flex-shrink: 0; align-items: flex-end; }
+  .attach-btn {
+    background: transparent; border: 1px solid transparent; color: var(--text-muted);
+    cursor: pointer; padding: 0; display: inline-flex; align-items: center;
+    justify-content: center; border-radius: 8px; transition: all 0.15s ease;
+    width: 32px; height: 32px;
   }
-  .attach-btn:hover { background: var(--bg-active); color: var(--text-primary); }
-  .send-btn { color: var(--accent); }
-  .send-btn:hover:not(:disabled) { background: var(--accent-dim); box-shadow: 0 0 12px rgba(124,111,224,0.2); }
-  .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .attach-btn:hover { background: var(--glass-hover); color: var(--text-primary); border-color: var(--glass-border); }
+  .attach-btn svg { width: 16px; height: 16px; }
 
-  .pause-btn { color: var(--warning); }
-  .pause-btn:hover { background: rgba(224,168,85,0.15); }
-  .stop-btn { color: var(--danger); }
-  .stop-btn:hover { background: rgba(224,85,85,0.15); }
+  /* Prominent filled send button */
+  .send-btn {
+    background: linear-gradient(135deg, var(--accent) 0%, #9488f0 100%);
+    border: none; color: white; cursor: pointer; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 10px; transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+    width: 36px; height: 36px; flex-shrink: 0;
+    box-shadow: 0 2px 10px rgba(124,111,224,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+    position: relative; overflow: hidden;
+  }
+  .send-btn::before {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(135deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
+    opacity: 0; transition: opacity 0.2s ease;
+  }
+  .send-btn:hover:not(:disabled) {
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 0 6px 20px rgba(124,111,224,0.5), inset 0 1px 0 rgba(255,255,255,0.25);
+  }
+  .send-btn:hover:not(:disabled)::before { opacity: 1; }
+  .send-btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+  .send-btn:disabled {
+    opacity: 0.35; cursor: not-allowed;
+    background: linear-gradient(135deg, var(--text-muted), var(--text-muted));
+    box-shadow: none;
+  }
+  .send-btn svg { width: 16px; height: 16px; position: relative; z-index: 1; }
 
+  /* Pause and stop share the same filled shape but with warning/danger colors */
+  .send-btn.pause-btn {
+    background: linear-gradient(135deg, var(--warning), #e8b860);
+    box-shadow: 0 2px 10px rgba(224,168,85,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+  }
+  .send-btn.pause-btn:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(224,168,85,0.5), inset 0 1px 0 rgba(255,255,255,0.25); }
+  .send-btn.stop-btn {
+    background: linear-gradient(135deg, var(--danger), #f07878);
+    box-shadow: 0 2px 10px rgba(224,85,85,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+  }
+  .send-btn.stop-btn:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(224,85,85,0.5), inset 0 1px 0 rgba(255,255,255,0.25); }
+
+  /* Input hint: keyboard-style chip row */
   .input-hint {
-    font-size: 11px; color: var(--text-muted); padding: 2px 4px;
+    font-size: 11px; color: var(--text-muted);
+    padding: 4px 4px 0 4px;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  }
+  .input-hint kbd {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; padding: 0 5px; margin: 0 1px;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
+    border-radius: 4px; font-size: 10px; font-family: Monaco, Menlo, monospace;
+    color: var(--text-secondary); box-shadow: 0 1px 0 rgba(0,0,0,0.25);
   }
 
   .modal-overlay {
@@ -963,27 +1085,46 @@
     padding: 4px 6px; margin-bottom: 2px; border-bottom: 1px solid var(--border);
   }
   .nav-section-label {
-    font-size: 9px; font-weight: 700; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 10px 1px 10px;
+    font-size: 10px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 1.2px;
+    padding: 8px 12px 4px 12px;
     margin-bottom: 0px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .nav-section-label::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--glass-border), transparent);
+    opacity: 0.6;
   }
   .nav-item {
-    padding: 4px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 0px;
-    display: flex; align-items: center; gap: 8px; transition: all 0.2s ease;
-    color: var(--text-secondary); border-left: 2px solid transparent;
+    padding: 5px 10px 5px 14px; border-radius: 8px; cursor: pointer; margin: 1px 0;
+    display: flex; align-items: center; gap: 10px; transition: all 0.2s ease;
+    color: var(--text-secondary);
     font-size: 13px;
+    position: relative;
+  }
+  /* Glowing left rail — transparent by default, accent when active */
+  .nav-item::before {
+    content: ''; position: absolute; left: 4px; top: 50%;
+    transform: translateY(-50%) scaleY(0);
+    width: 3px; height: 16px; border-radius: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent), 0 0 4px var(--accent);
+    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1), opacity 0.2s ease;
+    opacity: 0;
   }
   .nav-item:hover {
     background: var(--glass-hover); color: var(--text-primary);
-    transform: translateX(1px);
   }
+  .nav-item:hover::before { transform: translateY(-50%) scaleY(0.6); opacity: 0.5; }
   .nav-item.active {
-    background: linear-gradient(90deg, var(--accent-dim), rgba(124,111,224,0.04) 80%, transparent);
-    color: var(--accent);
-    border-left-color: var(--accent);
-    box-shadow: inset 0 0 20px rgba(124,111,224,0.08), 0 1px 0 rgba(255,255,255,0.02);
+    background: linear-gradient(90deg, var(--accent-dim) 0%, rgba(124,111,224,0.04) 70%, transparent 100%);
+    color: var(--text-primary);
+    box-shadow: inset 0 0 24px rgba(124,111,224,0.10), 0 1px 0 rgba(255,255,255,0.02);
     font-weight: 600;
   }
+  .nav-item.active::before { transform: translateY(-50%) scaleY(1); opacity: 1; }
+  .nav-item.active .nav-item-icon { filter: drop-shadow(0 0 4px rgba(124,111,224,0.4)); }
   .nav-item-icon { font-size: 14px; flex-shrink: 0; }
   .nav-item-label { font-size: 13px; font-weight: 500; }
 
@@ -994,39 +1135,102 @@
     gap: 16px; margin-bottom: 20px;
   }
   .stat-card {
-    background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.01) 60%, transparent 100%),
+      var(--glass);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
     border: 1px solid var(--glass-border);
-    border-radius: 14px; padding: 20px; border-top: none;
+    border-radius: 14px; padding: 20px 20px 18px;
     position: relative; overflow: hidden;
-    transition: all 0.3s ease;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset,
+      0 1px 2px rgba(0,0,0,0.2),
+      0 8px 24px rgba(0,0,0,0.18);
+    transition: transform 0.25s cubic-bezier(0.2,0.8,0.2,1),
+                box-shadow 0.25s ease,
+                border-color 0.25s ease;
   }
   .stat-card::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, var(--stat-color), transparent);
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, transparent 0%, var(--stat-color) 40%, var(--stat-color) 60%, transparent 100%);
+    filter: drop-shadow(0 0 6px var(--stat-color));
+    opacity: 0.9;
   }
   .stat-card::after {
     content: ''; position: absolute; inset: 0; border-radius: 14px; opacity: 0;
-    background: radial-gradient(circle at 50% 0%, var(--stat-color), transparent 70%);
+    background: radial-gradient(circle at 70% 0%, var(--stat-color), transparent 60%);
     transition: opacity 0.3s; pointer-events: none;
   }
-  .stat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.12); }
-  .stat-card:hover::after { opacity: 0.06; }
+  .stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.06) inset,
+      0 2px 4px rgba(0,0,0,0.25),
+      0 14px 40px rgba(0,0,0,0.35),
+      0 0 28px -8px var(--stat-color);
+    border-color: rgba(255,255,255,0.14);
+  }
+  .stat-card:hover::after { opacity: 0.12; }
   .stat-card.sessions { --stat-color: #4588e0; }
   .stat-card.messages { --stat-color: #44d88a; }
   .stat-card.tools { --stat-color: #c088e0; }
   .stat-card.tokens { --stat-color: #e8b04a; }
-  .stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-  .stat-value { font-size: 32px; font-weight: 800; color: var(--text-primary); margin-bottom: 4px; letter-spacing: -1px; }
-  .stat-icon { font-size: 20px; opacity: 0.4; position: absolute; top: 16px; right: 16px; }
+  .stat-label {
+    font-size: 10.5px; color: var(--text-muted); margin-bottom: 10px;
+    text-transform: uppercase; letter-spacing: 1.1px; font-weight: 600;
+  }
+  .stat-value {
+    font-size: 34px; font-weight: 700; color: var(--text-primary);
+    margin-bottom: 2px; letter-spacing: -1.2px; line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1, 'ss01' 1;
+  }
+  .stat-icon {
+    position: absolute; top: 14px; right: 14px;
+    width: 34px; height: 34px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--stat-color);
+    background: color-mix(in srgb, var(--stat-color) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--stat-color) 22%, transparent);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
+    transition: transform 0.25s ease, background 0.25s ease;
+  }
+  .stat-card:hover .stat-icon {
+    transform: scale(1.06);
+    background: color-mix(in srgb, var(--stat-color) 22%, transparent);
+  }
+  .stat-icon svg { width: 16px; height: 16px; }
   .card-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-bottom: 16px; }
   .info-card {
-    background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.025) 0%, transparent 60%),
+      var(--glass);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
     border: 1px solid var(--glass-border);
     border-radius: 14px; padding: 20px;
-    transition: border-color 0.3s ease;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset,
+      0 6px 20px rgba(0,0,0,0.14);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
   }
-  .info-card:hover { border-color: rgba(255,255,255,0.1); }
-  .info-card-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; }
+  .info-card:hover {
+    border-color: rgba(255,255,255,0.12);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.05) inset,
+      0 10px 32px rgba(0,0,0,0.22);
+  }
+  .info-card-title {
+    font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 14px;
+    text-transform: uppercase; letter-spacing: 1.1px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .info-card-title::before {
+    content: ''; width: 3px; height: 12px; border-radius: 2px;
+    background: linear-gradient(180deg, var(--accent), rgba(124,111,224,0.3));
+    box-shadow: 0 0 6px rgba(124,111,224,0.5);
+  }
   .chart-placeholder { height: 200px; background: var(--bg-primary); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 12px; }
   .skills-list { font-size: 13px; color: var(--text-secondary); line-height: 1.8; }
 
@@ -1285,24 +1489,25 @@
   .theme-dot.twilight { background: linear-gradient(135deg, #e8b860 0%, #d4a044 50%, #0e0a08 100%); }
   .theme-dot.dawn { background: linear-gradient(135deg, #7d6de0 0%, #6050b0 50%, #f4f2f0 100%); }
 
-  /* Floating sidebar toggle (shown when sidebar is collapsed) */
+  /* Floating sidebar toggle (shown when sidebar is collapsed) — anchored to header */
   .floating-sidebar-btn {
-    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
-    width: 36px; height: 36px; border-radius: 10px;
-    background: linear-gradient(135deg, rgba(124,111,224,0.12), rgba(16,16,28,0.75));
-    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    position: absolute; left: 10px; top: 10px;
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, rgba(124,111,224,0.14), rgba(16,16,28,0.82));
+    backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
     border: 1px solid var(--glass-border);
     color: var(--text-secondary); cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
-    font-size: 16px; z-index: 10;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    z-index: 20;
+    transition: all 0.18s ease;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
   }
   .floating-sidebar-btn:hover {
-    color: var(--text-primary); border-color: rgba(124,111,224,0.3);
-    box-shadow: 0 2px 12px rgba(124,111,224,0.2);
-    transform: translateY(-50%) translateX(1px);
+    color: var(--text-primary); border-color: rgba(124,111,224,0.35);
+    box-shadow: 0 4px 16px rgba(124,111,224,0.22);
+    transform: translateY(-1px);
   }
+  .floating-sidebar-btn svg { width: 16px; height: 16px; }
 
   /* Modal close button (X in top-right corner of modals) */
   .modal-close-btn {
@@ -1471,6 +1676,40 @@ const PERSONALITY_PROMPTS = {
   'academic': 'You are an academic assistant. Provide well-researched, cited information. Focus on educational value and intellectual rigor.',
 };
 
+// ── Inline Icon set (Lucide-style strokes, currentColor) ─────────────────
+function Icon({ name, size, className, strokeWidth }) {
+  var s = size || 16;
+  var common = {
+    width: s, height: s, viewBox: '0 0 24 24',
+    fill: 'none', stroke: 'currentColor',
+    strokeWidth: strokeWidth || 1.75,
+    strokeLinecap: 'round', strokeLinejoin: 'round',
+    className: 'icon ' + (className || ''),
+    'aria-hidden': 'true',
+  };
+  switch (name) {
+    case 'file-text': return (<svg {...common}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>);
+    case 'file-pen': return (<svg {...common}><path d="M12 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8l6 6v4"/><polyline points="14 2 14 8 20 8"/><path d="M18.375 14.5a1.414 1.414 0 1 1 2 2L15 21.5l-3 1 1-3z"/></svg>);
+    case 'terminal': return (<svg {...common}><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>);
+    case 'wrench': return (<svg {...common}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.121 2.121 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>);
+    case 'search': return (<svg {...common}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>);
+    case 'keyboard': return (<svg {...common}><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>);
+    case 'settings': return (<svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>);
+    case 'menu': return (<svg {...common}><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>);
+    case 'x': return (<svg {...common}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>);
+    case 'send': return (<svg {...common}><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>);
+    case 'sparkles': return (<svg {...common}><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z"/></svg>);
+    case 'plus': return (<svg {...common}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>);
+    case 'paperclip': return (<svg {...common}><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>);
+    case 'image': return (<svg {...common}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>);
+    case 'message-square': return (<svg {...common}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>);
+    case 'mail': return (<svg {...common}><rect x="3" y="5" width="18" height="14" rx="2" ry="2"/><polyline points="3 7 12 13 21 7"/></svg>);
+    case 'cog': return (<svg {...common}><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/></svg>);
+    case 'activity': return (<svg {...common}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>);
+    default: return (<svg {...common}><circle cx="12" cy="12" r="4"/></svg>);
+  }
+}
+
 function renderMarkdown(content) {
   var text = content || '';
 
@@ -1566,7 +1805,7 @@ function ShortcutsModal({ onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content shortcuts-modal" onClick={function(e) { e.stopPropagation(); }}>
-        <button className="modal-close-btn" onClick={onClose} title="Close (Esc)" aria-label="Close">{'×'}</button>
+        <button className="modal-close-btn" onClick={onClose} title="Close (Esc)" aria-label="Close"><Icon name="x" size={18}/></button>
         <div className="modal-title">{'Keyboard Shortcuts'}</div>
         <div>
           {shortcuts.map(function(s, i) {
@@ -1678,11 +1917,11 @@ function MessageBubble({ message, onImageClick, onEdit }) {
   }, [message.content]);
 
   return (
-    <div className="message">
+    <div className={"message " + (isUser ? 'user-msg' : 'assistant-msg')}>
       <div className="message-header">
         <div className={"message-avatar " + (isUser ? 'user' : 'assistant')}>{isUser ? 'Y' : 'H'}</div>
         <span className="message-role">{isUser ? 'You' : 'Hermes'}</span>
-        {message.timestamp && <span style={{fontSize:'11px',color:'var(--text-muted)',marginLeft:'auto'}}>{new Date(message.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>}
+        {message.timestamp && <span style={{fontSize:'11px',color:'var(--text-muted)',marginLeft:'auto',fontVariantNumeric:'tabular-nums'}}>{new Date(message.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>}
       </div>
 
       {message.toolCalls && message.toolCalls.length > 0 && (
@@ -1779,7 +2018,7 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth:'560px',maxHeight:'85vh',overflow:'auto'}}>
-        <button className="modal-close-btn" onClick={onClose} title="Close (Esc)" aria-label="Close">{'×'}</button>
+        <button className="modal-close-btn" onClick={onClose} title="Close (Esc)" aria-label="Close"><Icon name="x" size={18}/></button>
         <div className="modal-title">Settings</div>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',gap:'12px'}}>
           <div style={{display:'flex',gap:'4px'}}>
@@ -2378,9 +2617,9 @@ function DashboardView() {
   var uptime = health && health.uptime ? formatUptime(health.uptime) : '--';
 
   var statCards = [
-    { key: 'sessions', label: 'Sessions', value: stats.sessions, icon: '💬', color: '#4588e0' },
-    { key: 'messages', label: 'Messages', value: formatTokens(stats.messages), icon: '✉️', color: '#44d88a' },
-    { key: 'tools', label: 'Tool Calls', value: formatTokens(stats.tools), icon: '⚙️', color: '#c088e0' },
+    { key: 'sessions', label: 'Sessions', value: stats.sessions, icon: <Icon name="message-square" size={16}/>, color: '#4588e0' },
+    { key: 'messages', label: 'Messages', value: formatTokens(stats.messages), icon: <Icon name="mail" size={16}/>, color: '#44d88a' },
+    { key: 'tools', label: 'Tool Calls', value: formatTokens(stats.tools), icon: <Icon name="cog" size={16}/>, color: '#c088e0' },
 
   ];
 
@@ -3261,7 +3500,7 @@ function JobsView() {
     var s = (typeof schedule === 'string') ? schedule : (schedule.display || schedule.expr || schedule.expression || '');
     if (!s) return '';
     var parts = s.split(' ');
-    if (parts.length !== 5) return schedule;
+    if (parts.length !== 5) return s;
     var min = parts[0], hour = parts[1], dom = parts[2], mon = parts[3], dow = parts[4];
     var h = parseInt(hour, 10);
     var ampm = h >= 12 ? 'PM' : 'AM';
@@ -3273,7 +3512,7 @@ function JobsView() {
       var dayNames = dow.split(',').map(function(d) { return days[parseInt(d,10)] || d; }).join(', ');
       return dayNames + ' at ' + timeStr;
     }
-    return schedule + ' (' + timeStr + ')';
+    return s + ' (' + timeStr + ')';
   }
 
   function formatNextRun(nextRun) {
@@ -3413,7 +3652,7 @@ function JobsView() {
 
               <div style={{display:'flex',flexWrap:'wrap',gap:'14px',fontSize:'11px',color:'var(--text-muted)',fontFamily:'JetBrains Mono, monospace'}}>
                 <span title="Cron schedule" style={{display:'flex',alignItems:'center',gap:'4px'}}>
-                  <span style={{color:'#c088e0'}}>{'🕐'}</span> {job.schedule_display || (job.schedule && job.schedule.display) || job.schedule || '--'}
+                  <span style={{color:'#c088e0'}}>{'🕐'}</span> {job.schedule_display || (job.schedule && (job.schedule.display || (job.schedule.kind === 'interval' && job.schedule.minutes ? 'every ' + job.schedule.minutes + ' min' : ''))) || (typeof job.schedule === 'string' ? job.schedule : '--')}
                 </span>
                 {job.next_run && (
                   <span title={'Next run: ' + job.next_run} style={{display:'flex',alignItems:'center',gap:'4px'}}>
@@ -5492,6 +5731,10 @@ function App() {
   return (
     <div className="app-wrapper">
     <div className="app">
+      {/* Depth layers */}
+      <div className="ambient-glow-3" aria-hidden="true"></div>
+      <div className="app-vignette" aria-hidden="true"></div>
+      <div className="app-noise" aria-hidden="true"></div>
       {/* Sidebar backdrop overlay (mobile) */}
       {!sidebarCollapsed && (
         <div className="sidebar-backdrop" onClick={() => setSidebarCollapsed(true)} />
@@ -5501,7 +5744,7 @@ function App() {
       {/* Floating sidebar toggle when collapsed */}
       {sidebarCollapsed && (
         <button className="floating-sidebar-btn" onClick={() => setSidebarCollapsed(false)} title="Show sidebar">
-          {'☰'}
+          <Icon name="menu"/>
         </button>
       )}
 
@@ -5607,14 +5850,15 @@ function App() {
                     return <div key={key} className={"theme-dot " + t.className + (currentTheme === key ? ' active' : '')} title={t.label} onClick={function() { setCurrentTheme(key); }} />;
                   })}
                 </div>
-                <div className="header-controls-divider"></div>
-                <button className="header-btn hide-mobile" onClick={exportChat} title="Export as PDF/HTML">{'📄'}</button>
-                <button className="header-btn hide-mobile" onClick={function() { if (messages.length > 0) { var t = activeConvId ? (conversations.find(function(c){return c.id===activeConvId;})||{}).title : 'Chat'; exportChatAsMarkdown(messages, t || 'Chat'); } }} title="Export as Markdown">{'📝'}</button>
-                <button className={"header-btn hide-mobile " + (showTerminal ? 'active' : '')} onClick={function(){ setShowTerminal(!showTerminal); }} title="Live terminal logs">{'>_'}</button>
-                <button className="header-btn hide-mobile" onClick={() => setShowMCPBrowser(true)} title="MCP Tools">{'🔧'}</button>
-                <button className="header-btn" onClick={toggleSearchMode} title="Search content">{'🔍'}</button>
-                <button className="header-btn hide-mobile" onClick={function(){ setShowShortcuts(true); }} title="Keyboard shortcuts (?)">{'⌨'}</button>
-                <button className="header-btn" onClick={() => setShowSettings(true)} title="Settings">{'⚙'}</button>
+                <div className="toolbar-pill">
+                  <button className="header-btn hide-mobile" onClick={exportChat} title="Export as PDF/HTML"><Icon name="file-text"/></button>
+                  <button className="header-btn hide-mobile" onClick={function() { if (messages.length > 0) { var t = activeConvId ? (conversations.find(function(c){return c.id===activeConvId;})||{}).title : 'Chat'; exportChatAsMarkdown(messages, t || 'Chat'); } }} title="Export as Markdown"><Icon name="file-pen"/></button>
+                  <button className={"header-btn hide-mobile " + (showTerminal ? 'active' : '')} onClick={function(){ setShowTerminal(!showTerminal); }} title="Live terminal logs"><Icon name="terminal"/></button>
+                  <button className="header-btn hide-mobile" onClick={() => setShowMCPBrowser(true)} title="MCP Tools"><Icon name="wrench"/></button>
+                  <button className="header-btn" onClick={toggleSearchMode} title="Search content"><Icon name="search"/></button>
+                  <button className="header-btn hide-mobile" onClick={function(){ setShowShortcuts(true); }} title="Keyboard shortcuts (?)"><Icon name="keyboard"/></button>
+                  <button className="header-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="settings"/></button>
+                </div>
               </div>
             </div>
 
@@ -5726,33 +5970,44 @@ function App() {
                   <input ref={fileInputRef2} type="file" accept=".md,.txt,.json,.csv,.ts,.tsx,.js,.py,.pdf" multiple style={{ display: 'none' }} onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value = ''; }} />
                   <div className="input-btn-group">
                     <button className="attach-btn" onClick={() => fileInputRef2.current?.click()} title="Attach file">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                      <Icon name="paperclip" size={16}/>
                     </button>
                     <button className="attach-btn" onClick={() => fileInputRef.current?.click()} title="Attach image">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                      <Icon name="image" size={16}/>
                     </button>
                     {isStreaming ? (
                       <React.Fragment>
                         <button className="send-btn pause-btn" onClick={pauseStreaming} title="Pause to interject">
-                          <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
+                          <svg width="16" height="16" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
                         </button>
                         <button className="send-btn stop-btn" onClick={stopStreamingAction} title="Stop">
-                          <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
+                          <svg width="16" height="16" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
                         </button>
                       </React.Fragment>
                     ) : isPaused ? (
-                      <button className="send-btn" onClick={() => sendInterjection(input)} disabled={!input.trim()}>
-                        <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z" fill="currentColor"/></svg>
+                      <button className="send-btn" onClick={() => sendInterjection(input)} disabled={!input.trim()} title="Send interjection">
+                        <Icon name="send" size={16}/>
                       </button>
                     ) : (
-                      <button className="send-btn" onClick={() => sendMessage(input)} disabled={(!input.trim() && !pendingImages.length && !pendingFiles.length) || connected === false || anyAnalyzing}>
-                        <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z" fill="currentColor"/></svg>
+                      <button className="send-btn" onClick={() => sendMessage(input)} disabled={(!input.trim() && !pendingImages.length && !pendingFiles.length) || connected === false || anyAnalyzing} title="Send (⏎)">
+                        <Icon name="send" size={16}/>
                       </button>
                     )}
                   </div>
                 </div>
                 <div className="input-hint">
-                  {isStreaming ? 'Pause to interject \u00B7 Stop to cancel' : isPaused ? 'Enter to send interjection \u00B7 Dismiss to keep partial response' : 'Shift+Enter for new line \u00B7 Paste/drop images & files \u00B7 ' + (PERSONALITY_LABELS[personality] || 'Default') + ' mode' + (!config.geminiKey ? ' \u00B7 Add Gemini key in Settings for image analysis' : '')}
+                  {isStreaming ? (
+                    <span>Pause to interject · Stop to cancel</span>
+                  ) : isPaused ? (
+                    <span><kbd>⏎</kbd> send interjection · Dismiss to keep partial</span>
+                  ) : (
+                    <React.Fragment>
+                      <span><kbd>⏎</kbd> send</span>
+                      <span><kbd>⇧</kbd><kbd>⏎</kbd> new line</span>
+                      <span>Paste / drop images & files</span>
+                      <span style={{marginLeft:'auto',opacity:0.6}}>{(PERSONALITY_LABELS[personality] || 'Default') + ' mode'}{!config.geminiKey ? ' · add Gemini key for image analysis' : ''}</span>
+                    </React.Fragment>
+                  )}
                 </div>
               </div>
             </div>
@@ -5769,9 +6024,10 @@ function App() {
                     return <div key={key} className={"theme-dot " + t.className + (currentTheme === key ? ' active' : '')} title={t.label} onClick={function() { setCurrentTheme(key); }} />;
                   })}
                 </div>
-                <div className="header-controls-divider"></div>
-                <button className="header-btn hide-mobile" onClick={function(){ setShowShortcuts(true); }} title="Keyboard shortcuts (?)">{'⌨'}</button>
-                <button className="header-btn" onClick={() => setShowSettings(true)} title="Settings">{'⚙'}</button>
+                <div className="toolbar-pill">
+                  <button className="header-btn hide-mobile" onClick={function(){ setShowShortcuts(true); }} title="Keyboard shortcuts (?)"><Icon name="keyboard"/></button>
+                  <button className="header-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="settings"/></button>
+                </div>
               </div>
             </div>
             {currentView === 'dashboard' && <DashboardView />}
