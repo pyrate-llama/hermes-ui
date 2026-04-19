@@ -135,6 +135,8 @@
   }
   .sidebar-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim), 0 0 20px rgba(124,111,224,0.1); }
   .sidebar-search input::placeholder { color: var(--text-muted); }
+  .sidebar-search.content-mode input { border-color: var(--accent); background: var(--accent-dim); }
+  .sidebar-search-hint { font-size: 10px; color: var(--accent); padding: 4px 4px 0 4px; letter-spacing: 0.03em; text-transform: uppercase; opacity: 0.85; display: flex; align-items: center; gap: 4px; }
   .conversation-list { flex: 1; overflow-y: auto; padding: 2px 6px; }
   .conversation-list::-webkit-scrollbar { width: 4px; }
   .conversation-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
@@ -1544,6 +1546,142 @@
   }
   .theme-menu-item.active .theme-menu-item-check { opacity: 1; }
 
+  /* ── Search modal (command palette, nesq-style) ── */
+  .search-modal-overlay {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(8, 8, 16, 0.45);
+    backdrop-filter: blur(6px) saturate(1.1);
+    -webkit-backdrop-filter: blur(6px) saturate(1.1);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 9vh 16px 16px 16px;
+    animation: search-modal-fade 160ms ease-out;
+  }
+  @keyframes search-modal-fade { from { opacity: 0; } to { opacity: 1; } }
+  [data-theme="dawn"] .search-modal-overlay { background: rgba(40, 35, 55, 0.25); }
+  .search-modal {
+    width: min(640px, 92vw);
+    max-height: 68vh;
+    display: flex; flex-direction: column;
+    border-radius: 14px;
+    border: 1px solid var(--glass-border);
+    background: linear-gradient(180deg, rgba(22,22,34,0.94) 0%, rgba(16,16,26,0.94) 100%);
+    backdrop-filter: blur(22px) saturate(1.35);
+    -webkit-backdrop-filter: blur(22px) saturate(1.35);
+    box-shadow:
+      0 24px 60px rgba(0,0,0,0.55),
+      0 4px 16px rgba(0,0,0,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow: hidden;
+    animation: search-modal-pop 180ms cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes search-modal-pop {
+    from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  [data-theme="dawn"] .search-modal {
+    background: linear-gradient(180deg, rgba(252,250,248,0.96) 0%, rgba(246,243,240,0.96) 100%);
+  }
+  .search-modal-top { padding: 12px 14px 10px 14px; }
+  .search-modal-input-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--glass-border);
+    transition: all 0.18s ease;
+  }
+  .search-modal-input-row:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+    background: rgba(124,111,224,0.06);
+  }
+  .search-modal-input-row svg { color: var(--text-muted); flex-shrink: 0; }
+  .search-modal-input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--text-primary); font-size: 15px; font-family: inherit;
+  }
+  .search-modal-input::placeholder { color: var(--text-muted); }
+  .search-modal-clear {
+    background: transparent; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 12px; padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .search-modal-clear:hover { color: var(--text-primary); background: rgba(255,255,255,0.06); }
+  .search-modal-scopes {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
+  }
+  .search-modal-scope {
+    padding: 4px 10px; border-radius: 6px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.02);
+    color: var(--text-secondary); font-size: 11.5px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s ease;
+  }
+  .search-modal-scope:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+  .search-modal-scope.active {
+    border-color: rgba(124,111,224,0.4);
+    background: rgba(124,111,224,0.18);
+    color: var(--accent);
+  }
+  .search-modal-scope.disabled { opacity: 0.4; cursor: not-allowed; }
+  .search-modal-scope.disabled:hover { background: rgba(255,255,255,0.02); color: var(--text-secondary); }
+  .search-modal-body {
+    flex: 1; overflow-y: auto;
+    border-top: 1px solid var(--glass-border);
+    padding: 8px;
+  }
+  .search-modal-body::-webkit-scrollbar { width: 6px; }
+  .search-modal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .search-modal-empty, .search-modal-hint {
+    padding: 24px 16px; text-align: center;
+    color: var(--text-muted); font-size: 13px;
+  }
+  .search-modal-hint-label {
+    font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-muted); padding: 10px 10px 4px 10px;
+  }
+  .search-modal-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 8px;
+    cursor: pointer; transition: background 0.12s ease;
+  }
+  .search-modal-item-icon {
+    width: 28px; height: 28px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 6px; background: rgba(255,255,255,0.04);
+    color: var(--text-secondary);
+  }
+  .search-modal-item-text { flex: 1; min-width: 0; }
+  .search-modal-item-title {
+    color: var(--text-primary); font-size: 13.5px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .search-modal-item-snippet {
+    color: var(--text-muted); font-size: 11.5px; margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .search-modal-item-meta { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
+  .search-modal-item.selected, .search-modal-item:hover {
+    background: rgba(124,111,224,0.12);
+  }
+  .search-modal-item.selected .search-modal-item-icon,
+  .search-modal-item:hover .search-modal-item-icon {
+    background: rgba(124,111,224,0.18); color: var(--accent);
+  }
+  .search-modal-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px; font-size: 10.5px;
+    color: var(--text-muted);
+    border-top: 1px solid var(--glass-border);
+    background: rgba(0,0,0,0.2);
+  }
+  [data-theme="dawn"] .search-modal-footer { background: rgba(0,0,0,0.03); }
+  .search-modal-footer-keys { display: flex; gap: 10px; }
+  .search-modal-kbd {
+    display: inline-block; padding: 1px 5px; border-radius: 3px;
+    background: rgba(255,255,255,0.08); color: var(--text-secondary);
+    font-family: inherit; font-size: 10px; margin-right: 2px;
+  }
+
   /* Floating sidebar toggle (shown when sidebar is collapsed) — anchored to header */
   .floating-sidebar-btn {
     position: absolute; left: 10px; top: 10px;
@@ -1712,7 +1850,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useRef, useCallback } = React;
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 const API_BASE = '';
 const PERSONALITY_LABELS = {
@@ -4399,6 +4537,169 @@ function ThemeMenu({ currentTheme, setCurrentTheme }) {
   );
 }
 
+// ── Search modal (nesq-style command palette) ──
+const SEARCH_SCOPES = [
+  { value: 'all',    label: 'All' },
+  { value: 'chats',  label: 'Chats' },
+  { value: 'files',  label: 'Files',  disabled: true },
+  { value: 'agents', label: 'Agents', disabled: true },
+  { value: 'skills', label: 'Skills', disabled: true },
+  { value: 'actions',label: 'Actions',disabled: true },
+];
+
+function SearchModal({ open, onClose, conversations, onSelectConversation }) {
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [scope, setScope] = useState('all');
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const inputRef = useRef(null);
+  const modalRef = useRef(null);
+
+  // Debounce
+  useEffect(function() {
+    var t = window.setTimeout(function() { setDebouncedQuery(query); }, 180);
+    return function() { window.clearTimeout(t); };
+  }, [query]);
+
+  // Focus on open, reset on close
+  useEffect(function() {
+    if (!open) { setQuery(''); setDebouncedQuery(''); setScope('all'); setSelectedIndex(0); return; }
+    var raf = window.requestAnimationFrame(function() {
+      if (inputRef.current) { inputRef.current.focus(); inputRef.current.select(); }
+    });
+    return function() { window.cancelAnimationFrame(raf); };
+  }, [open]);
+
+  // Build result list
+  var results = useMemo(function() {
+    var q = (debouncedQuery || '').trim().toLowerCase();
+    if (!q) return [];
+    var items = [];
+    if (scope === 'all' || scope === 'chats') {
+      var matches = (conversations || []).filter(function(c) {
+        var hay = ((c.title || '') + ' ' + (c.id || '')).toLowerCase();
+        return hay.indexOf(q) !== -1;
+      }).slice(0, 40);
+      for (var i = 0; i < matches.length; i++) {
+        var c = matches[i];
+        items.push({
+          id: c.id,
+          scope: 'chats',
+          iconName: 'message-square',
+          title: c.title || 'Untitled',
+          snippet: (c.message_count ? (c.message_count + ' msgs') : '') + (c.created ? ' · ' + c.created : ''),
+          meta: c.source === 'telegram' ? 'Telegram' : 'Chat',
+          onSelect: function(conv) { return function() { onSelectConversation(conv.id); onClose(); }; }(c),
+        });
+      }
+    }
+    return items;
+  }, [debouncedQuery, scope, conversations]);
+
+  useEffect(function() { setSelectedIndex(0); }, [debouncedQuery, scope]);
+
+  // Keyboard navigation
+  useEffect(function() {
+    if (!open) return;
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIndex(function(i) { return Math.min(results.length - 1, i + 1); }); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setSelectedIndex(function(i) { return Math.max(0, i - 1); }); return; }
+      if (e.key === 'Enter') {
+        if (results.length === 0) return;
+        e.preventDefault();
+        var item = results[selectedIndex];
+        if (item) item.onSelect();
+        return;
+      }
+      if (e.key === 'Tab' && !e.shiftKey) {
+        var enabled = SEARCH_SCOPES.filter(function(s) { return !s.disabled; });
+        var idx = enabled.findIndex(function(s) { return s.value === scope; });
+        var next = enabled[(idx + 1) % enabled.length];
+        if (next) { e.preventDefault(); setScope(next.value); }
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return function() { window.removeEventListener('keydown', onKey); };
+  }, [open, results, selectedIndex, scope, onClose]);
+
+  if (!open) return null;
+  return ReactDOM.createPortal(
+    <div className="search-modal-overlay" onMouseDown={function(e) { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="search-modal" ref={modalRef} role="dialog" aria-label="Search">
+        <div className="search-modal-top">
+          <div className="search-modal-input-row">
+            <Icon name="search" size={16}/>
+            <input
+              ref={inputRef}
+              type="text"
+              className="search-modal-input"
+              placeholder="Search chats, files, skills..."
+              value={query}
+              onChange={function(e) { setQuery(e.target.value); }}
+              autoFocus
+            />
+            {query && (<button type="button" className="search-modal-clear" onClick={function() { setQuery(''); if (inputRef.current) inputRef.current.focus(); }}>Clear</button>)}
+          </div>
+          <div className="search-modal-scopes">
+            {SEARCH_SCOPES.map(function(s) {
+              var active = scope === s.value;
+              return (
+                <button
+                  key={s.value}
+                  type="button"
+                  className={"search-modal-scope " + (active ? 'active ' : '') + (s.disabled ? 'disabled' : '')}
+                  onClick={function() { if (!s.disabled) setScope(s.value); }}
+                  disabled={s.disabled}
+                  title={s.disabled ? 'Coming soon' : ''}
+                >{s.label}</button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="search-modal-body">
+          {(!debouncedQuery.trim()) ? (
+            <div>
+              <div className="search-modal-hint-label">Tips</div>
+              <div className="search-modal-empty">Start typing to search across your chats. Use <span className="search-modal-kbd">↑</span><span className="search-modal-kbd">↓</span> to navigate, <span className="search-modal-kbd">↵</span> to open, <span className="search-modal-kbd">Tab</span> to switch scope.</div>
+            </div>
+          ) : results.length === 0 ? (
+            <div className="search-modal-empty">No results for "{debouncedQuery}"</div>
+          ) : (
+            results.map(function(r, i) {
+              return (
+                <div
+                  key={r.scope + '-' + r.id + '-' + i}
+                  className={"search-modal-item " + (i === selectedIndex ? 'selected' : '')}
+                  onMouseEnter={function() { setSelectedIndex(i); }}
+                  onMouseDown={function(e) { e.preventDefault(); r.onSelect(); }}
+                >
+                  <div className="search-modal-item-icon"><Icon name={r.iconName} size={16}/></div>
+                  <div className="search-modal-item-text">
+                    <div className="search-modal-item-title">{r.title}</div>
+                    {r.snippet && <div className="search-modal-item-snippet">{r.snippet}</div>}
+                  </div>
+                  {r.meta && <div className="search-modal-item-meta">{r.meta}</div>}
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div className="search-modal-footer">
+          <div>{results.length > 0 ? (results.length + ' result' + (results.length === 1 ? '' : 's')) : ''}</div>
+          <div className="search-modal-footer-keys">
+            <span><span className="search-modal-kbd">↑↓</span>navigate</span>
+            <span><span className="search-modal-kbd">↵</span>open</span>
+            <span><span className="search-modal-kbd">Tab</span>scope</span>
+            <span><span className="search-modal-kbd">Esc</span>close</span>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function App() {
   const [currentView, setCurrentView] = useState('chat');
   const [config, setConfig] = useState(() => {
@@ -4513,7 +4814,7 @@ function App() {
     });
   };
   const [mcpTools, setMcpTools] = useState([]);
-  const [searchMode, setSearchMode] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(getStoredTheme);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showWelcome, setShowWelcome] = useState(function() {
@@ -4626,14 +4927,10 @@ function App() {
         setShowMCPBrowser(false);
         return;
       }
-      // Cmd/Ctrl+K — focus search
+      // Cmd/Ctrl+K — open global search modal (nesq-style command palette)
       if (mod && e.key === 'k') {
         e.preventDefault();
-        setCurrentView('chat');
-        setTimeout(function() {
-          var searchInput = document.querySelector('.sidebar-search input');
-          if (searchInput) searchInput.focus();
-        }, 100);
+        setShowSearchModal(true);
         return;
       }
       // Cmd/Ctrl+N — new chat
@@ -5818,37 +6115,10 @@ function App() {
   // ── Search / filter ──
   const filteredConvs = conversations.filter(c => (c.title || '').toLowerCase().includes(searchQuery.toLowerCase()));
 
-  const handleSessionSearch = async (query) => {
-    if (query.trim() && searchMode) {
-      try {
-        const r = await fetch(API_BASE + '/api/sessions/search?q=' + encodeURIComponent(query));
-        if (r.ok) {
-          const results = await r.json();
-          setConversations(results.items || []);
-        }
-      } catch (e) {
-        console.error('Session search failed:', e);
-      }
-    }
-  };
-
-  const toggleSearchMode = () => {
-    if (searchMode) {
-      setSearchMode(false);
-      // Reload normal conversations
-      (async () => {
-        try {
-          const r = await fetch(API_BASE + '/api/sessions');
-          if (r.ok) {
-            const result = await r.json();
-            setConversations((result.items || []).slice(0, 30));
-          }
-        } catch (e) { /* ignore */ }
-      })();
-    } else {
-      setSearchMode(true);
-    }
-  };
+  // v0.7.x: Global search uses a command-palette modal (see SearchModal component)
+  // — opened via the header search button or Cmd/Ctrl+K. The old searchMode
+  // placeholder toggle was removed in favour of the nesq-style modal.
+  const openSearchModal = () => setShowSearchModal(true);
 
   const anyAnalyzing = pendingImages.some(img => img.analyzing);
 
@@ -5944,7 +6214,7 @@ function App() {
         </div>
 
         <div className="sidebar-search" style={{display: currentView === 'chat' ? 'block' : 'none'}}>
-          <input type="text" placeholder={searchMode ? "Search content..." : "Search chats..."} value={searchQuery} onChange={e => { setSearchQuery(e.target.value); if (searchMode) handleSessionSearch(e.target.value); }} />
+          <input type="text" placeholder="Filter chats..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
         </div>
         <div className="conversation-list" style={{display: currentView === 'chat' ? 'block' : 'none'}}>
           {filteredConvs.map(conv => (
@@ -5997,7 +6267,7 @@ function App() {
                   <button className="header-btn hide-mobile" onClick={function() { if (messages.length > 0) { var t = activeConvId ? (conversations.find(function(c){return c.id===activeConvId;})||{}).title : 'Chat'; exportChatAsMarkdown(messages, t || 'Chat'); } }} title="Export as Markdown"><Icon name="file-pen"/></button>
                   <button className={"header-btn hide-mobile " + (showTerminal ? 'active' : '')} onClick={function(){ setShowTerminal(!showTerminal); }} title="Live terminal logs"><Icon name="terminal"/></button>
                   <button className="header-btn hide-mobile" onClick={() => setShowMCPBrowser(true)} title="MCP Tools"><Icon name="wrench"/></button>
-                  <button className="header-btn" onClick={toggleSearchMode} title="Search content"><Icon name="search"/></button>
+                  <button className={"header-btn " + (showSearchModal ? 'active' : '')} onClick={openSearchModal} title="Search (⌘K)"><Icon name="search"/></button>
                   <button className="header-btn hide-mobile" onClick={function(){ setShowShortcuts(true); }} title="Keyboard shortcuts (?)"><Icon name="keyboard"/></button>
                   <button className="header-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="settings"/></button>
                 </div>
@@ -6188,6 +6458,7 @@ function App() {
       {lightboxSrc && <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
       {showMCPBrowser && <MCPBrowserModal tools={mcpTools} onClose={() => setShowMCPBrowser(false)} />}
       {showShortcuts && <ShortcutsModal onClose={function(){ setShowShortcuts(false); }} />}
+      <SearchModal open={showSearchModal} onClose={function(){ setShowSearchModal(false); }} conversations={conversations} onSelectConversation={function(id){ selectConversation(id); }} />
       {showWelcome && <WelcomePopup onClose={function(){ setShowWelcome(false); try { localStorage.setItem('hermes-ui-welcomed', '1'); } catch(e){} }} onOpenRemoteSetup={function(){ setShowSettings(true); }} />}
 
     </div>
