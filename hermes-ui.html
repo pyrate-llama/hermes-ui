@@ -5730,11 +5730,11 @@ function App() {
   // ── Render ──
   return (
     <div className="app-wrapper">
+    {/* Depth layers — rendered outside .app because .app > * forces position:relative */}
+    <div className="ambient-glow-3" aria-hidden="true"></div>
+    <div className="app-vignette" aria-hidden="true"></div>
+    <div className="app-noise" aria-hidden="true"></div>
     <div className="app">
-      {/* Depth layers */}
-      <div className="ambient-glow-3" aria-hidden="true"></div>
-      <div className="app-vignette" aria-hidden="true"></div>
-      <div className="app-noise" aria-hidden="true"></div>
       {/* Sidebar backdrop overlay (mobile) */}
       {!sidebarCollapsed && (
         <div className="sidebar-backdrop" onClick={() => setSidebarCollapsed(true)} />
