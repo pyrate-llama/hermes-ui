@@ -2182,7 +2182,7 @@ function MessageBubble({ message, onImageClick, onEdit }) {
 function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
   const [geminiKey, setGeminiKey] = useState(config.geminiKey || '');
   const [baseSystemPrompt, setBaseSystemPrompt] = useState(config.baseSystemPrompt || '');
-  const [applyBehavioralGuidelines, setApplyBehavioralGuidelines] = useState(!config || config.applyBehavioralGuidelines !== false);
+  const [applyBehavioralGuidelines, setApplyBehavioralGuidelines] = useState(!!(config && config.applyBehavioralGuidelines === true));
   const [settingsTab, setSettingsTab] = useState('general');
   const [serverStatus, setServerStatus] = useState(null);
 
@@ -4705,9 +4705,9 @@ function App() {
   const [config, setConfig] = useState(() => {
     try {
       const saved = localStorage.getItem('hermes-config');
-      return saved ? JSON.parse(saved) : { apiUrl: API_BASE, geminiKey: '', baseSystemPrompt: '', applyBehavioralGuidelines: true };
+      return saved ? JSON.parse(saved) : { apiUrl: API_BASE, geminiKey: '', baseSystemPrompt: '', applyBehavioralGuidelines: false };
     } catch(e) {
-      return { apiUrl: API_BASE, geminiKey: '', baseSystemPrompt: '', applyBehavioralGuidelines: true };
+      return { apiUrl: API_BASE, geminiKey: '', baseSystemPrompt: '', applyBehavioralGuidelines: false };
     }
   });
 
@@ -5939,7 +5939,7 @@ function App() {
         },
         abortCtrl.signal,
         messagesRef.current,
-        { baseSystemPrompt: (config && config.baseSystemPrompt) || '', applyBehavioralGuidelines: !config || config.applyBehavioralGuidelines !== false }
+        { baseSystemPrompt: (config && config.baseSystemPrompt) || '', applyBehavioralGuidelines: !!(config && config.applyBehavioralGuidelines === true) }
       );
     } catch (err) {
       if (err.name !== 'AbortError') {
