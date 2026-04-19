@@ -22,6 +22,46 @@ import uuid
 import traceback
 import urllib.parse
 
+# ── Python interpreter sanity check ─────────────────────────────────────────
+# serve_lite.py depends on hermes-agent's compiled C extensions (pydantic_core
+# and friends) which are built against a specific Python minor version. Running
+# with the wrong interpreter silently fails the AIAgent import and breaks chat
+# with a 404 on /api/chat/stream ("Stream ended without a completion event").
+# Detect the mismatch early and print a clear fix.
+def _check_interpreter_matches_venv():
+    import glob, re
+    agent_dir = os.path.expanduser("~/.hermes/hermes-agent")
+    venv_sitepkgs = glob.glob(os.path.join(agent_dir, "venv", "lib", "python*", "site-packages"))
+    if not venv_sitepkgs:
+        return  # No venv installed — fresh checkout; let normal Python rules apply.
+    vm = re.search(r"python(\d+\.\d+)", venv_sitepkgs[0])
+    if not vm:
+        return
+    venv_ver = vm.group(1)
+    cur_ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+    if cur_ver != venv_ver:
+        venv_py = os.path.join(agent_dir, "venv", "bin", "python3")
+        bar = "=" * 72
+        print(
+            f"\n{bar}\n"
+            f"  ERROR: serve_lite.py was started with Python {cur_ver}\n"
+            f"  ({sys.executable})\n"
+            f"  but hermes-agent's venv was built for Python {venv_ver}.\n"
+            f"\n"
+            f"  Compiled C extensions (pydantic_core, etc.) are ABI-specific\n"
+            f"  and will fail to import under the wrong Python. Chat will break\n"
+            f"  silently with 'Stream ended without a completion event'.\n"
+            f"\n"
+            f"  Fix: run serve_lite.py with the matching interpreter:\n"
+            f"    {venv_py} serve_lite.py\n"
+            f"{bar}\n",
+            file=sys.stderr,
+            flush=True,
+        )
+        sys.exit(1)
+
+_check_interpreter_matches_venv()
+
 # ── Hermes agent discovery ──────────────────────────────────────────────────
 HERMES_HOME = os.path.expanduser("~/.hermes")
 AGENT_DIR = os.path.join(HERMES_HOME, "hermes-agent")
