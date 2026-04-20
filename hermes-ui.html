@@ -548,10 +548,10 @@
   .input-area {
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid var(--glass-border);
-    padding: 16px 20px;
+    padding: 8px 20px 4px 20px;
   }
 
-  .input-container { display: flex; flex-direction: column; gap: 12px; }
+  .input-container { display: flex; flex-direction: column; gap: 4px; }
 
   .image-preview-strip {
     display: flex; gap: 8px; overflow-x: auto; padding: 4px 0;
@@ -4866,6 +4866,7 @@ function App() {
   };
   const [mcpTools, setMcpTools] = useState([]);
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(getStoredTheme);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showWelcome, setShowWelcome] = useState(function() {
@@ -5229,12 +5230,20 @@ function App() {
         });
 
         source.addEventListener('compressed', function(e) {
-          // Mirrors nesquena/hermes-webui: context auto-compression notification.
+          // Mirrors nesquena/hermes-webui messages.js lines 481-490: context
+          // auto-compression notification. When this fires, the backend has
+          // rotated session_id and compacted history. We insert a visible
+          // divider into the transcript AND set has_compaction on the
+          // conversation so the sidebar 🔄 icon appears. Caller wires the
+          // React setters via opts.onCompressed(msg, newSessionId).
           var d = {};
           try { d = JSON.parse(e.data); } catch(err) {}
           var msg = d.message || 'Context auto-compressed to continue the conversation';
           console.log('[stream] ' + msg);
           if (onThinking) onThinking('[compressed] ' + msg);
+          if (opts.onCompressed) {
+            try { opts.onCompressed(msg, d.session_id || null); } catch(err) { console.warn('[compressed] onCompressed threw:', err); }
+          }
         });
 
         source.addEventListener('done', function(e) {
@@ -6021,7 +6030,33 @@ function App() {
         },
         abortCtrl.signal,
         messagesRef.current,
-        { baseSystemPrompt: (config && config.baseSystemPrompt) || '', applyBehavioralGuidelines: !!(config && config.applyBehavioralGuidelines === true) }
+        {
+          baseSystemPrompt: (config && config.baseSystemPrompt) || '',
+          applyBehavioralGuidelines: !!(config && config.applyBehavioralGuidelines === true),
+          // Mirrors nesquena/hermes-webui messages.js 481-490: when the backend
+          // compacts context mid-stream, insert a visible divider into the
+          // transcript and flag the conversation so the sidebar 🔄 icon shows.
+          onCompressed: function(msg, newSessionId) {
+            var markerId = 'compaction-' + Date.now();
+            updateStreamMessages(sessionId, function(prev) {
+              var updated = prev.slice();
+              // Insert divider BEFORE the currently-streaming assistant message
+              // (last entry) so compaction reads as "happened before this reply".
+              var insertAt = updated.length;
+              if (insertAt > 0 && updated[insertAt - 1] && updated[insertAt - 1].role === 'assistant' && updated[insertAt - 1].streaming) {
+                insertAt = insertAt - 1;
+              }
+              updated.splice(insertAt, 0, { id: markerId, role: 'compaction', content: msg });
+              return updated;
+            });
+            setConversations(function(prev) {
+              return prev.map(function(c) {
+                if (c.id !== sessionId && c.id !== newSessionId) return c;
+                return Object.assign({}, c, { has_compaction: true });
+              });
+            });
+          },
+        }
       );
     } catch (err) {
       if (err.name !== 'AbortError') {
@@ -6355,8 +6390,6 @@ function App() {
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
                 <div className="toolbar-pill">
-                  <button className="header-btn hide-mobile" onClick={exportChat} title="Export as PDF/HTML"><Icon name="file-text"/></button>
-                  <button className="header-btn hide-mobile" onClick={function() { if (messages.length > 0) { var t = activeConvId ? (conversations.find(function(c){return c.id===activeConvId;})||{}).title : 'Chat'; exportChatAsMarkdown(messages, t || 'Chat'); } }} title="Export as Markdown"><Icon name="file-pen"/></button>
                   <button className={"header-btn hide-mobile " + (showTerminal ? 'active' : '')} onClick={function(){ setShowTerminal(!showTerminal); }} title="Live terminal logs"><Icon name="terminal"/></button>
                   <button className={"header-btn " + (showSearchModal ? 'active' : '')} onClick={openSearchModal} title="Search (⌘K)"><Icon name="search"/></button>
                   <button className="header-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="settings"/></button>
@@ -6507,7 +6540,44 @@ function App() {
                       <span><kbd>⏎</kbd> send</span>
                       <span><kbd>⇧</kbd><kbd>⏎</kbd> new line</span>
                       <span>Paste / drop images & files</span>
-                      <span style={{marginLeft:'auto',opacity:0.6}}>{(PERSONALITY_LABELS[personality] || 'Default') + ' mode'}{!config.geminiKey ? ' · add Gemini key for image analysis' : ''}</span>
+                      {!config.geminiKey && <span style={{opacity:0.6}}>· add Gemini key for image analysis</span>}
+                      {/* Export chat dropdown — inline in hint row, right-aligned */}
+                      <div style={{marginLeft:'auto', position:'relative'}}>
+                        <button
+                          className={"header-btn " + (showExportMenu ? 'active' : '')}
+                          onClick={function(){ setShowExportMenu(!showExportMenu); }}
+                          title="Export chat"
+                          style={{padding:'4px 10px', fontSize:'12px', display:'inline-flex', alignItems:'center', gap:'6px', width:'auto', height:'26px'}}
+                        >
+                          <Icon name="file-text" size={14}/>
+                          <span style={{fontSize:'12px'}}>Export</span>
+                        </button>
+                        {showExportMenu && (
+                          <React.Fragment>
+                            <div onClick={function(){ setShowExportMenu(false); }} style={{position:'fixed', inset:0, zIndex:9}} />
+                            <div style={{position:'absolute', right:0, bottom:'calc(100% + 4px)', background:'var(--panel, var(--bg-panel, #1a1a1f))', border:'1px solid var(--border, rgba(255,255,255,0.1))', borderRadius:'8px', padding:'4px', minWidth:'200px', boxShadow:'0 4px 16px rgba(0,0,0,0.3)', zIndex:10}}>
+                              <button
+                                onClick={function(){ setShowExportMenu(false); exportChat(); }}
+                                style={{display:'flex', alignItems:'center', gap:'10px', width:'100%', background:'none', border:'none', color:'var(--text, #fff)', padding:'8px 12px', borderRadius:'6px', cursor:'pointer', fontSize:'13px', textAlign:'left'}}
+                                onMouseEnter={function(e){ e.currentTarget.style.background='rgba(255,255,255,0.06)'; }}
+                                onMouseLeave={function(e){ e.currentTarget.style.background='none'; }}
+                              >
+                                <Icon name="file-text" size={14}/>
+                                <span>Export as PDF/HTML</span>
+                              </button>
+                              <button
+                                onClick={function(){ setShowExportMenu(false); if (messages.length > 0) { var t = activeConvId ? (conversations.find(function(c){return c.id===activeConvId;})||{}).title : 'Chat'; exportChatAsMarkdown(messages, t || 'Chat'); } }}
+                                style={{display:'flex', alignItems:'center', gap:'10px', width:'100%', background:'none', border:'none', color:'var(--text, #fff)', padding:'8px 12px', borderRadius:'6px', cursor:'pointer', fontSize:'13px', textAlign:'left'}}
+                                onMouseEnter={function(e){ e.currentTarget.style.background='rgba(255,255,255,0.06)'; }}
+                                onMouseLeave={function(e){ e.currentTarget.style.background='none'; }}
+                              >
+                                <Icon name="file-pen" size={14}/>
+                                <span>Export as Markdown</span>
+                              </button>
+                            </div>
+                          </React.Fragment>
+                        )}
+                      </div>
                     </React.Fragment>
                   )}
                 </div>
