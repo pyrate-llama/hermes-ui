@@ -1902,6 +1902,10 @@ function Icon({ name, size, className, strokeWidth }) {
     case 'palette': return (<svg {...common}><circle cx="13.5" cy="6.5" r=".8" fill="currentColor" stroke="none"/><circle cx="17.5" cy="10.5" r=".8" fill="currentColor" stroke="none"/><circle cx="8.5" cy="7.5" r=".8" fill="currentColor" stroke="none"/><circle cx="6.5" cy="12.5" r=".8" fill="currentColor" stroke="none"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.96 0 1.75-.78 1.75-1.75 0-.45-.17-.86-.45-1.17-.27-.31-.45-.72-.45-1.17 0-.96.79-1.75 1.75-1.75H17c2.76 0 5-2.24 5-5C22 6.01 17.52 2 12 2z"/></svg>);
     case 'check': return (<svg {...common}><polyline points="20 6 9 17 4 12"/></svg>);
     case 'trash': return (<svg {...common}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>);
+    case 'layout-dashboard': return (<svg {...common}><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>);
+    case 'folder': return (<svg {...common}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>);
+    case 'clock': return (<svg {...common}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>);
+    case 'brain': return (<svg {...common}><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 0 0 6.25 18 4 4 0 0 0 12 21.5a4 4 0 0 0 5.75-3.5 4 4 0 0 0 2.217-1.517 4 4 0 0 0 .556-6.588 4 4 0 0 0-2.526-5.77A3 3 0 1 0 12 5"/><path d="M12 5v16"/><path d="M7 10h4"/><path d="M13 10h4"/></svg>);
     default: return (<svg {...common}><circle cx="12" cy="12" r="4"/></svg>);
   }
 }
@@ -2658,7 +2662,7 @@ function TerminalPanel({ isOpen, onClose, onClear, localLogs, artifacts, onArtif
             <div style={{color:'var(--text-muted)', textAlign:'center', padding:'40px 20px', fontSize:'13px'}}>
               <div style={{fontSize:'28px', marginBottom:'12px'}}>{'🎨'}</div>
               <div style={{fontWeight:600, marginBottom:'6px'}}>No artifacts yet</div>
-              <div>When Hermes generates HTML, SVG, PDFs, CSVs, or code blocks, they will appear here as live previews.</div>
+              <div>When Hermes generates HTML, SVG, PDFs, or CSVs, they will appear here as live previews.</div>
               <div style={{marginTop:'12px', fontSize:'11px'}}>Or use the Load File button above to open a local file.</div>
             </div>
           ) : (
@@ -4817,7 +4821,13 @@ function App() {
   const streamingMap = useRef({});
   const [streamingSessionIds, setStreamingSessionIds] = useState([]);
   // Derived: is the CURRENT conversation streaming/paused?
-  const isStreaming = streamingSessionIds.includes(activeConvId);
+  // We OR two signals because streamingSessionIds can desync from reality in edge cases
+  // (SSE reconnect paths, session-id rotation timing, browser tab-visibility buffering).
+  // The message-level flags (.streaming / .thinking on the last assistant msg) are the
+  // most faithful "is content still arriving" signal, so we fall back to them.
+  const _lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+  const _lastMsgActive = !!(_lastMsg && _lastMsg.role === 'assistant' && (_lastMsg.streaming || _lastMsg.thinking));
+  const isStreaming = streamingSessionIds.includes(activeConvId) || _lastMsgActive;
   // isPaused is now derived from pausedSessionIds (defined later with pause/stop functions)
 
   const startStreaming = (sessionId, abortCtrl) => {
@@ -5861,18 +5871,9 @@ function App() {
             while ((m = inlineSvgRe.exec(text)) !== null) {
               if (m[0].length > 10) newArtifacts.push({ type: 'svg', content: m[0], timestamp: Date.now() });
             }
-            // Detect other code fences (python, javascript, css, etc.)
-            // Only grab substantial code blocks (5+ lines) — short snippets stay in chat
-            var codeFenceRe = /```(\w+)\s*\n([\s\S]*?)```/gi;
-            while ((m = codeFenceRe.exec(text)) !== null) {
-              var lang = m[1].toLowerCase();
-              if (lang === 'html' || lang === 'svg') continue; // already handled
-              var codeContent = m[2].trim();
-              var lineCount = codeContent.split('\n').length;
-              if (codeContent.length > 200 && lineCount >= 5) {
-                newArtifacts.push({ type: 'code', language: lang, content: codeContent, timestamp: Date.now() });
-              }
-            }
+            // Generic code fences (python, yaml, json, etc.) are NOT promoted to artifacts —
+            // they render inline in the chat with syntax highlighting and don't need a preview panel.
+            // Only visually-renderable artifacts (HTML, SVG, PDF, CSV) belong in the right column.
 
             // Detect file paths saved by Hermes (~/path/to/file.html, /Users/.../file.svg, etc.)
             // Auto-load renderable files into artifact panel: HTML, SVG, PDF, CSV
@@ -6170,6 +6171,26 @@ function App() {
   // Override isPaused to use dedicated state
   const isPaused = pausedSessionIds.includes(activeConvId);
 
+  // Defensive helper: clears stuck .streaming / .thinking flags on the last assistant
+  // message for a given session. Used by pause/stop so the UI always unsticks, even
+  // when streamingSessionIds has desynced from actual SSE activity.
+  const _clearStuckMessageFlags = (sid) => {
+    const flip = (prev) => {
+      if (!prev || !prev.length) return prev;
+      var last = prev[prev.length - 1];
+      if (last && last.role === 'assistant' && (last.streaming || last.thinking)) {
+        var updated = prev.slice();
+        updated[updated.length - 1] = Object.assign({}, last, { streaming: false, thinking: false });
+        return updated;
+      }
+      return prev;
+    };
+    if (activeConvRef.current === sid) {
+      setMessages(flip);
+    }
+    setConversations(prev => prev.map(c => c.id === sid ? Object.assign({}, c, { messages: flip(c.messages || []) }) : c));
+  };
+
   const pauseStreaming = () => {
     const sid = activeConvId;
     if (!sid) return;
@@ -6178,6 +6199,7 @@ function App() {
       entry.abortController.abort();
     }
     stopStreaming(sid);
+    _clearStuckMessageFlags(sid);
     setPausedSessionIds(prev => prev.includes(sid) ? prev : [...prev, sid]);
   };
 
@@ -6189,6 +6211,7 @@ function App() {
       entry.abortController.abort();
     }
     stopStreaming(sid);
+    _clearStuckMessageFlags(sid);
     setPausedSessionIds(prev => prev.filter(id => id !== sid));
   };
 
@@ -6297,43 +6320,43 @@ function App() {
         <div className="sidebar-nav">
           {/* section labels removed for density */}
           <div className={"nav-item " + (currentView === 'dashboard' ? 'active' : '')} onClick={function() { setCurrentView('dashboard'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon">{'📊'}</span>
+            <span className="nav-item-icon" style={{color:'#6fb3c2'}}><Icon name="layout-dashboard" size={15}/></span>
             <span className="nav-item-label">Dashboard</span>
           </div>
           <div className={"nav-item " + (currentView === 'chat' ? 'active' : '')} onClick={function() { setCurrentView('chat'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon">{'💬'}</span>
+            <span className="nav-item-icon" style={{color:'#7a9cc4'}}><Icon name="message-square" size={15}/></span>
             <span className="nav-item-label">Chat</span>
           </div>
           <div className={"nav-item " + (currentView === 'files' ? 'active' : '')} onClick={function() { setCurrentView('files'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon">{'📁'}</span>
+            <span className="nav-item-icon" style={{color:'#c9a754'}}><Icon name="folder" size={15}/></span>
             <span className="nav-item-label">Files</span>
           </div>
           <div className={"nav-item " + (currentView === 'terminal' ? 'active' : '')} onClick={function() { setCurrentView('terminal'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon" style={{fontFamily:'Monaco, Menlo, monospace',fontSize:'14px',fontWeight:'700'}}>{'>'}</span>
+            <span className="nav-item-icon" style={{color:'#69a68a'}}><Icon name="terminal" size={15}/></span>
             <span className="nav-item-label">Terminal</span>
           </div>
           <div className={"nav-item " + (currentView === 'jobs' ? 'active' : '')} onClick={function() { setCurrentView('jobs'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon">{'🕐'}</span>
+            <span className="nav-item-icon" style={{color:'#c78b5e'}}><Icon name="clock" size={15}/></span>
             <span className="nav-item-label">Cron Jobs</span>
           </div>
 
           <div style={{borderTop:'1px solid var(--border)',margin:'2px 8px'}} />
           <div className={"nav-item " + (currentView === 'memory' ? 'active' : '')} onClick={function() { setCurrentView('memory'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon">{'🧠'}</span>
+            <span className="nav-item-icon" style={{color:'#a589c5'}}><Icon name="brain" size={15}/></span>
             <span className="nav-item-label">Memory</span>
           </div>
           <div className={"nav-item " + (currentView === 'skills' ? 'active' : '')} onClick={function() { setCurrentView('skills'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon">{'✨'}</span>
+            <span className="nav-item-icon" style={{color:'#7b83b8'}}><Icon name="sparkles" size={15}/></span>
             <span className="nav-item-label">Skills</span>
           </div>
           <div className="nav-item" onClick={function() { setShowMCPBrowser(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Browse connected MCP tools">
-            <span className="nav-item-icon"><Icon name="wrench" size={14}/></span>
+            <span className="nav-item-icon" style={{color:'#7b83b8'}}><Icon name="wrench" size={15}/></span>
             <span className="nav-item-label">MCP Tools</span>
           </div>
 
           <div style={{borderTop:'1px solid var(--border)',margin:'2px 8px'}} />
           <div className="nav-item" onClick={function() { setShowShortcuts(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Keyboard shortcuts (?)">
-            <span className="nav-item-icon"><Icon name="keyboard" size={14}/></span>
+            <span className="nav-item-icon" style={{color:'#94a3b8'}}><Icon name="keyboard" size={15}/></span>
             <span className="nav-item-label">Shortcuts</span>
           </div>
 
@@ -6494,10 +6517,16 @@ function App() {
                     onKeyDown={e => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        isPaused ? sendInterjection(input) : sendMessage(input);
+                        if (isStreaming && !isPaused && input.trim()) {
+                          // Auto-interject: mirror manual Pause → type → Send flow
+                          pauseStreaming();
+                          sendInterjection(input);
+                        } else {
+                          isPaused ? sendInterjection(input) : sendMessage(input);
+                        }
                       }
                     }}
-                    placeholder={connected === false ? 'Hermes API not connected...' : isPaused ? 'Type your interjection...' : anyAnalyzing ? 'Waiting for image analysis...' : 'Message Hermes... (paste/drop images or files)'}
+                    placeholder={connected === false ? 'Hermes API not connected...' : isPaused ? 'Type your interjection...' : isStreaming ? 'Type + ⏎ to interject (auto-pause)...' : anyAnalyzing ? 'Waiting for image analysis...' : 'Message Hermes... (paste/drop images or files)'}
                     rows={1}
                     disabled={connected === false}
                   />
@@ -6518,6 +6547,9 @@ function App() {
                         <button className="send-btn stop-btn" onClick={stopStreamingAction} title="Stop">
                           <svg width="16" height="16" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
                         </button>
+                        <button className="send-btn" onClick={function(){ pauseStreaming(); sendInterjection(input); }} disabled={!input.trim()} title="Interject (auto-pauses then sends)">
+                          <Icon name="send" size={16}/>
+                        </button>
                       </React.Fragment>
                     ) : isPaused ? (
                       <button className="send-btn" onClick={() => sendInterjection(input)} disabled={!input.trim()} title="Send interjection">
@@ -6532,7 +6564,7 @@ function App() {
                 </div>
                 <div className="input-hint">
                   {isStreaming ? (
-                    <span>Pause to interject · Stop to cancel</span>
+                    <span><kbd>⏎</kbd> interject · Pause · Stop to cancel</span>
                   ) : isPaused ? (
                     <span><kbd>⏎</kbd> send interjection · Dismiss to keep partial</span>
                   ) : (
