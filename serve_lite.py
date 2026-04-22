@@ -672,6 +672,28 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         session_id = body.get("session_id") or self.headers.get("X-Hermes-Session-Id") or f"web_{uuid.uuid4().hex[:12]}"
         # User-configurable base system prompt from Settings → General
         base_system_prompt = (body.get("base_system_prompt") or "").strip()
+
+        # Optional user-local prompt addon.  If ~/.hermes/extra_system_prompt.md
+        # exists, prepend its contents to the base_system_prompt.  This lets
+        # individual users inject site-specific instructions (e.g. "route X to
+        # delegation model Y") without forking hermes-ui.  The file is NOT
+        # part of this repo — it lives in the user's private ~/.hermes/ dir,
+        # so this is a no-op for anyone who hasn't opted in.
+        try:
+            _extra_path = os.path.expanduser("~/.hermes/extra_system_prompt.md")
+            if os.path.isfile(_extra_path):
+                with open(_extra_path, "r", encoding="utf-8") as _ef:
+                    _extra = _ef.read().strip()
+                if _extra:
+                    _extra_sep = "\n\n---\n\n" if base_system_prompt else ""
+                    base_system_prompt = (_extra + _extra_sep + base_system_prompt).strip()
+        except Exception as _extra_err:
+            print(
+                f"[serve] extra_system_prompt read failed: {_extra_err!r} — "
+                f"skipping",
+                flush=True,
+            )
+
         if base_system_prompt:
             # Log only when a prompt is actually set, so the default-empty case
             # stays quiet.  Useful when debugging "is my personality arriving?".
