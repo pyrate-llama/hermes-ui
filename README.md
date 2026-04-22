@@ -16,7 +16,26 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 >
 > Turn it on in **Settings → General → Apply Karpathy behavioral guidelines**. The change applies to new chats only — existing chats keep whatever setting they started with. The prompt text lives in [`behavioral_guidelines.md`](behavioral_guidelines.md) and is fully editable.
 
-_Screenshots temporarily removed — fresh sanitized shots coming in a follow-up commit._
+### Chat
+![Chat with inline image generation and live terminal panel](screenshots/chat.png)
+
+### Dashboard
+![Dashboard with live stats, recent activity, and installed skills](screenshots/dashboard.png)
+
+### Skills Browser
+![Browse and manage installed Hermes skills](screenshots/skills.png)
+
+### Cron Jobs
+![Scheduled cron jobs with edit, pause, and run-now controls](screenshots/cron-jobs.png)
+
+### MCP Tools
+![Connected MCP servers grouped by category](screenshots/mcp-tools.png)
+
+### File Browser
+![Live file browser for the ~/.hermes directory with inline preview](screenshots/files.png)
+
+### Light Theme
+![Dawn light theme with pirate personality](screenshots/chat-light.png)
 
 ---
 
