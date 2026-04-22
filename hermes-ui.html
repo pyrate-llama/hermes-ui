@@ -4446,7 +4446,10 @@ function WelcomePopup({ onClose, onOpenRemoteSetup }) {
 /* ── Main App ── */
 /* ── Status Bar ── */
 function StatusBar({ connected, conversations }) {
-  var [stats, setStats] = useState({ model: '...', memory: 0, sessions: 0, uptime: '' });
+  var [stats, setStats] = useState({ model: '...', memory: 0, uptime: '' });
+  // Derive sessions count reactively from props so it stays in sync as chats load.
+  // (Previous version captured conversations in a stale closure inside useEffect[].)
+  var sessionsCount = conversations ? conversations.length : 0;
 
   useEffect(function() {
     var fetchStats = async function() {
@@ -4458,16 +4461,30 @@ function StatusBar({ connected, conversations }) {
         var memCount = 0, model = '...', uptime = '';
         if (memR && memR.ok) {
           var md = await memR.json();
-          if (md.targets) { for (var t = 0; t < md.targets.length; t++) { memCount += (md.targets[t].entries || []).length; } }
-          else { memCount = (md.memories || md.items || []).length; }
+          // Entries can come as a flat list OR as a single string per target
+          // containing multiple entries separated by '§'. Count the real chunks.
+          var countEntries = function(arr) {
+            var n = 0;
+            for (var i = 0; i < arr.length; i++) {
+              var v = arr[i];
+              if (typeof v === 'string') {
+                var pieces = v.split('§').map(function(x){ return x.trim(); }).filter(function(x){ return x.length > 0; });
+                n += pieces.length || 1;
+              } else {
+                n += 1;
+              }
+            }
+            return n;
+          };
+          if (md.targets) { for (var t = 0; t < md.targets.length; t++) { memCount += countEntries(md.targets[t].entries || []); } }
+          else { memCount = countEntries(md.memories || md.items || []); }
         }
         if (healthR && healthR.ok) {
           var hd = await healthR.json();
           model = hd.model || hd.default_model || model;
           if (hd.uptime) { var hrs = Math.floor(hd.uptime / 3600); var mins = Math.floor((hd.uptime % 3600) / 60); uptime = hrs + 'h ' + mins + 'm'; }
         }
-        var sessCount = conversations ? conversations.length : 0;
-        setStats({ model: model, memory: memCount, sessions: sessCount, uptime: uptime });
+        setStats({ model: model, memory: memCount, uptime: uptime });
       } catch(e) {}
     };
     fetchStats();
@@ -4491,7 +4508,7 @@ function StatusBar({ connected, conversations }) {
       </div>
       <div className="status-bar-sep"></div>
       <div className="status-bar-item" title="Total sessions">
-        <span>{'💬'}</span> <span>{stats.sessions} sessions</span>
+        <span>{'💬'}</span> <span>{sessionsCount} sessions</span>
       </div>
       {stats.uptime && (
         <React.Fragment>
