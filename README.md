@@ -6,7 +6,7 @@ A sleek, glassmorphic web interface for [Hermes Agent](https://github.com/pyrate
 
 Built as a single-file HTML application with React 18, Hermes UI provides a full-featured chat interface, real-time log streaming, file browsing, memory inspection, and more — all through a lightweight Python proxy server.
 
-![Dark glassmorphic UI with ambient glow effects](https://img.shields.io/badge/theme-glassmorphism-7c6fe0?style=for-the-badge)
+![v2.5](https://img.shields.io/badge/version-2.5-ef4444?style=for-the-badge)
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
@@ -16,17 +16,70 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 >
 > Turn it on in **Settings → General → Apply Karpathy behavioral guidelines**. The change applies to new chats only — existing chats keep whatever setting they started with. The prompt text lives in [`behavioral_guidelines.md`](behavioral_guidelines.md) and is fully editable.
 
-### Artifact Panel
-![Artifact Panel](screenshots/screenshot-artifacts.png)
+### Chat
+![Chat with inline image generation and live terminal panel](screenshots/chat.png)
 
-### Midnight (default)
-![Midnight Theme](screenshots/screenshot-midnight.png)
+### Dashboard
+![Dashboard with live stats, recent activity, and installed skills](screenshots/dashboard.png)
 
-### Twilight
-![Twilight Theme](screenshots/screenshot-twilight.png)
+### Skills Browser
+![Browse and manage installed Hermes skills](screenshots/skills.png)
 
-### Dawn
-![Dawn Theme](screenshots/screenshot-dawn.png)
+### Cron Jobs
+![Scheduled cron jobs with edit, pause, and run-now controls](screenshots/cron-jobs.png)
+
+### MCP Tools
+![Connected MCP servers grouped by category](screenshots/mcp-tools.png)
+
+### File Browser
+![Live file browser for the ~/.hermes directory with inline preview](screenshots/files.png)
+
+### Light Theme
+![Dawn light theme with pirate personality](screenshots/chat-light.png)
+
+---
+
+## What's new in v2.5
+
+~45 commits since v2.0 (April 2026).
+
+**New features**
+- **Command palette** (`Ctrl/Cmd+K`) — fuzzy search across chats and skills (nesq-style)
+- **Document upload in chat** — drop `.txt`, `.md`, `.pdf`, `.json`, `.csv`, `.py`, `.js`, `.ts` files directly into the composer
+- **Artifact panel** — auto-detects HTML, SVG, PDF, and CSV output and renders live previews in a widening right panel
+- **MCP Tools modal** — categorized view of all connected servers (Web, Browser, Terminal, Files, Code, etc.)
+- **Base System Prompt field** — write your own persona or instructions in Settings, applied to new chats
+- **`~/.hermes/extra_system_prompt.md` addon** (opt-in) — prepend a user-local prompt snippet without forking the repo
+- **Karpathy behavioral guidelines toggle** (OFF by default, editable at `behavioral_guidelines.md`)
+- **Compaction marker SSE event** — visible indicator when context compression fires mid-stream
+- **Simplified Chinese README** and an in-app language switcher
+
+**Visual refresh**
+- New inline SVG icon set throughout
+- Segmented toolbar pill, ambient depth layers (vignette + noise + third glow blob)
+- Color-grouped sidebar icons, regrouped sidebar sections, tightened vertical density
+- Dashboard card polish with refreshed typography
+- Message bubble and user-avatar gradient refinements
+- Light-theme code block readability fix (hljs stylesheet swap)
+- Palette-icon theme dropdown replacing the three raw theme swatches
+
+**Skills**
+- Delete button wired to a matching DELETE endpoint
+- Edit/save for skill contents
+- Details modal wired to a working endpoint
+- Newest-first sort via a new `/skills/dates` endpoint with relative timestamps
+
+**Stability & bug fixes**
+- Composer no longer shows "send" when a stream is actually running (state-desync unstick)
+- Auto-pause-send on `Enter` while streaming
+- Chat list stays visible across non-chat views
+- Scroll position preserved when switching between views
+- Session-id rotation after compression re-keys the UI correctly
+- Tool calls are no longer stripped from stored sessions
+- RTF drag-drop auto-converts to plain text
+- Theme dropdown no longer clipped by the header's containing block
+- `serve_lite.py` fails loudly on the wrong Python interpreter
+- `serve.py` is now a shim that forwards to `serve_lite.py` — existing systemd units keep working
 
 ---
 
@@ -37,8 +90,11 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 - Tool call visualization with expandable results
 - Message editing and re-sending
 - Image paste/drop with Gemini vision analysis
-- Pause, interject, and stop controls mid-stream
+- Document upload in the composer (.txt, .md, .pdf, .json, .csv, .py, .js, .ts) — RTF auto-converts to plain text
+- Pause, interject, and stop controls mid-stream (auto-pause on `Enter` while streaming)
+- Command palette (`Ctrl/Cmd+K`) for fuzzy search across chats and skills
 - Multiple personality modes (default, technical, creative, pirate, kawaii, and more)
+- Base System Prompt field in Settings — write your own persona or instructions
 - PDF and HTML chat export
 - Markdown rendering with syntax-highlighted code blocks
 
@@ -48,8 +104,8 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 - Hermes configuration overview
 
 **Artifact Panel**
-- 5th tab in the live terminal panel (alongside Gateway, Errors, Web UI, All)
-- Auto-detects HTML, SVG, and code blocks in Hermes responses and renders them live
+- Dedicated tab in the live right panel (alongside Errors, Web UI, All)
+- Auto-detects HTML, SVG, PDF, and CSV output in Hermes responses and renders them live
 - Auto-detects file paths Hermes saves to disk (e.g. `~/Desktop/page.html`) and loads them automatically — no need to copy-paste code
 - Panel dynamically widens from 320px to 600px when Artifacts tab is active
 - Sandboxed iframe rendering for HTML/SVG with full animation and JavaScript support
