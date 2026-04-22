@@ -10,12 +10,6 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
-> [!NOTE]
-> **Karpathy-style behavioral guidelines are available as an opt-in — OFF by default.**
-> When enabled, new chats get a system-prompt appendix enforcing four coding principles: *Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution*. This tightens Hermes into a careful, scoped code collaborator — useful for focused coding sessions, but it can cause over-thinking loops on tasks that just need a skill to run (the reason it ships OFF).
->
-> Turn it on in **Settings → General → Apply Karpathy behavioral guidelines**. The change applies to new chats only — existing chats keep whatever setting they started with. The prompt text lives in [`behavioral_guidelines.md`](behavioral_guidelines.md) and is fully editable.
-
 ### Chat
 ![Chat with inline image generation and live terminal panel](screenshots/chat.png)
 
