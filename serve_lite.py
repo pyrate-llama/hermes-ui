@@ -69,6 +69,16 @@ AGENT_DIR = os.path.join(HERMES_HOME, "hermes-agent")
 DIR = os.path.dirname(os.path.abspath(__file__))
 PORT = 3333
 
+# Current hermes-ui release version. Bump on every tagged release so the
+# /api/version endpoint can tell the UI when a newer release is available on
+# GitHub. Keep in sync with the git tag (e.g. "2.6" corresponds to v2.6).
+__version__ = "2.6"
+_GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
+
+# Cache for the latest-release lookup so we don't hammer GitHub. Stores
+# (timestamp, payload_dict). TTL of 1 hour is plenty for an update-nag.
+_latest_release_cache = {"ts": 0.0, "data": None}
+
 # Add hermes-agent to sys.path so we can import AIAgent directly
 if AGENT_DIR not in sys.path:
     sys.path.insert(0, AGENT_DIR)
@@ -1378,6 +1388,67 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
     # Lets the UI talk directly to the delegation model (bypassing MiniMax /
     # the main agent loop). Reads whatever delegation.* is in config.yaml so
     # it works for any fork — OpenRouter Qwen, Together, Groq, etc.
+    def _handle_version_info(self):
+        """GET /api/version — return {current, latest, update_available, html_url}.
+
+        Hits GitHub's releases/latest endpoint but caches the result for an
+        hour so we're not rate-limited. Designed to fail soft: if the network
+        call fails we still return the current version so the UI doesn't
+        break, and `update_available` is False / latest is None.
+        """
+        import time as _time
+        import urllib.request as _ur
+
+        current = __version__
+        latest = None
+        html_url = None
+        error = None
+
+        try:
+            now = _time.time()
+            cache = _latest_release_cache
+            if cache["data"] and (now - cache["ts"]) < 3600:
+                payload = cache["data"]
+            else:
+                req = _ur.Request(
+                    _GITHUB_RELEASES_API,
+                    headers={
+                        "User-Agent": f"hermes-ui/{current}",
+                        "Accept": "application/vnd.github+json",
+                    },
+                )
+                with _ur.urlopen(req, timeout=5) as resp:
+                    payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+                cache["ts"] = now
+                cache["data"] = payload
+
+            # tag_name is like "v2.6" — strip the leading "v" for comparison.
+            tag = (payload or {}).get("tag_name") or ""
+            latest = tag.lstrip("v") or None
+            html_url = (payload or {}).get("html_url") or None
+        except Exception as e:
+            error = str(e)
+
+        def _ver_tuple(v):
+            try:
+                return tuple(int(x) for x in str(v).split("."))
+            except Exception:
+                return ()
+
+        update_available = False
+        if latest:
+            update_available = _ver_tuple(latest) > _ver_tuple(current)
+
+        out = {
+            "current": current,
+            "latest": latest,
+            "update_available": update_available,
+            "html_url": html_url,
+        }
+        if error:
+            out["error"] = error
+        self._json(out)
+
     def _handle_delegation_info(self):
         """GET /api/delegation/info — return {configured, model, label}."""
         try:
@@ -1492,6 +1563,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_cron_list()
         elif self.path == "/api/delegation/info":
             self._handle_delegation_info()
+        elif self.path == "/api/version":
+            self._handle_version_info()
         else:
             super().do_GET()
 

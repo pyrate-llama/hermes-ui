@@ -5063,6 +5063,28 @@ function App() {
       .then(function(d) { setDelegationInfo(d || { configured: false }); })
       .catch(function() { setDelegationInfo({ configured: false }); });
   }, []);
+  // Version-check: shows a soft "new release available" notice when the
+  // backend reports a GitHub tag newer than __version__. Dismissible per
+  // release so we don't nag the user repeatedly for the same update.
+  const [versionInfo, setVersionInfo] = useState({ current: '', latest: null, update_available: false, html_url: null });
+  const [versionNoticeDismissed, setVersionNoticeDismissed] = useState(function() {
+    try { return localStorage.getItem('hermes-ui-update-dismissed') || ''; }
+    catch(e) { return ''; }
+  });
+  useEffect(function() {
+    fetch(API_BASE + '/api/version')
+      .then(function(r) { return r.json(); })
+      .then(function(d) { setVersionInfo(d || {}); })
+      .catch(function() {});
+  }, []);
+  const dismissVersionNotice = function() {
+    if (versionInfo && versionInfo.latest) {
+      try { localStorage.setItem('hermes-ui-update-dismissed', versionInfo.latest); } catch(e) {}
+      setVersionNoticeDismissed(versionInfo.latest);
+    }
+  };
+  const showVersionNotice = versionInfo && versionInfo.update_available &&
+    versionInfo.latest && versionNoticeDismissed !== versionInfo.latest;
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(getStoredTheme);
@@ -6595,6 +6617,33 @@ function App() {
 
       {/* Main panel */}
       <div className={"main " + (currentView !== 'chat' ? 'non-chat-view' : '')}>
+        {showVersionNotice && (
+          <div style={{
+            display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',
+            padding:'8px 16px',fontSize:'12px',
+            background:'linear-gradient(90deg,rgba(123,131,184,0.12),rgba(165,137,197,0.12))',
+            borderBottom:'1px solid var(--border)',color:'var(--text)'
+          }}>
+            <span>
+              <span style={{marginRight:'8px'}}>{'✨'}</span>
+              Hermes UI <strong>v{versionInfo.latest}</strong> is available
+              {versionInfo.current ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>(you're on v{versionInfo.current})</span> : null}
+            </span>
+            <span style={{display:'flex',gap:'8px',alignItems:'center'}}>
+              {versionInfo.html_url && (
+                <a href={versionInfo.html_url} target="_blank" rel="noopener noreferrer"
+                   style={{color:'var(--accent)',textDecoration:'none',fontWeight:'600'}}>
+                  View release notes →
+                </a>
+              )}
+              <button onClick={dismissVersionNotice} title="Dismiss until next release"
+                style={{background:'transparent',border:'1px solid var(--border)',color:'var(--text-secondary)',
+                        borderRadius:'4px',padding:'2px 8px',cursor:'pointer',fontSize:'11px'}}>
+                Dismiss
+              </button>
+            </span>
+          </div>
+        )}
         {currentView === 'chat' ? (
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
