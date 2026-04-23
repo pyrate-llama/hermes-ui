@@ -5011,8 +5011,19 @@ function App() {
   // isPaused is now derived from pausedSessionIds (defined later with pause/stop functions)
 
   const startStreaming = (sessionId, abortCtrl) => {
-    streamingMap.current[sessionId] = { abortController: abortCtrl, paused: false };
+    streamingMap.current[sessionId] = { abortController: abortCtrl, paused: false, streamId: null };
     setStreamingSessionIds(prev => prev.includes(sessionId) ? prev : [...prev, sessionId]);
+  };
+  // Attach backend stream_id to the per-session streaming entry so Stop/Pause
+  // can call /api/chat/cancel directly (mirrors nesq cancelStream() pattern).
+  // Without this, cancel relied on the EventSource abort listener firing —
+  // which is racy: if the abort arrives before the listener attaches, or the
+  // stream has already closed, the backend agent keeps running tools to
+  // completion. Nesq's webui calls the cancel endpoint from the stop button
+  // directly and doesn't depend on the abort listener.
+  const attachStreamId = (sessionId, streamId) => {
+    var entry = streamingMap.current[sessionId];
+    if (entry) entry.streamId = streamId;
   };
   const stopStreaming = (sessionId) => {
     delete streamingMap.current[sessionId];
@@ -5031,6 +5042,19 @@ function App() {
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth <= 768);
+  // Auto-collapse sidebar when window shrinks below 768px. Without this the
+  // CSS flips the sidebar into a fixed overlay (+ 50% dark backdrop) while
+  // `sidebarCollapsed` stays false, so the chat gets hidden behind the open
+  // sidebar on resize. Keeps chat visible at every window size.
+  useEffect(function() {
+    var onResize = function() {
+      if (window.innerWidth <= 768) {
+        setSidebarCollapsed(true);
+      }
+    };
+    window.addEventListener('resize', onResize);
+    return function() { window.removeEventListener('resize', onResize); };
+  }, []);
   const [activityLog, setActivityLog] = useState([]);
   const [activityPanelOpen, setActivityPanelOpen] = useState(() => {
     try {
@@ -5290,6 +5314,9 @@ function App() {
       }
       const startData = await startResp.json();
       const streamId = startData.stream_id;
+      // Register streamId so Stop/Pause can call /api/chat/cancel directly
+      // without relying on the AbortController listener race.
+      try { attachStreamId(sessionId, streamId); } catch(e) {}
       var _httpMs = Date.now() - _streamStart;
       console.log('[stream] chat/start returned stream_id in ' + _httpMs + 'ms');
       if (onThinking) onThinking('[timing] Stream started in ' + (_httpMs < 1000 ? _httpMs + 'ms' : Math.round(_httpMs/1000) + 's'));
@@ -6405,6 +6432,13 @@ function App() {
     const sid = activeConvId;
     if (!sid) return;
     var entry = streamingMap.current[sid];
+    // Cancel backend stream directly, same as stopStreamingAction —
+    // without this, pause only aborts the client fetch while the agent
+    // keeps running tools/LLM calls until done.
+    if (entry && entry.streamId) {
+      fetch(API_BASE + '/api/chat/cancel?stream_id=' + encodeURIComponent(entry.streamId))
+        .catch(function(){});
+    }
     if (entry) {
       entry.abortController.abort();
     }
@@ -6417,6 +6451,14 @@ function App() {
     const sid = activeConvId;
     if (!sid) return;
     var entry = streamingMap.current[sid];
+    // Fire the backend cancel FIRST, directly — mirrors nesq cancelStream().
+    // Relying on the EventSource abort listener was racy: if the stream had
+    // already closed (e.g. agent was mid-tool), the listener never fired and
+    // the agent kept running to completion.
+    if (entry && entry.streamId) {
+      fetch(API_BASE + '/api/chat/cancel?stream_id=' + encodeURIComponent(entry.streamId))
+        .catch(function(){});
+    }
     if (entry) {
       entry.abortController.abort();
     }
