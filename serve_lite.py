@@ -225,6 +225,11 @@ def _sanitize_messages_for_api(messages):
     for msg in messages:
         if not isinstance(msg, dict):
             continue
+        # Skip persisted error markers — never send them to the LLM as prior
+        # context. Matches nesq _sanitize_messages_for_api (closes error-loop
+        # feedback where a failed turn would be replayed to the model).
+        if msg.get("_error"):
+            continue
         if msg.get("role") == "tool":
             tid = msg.get("tool_call_id") or ""
             if not tid or tid not in valid_tool_call_ids:
@@ -373,6 +378,12 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
 
     _approval_registered = False
     _unreg_notify = None
+    # Initialised here (before any code that may raise) so the outer `finally`
+    # block can safely check `if _checkpoint_stop is not None` even when an
+    # exception fires before the checkpoint thread is created.
+    # Matches nesquena/hermes-webui api/streaming.py (Issue #765).
+    _checkpoint_stop = None
+    _checkpoint_activity = [0]
 
     try:
         # Check for pre-flight cancel
@@ -450,9 +461,21 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
                     "name": name, "preview": preview, "args": args_snap,
                     "duration": kwargs.get("duration"),
                 })
+                # Signal the periodic checkpoint thread that real progress has
+                # been made (Issue #765). The agent works on an internal copy
+                # of s.messages during run_conversation, so watching
+                # message-count would never trigger — tool completions are
+                # the first reliable mid-run signal.
+                _checkpoint_activity[0] += 1
 
-        # Build the agent
-        agent = AgentClass(
+        # Build the agent.
+        # Guard newer AIAgent params via signature introspection so we degrade
+        # gracefully on older hermes-agent builds (matches nesquena/hermes-webui
+        # api/streaming.py pattern — issue #772 in their repo).
+        import inspect as _inspect
+        _agent_params = set(_inspect.signature(AgentClass.__init__).parameters)
+
+        _agent_kwargs = dict(
             model=model,
             provider=provider,
             base_url=base_url,
@@ -466,6 +489,17 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
             reasoning_callback=on_reasoning,
             tool_progress_callback=on_tool,
         )
+
+        # Pin Honcho memory sessions to the stable WebUI session ID. Without
+        # this, the 'per-session' Honcho strategy creates a fresh Honcho session
+        # on EVERY streaming request because HonchoSessionManager is
+        # re-instantiated each turn — which is why the agent kept losing memory
+        # mid-chat despite no compaction firing. Fix ported from nesquena
+        # /hermes-webui issue #855.
+        if 'gateway_session_key' in _agent_params:
+            _agent_kwargs['gateway_session_key'] = session_id
+
+        agent = AgentClass(**_agent_kwargs)
 
         # User-configurable base system prompt from Settings → General.
         # Passed via agent.ephemeral_system_prompt — the library's sanctioned
@@ -539,6 +573,39 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
         # Remove the last user message — it goes in user_message param instead
         if clean_history and clean_history[-1].get("role") == "user":
             clean_history.pop()
+
+        # Persist the incoming user message BEFORE run_conversation so a server
+        # crash mid-turn doesn't silently drop what the user just typed.
+        # Mirrors nesquena/hermes-webui `s.pending_user_message` pattern
+        # (Issue #765). The final _save_session at end of stream is
+        # authoritative; this is a durability floor.
+        _pending_msgs = list(_previous_messages)
+        if user_msg and not (_pending_msgs and _pending_msgs[-1].get("role") == "user"
+                             and _pending_msgs[-1].get("content") == user_msg):
+            _pending_msgs.append({"role": "user", "content": user_msg})
+        session["messages"] = _pending_msgs
+        _save_session(session_id, session)
+
+        # ── Periodic checkpoint thread (Issue #765) ──
+        # Save the session every 15s while a tool is actively completing.
+        # Worst case on server restart: up to 15s of tool-call progress lost
+        # rather than the entire conversation turn.
+        def _periodic_checkpoint():
+            last_saved_activity = 0
+            while not _checkpoint_stop.wait(15):
+                try:
+                    cur = _checkpoint_activity[0]
+                    if cur > last_saved_activity:
+                        _save_session(session_id, session)
+                        last_saved_activity = cur
+                except Exception as _ckpt_err:
+                    print(f"[serve] checkpoint save failed: {_ckpt_err}", flush=True)
+        _checkpoint_stop = threading.Event()
+        _ckpt_thread = threading.Thread(
+            target=_periodic_checkpoint, daemon=True,
+            name=f"ckpt-{session_id[:8]}",
+        )
+        _ckpt_thread.start()
 
         result = agent.run_conversation(
             user_message=workspace_ctx + user_msg,
@@ -633,6 +700,9 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
         print(f"[serve] stream error:\n{traceback.format_exc()}", flush=True)
         put("error", {"message": str(e)})
     finally:
+        # Stop periodic checkpoint thread if it was started (Issue #765)
+        if _checkpoint_stop is not None:
+            _checkpoint_stop.set()
         # Unregister approval callback
         if _approval_registered and _unreg_notify is not None:
             try:
