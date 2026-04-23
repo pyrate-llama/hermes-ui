@@ -4443,6 +4443,169 @@ function WelcomePopup({ onClose, onOpenRemoteSetup }) {
   );
 }
 
+/* ── Delegation Direct-Chat View ──
+   Talks straight to the configured delegation model (whatever that is —
+   Qwen, DeepSeek, GPT-4o, etc.) without going through the main MiniMax
+   agent loop. Cheap, fast, useful when you want a second-opinion chat
+   with no tool-discovery or base-system-prompt token overhead.
+*/
+function DelegationChatView() {
+  var [messages, setMessages] = useState([]);
+  var [input, setInput] = useState('');
+  var [sending, setSending] = useState(false);
+  var [info, setInfo] = useState({ configured: null, model: '', label: '', provider: '' });
+  var bodyRef = useRef(null);
+  var inputRef = useRef(null);
+
+  useEffect(function() {
+    fetch(API_BASE + '/api/delegation/info')
+      .then(function(r) { return r.json(); })
+      .then(function(d) { setInfo(d || {}); })
+      .catch(function() { setInfo({ configured: false }); });
+  }, []);
+
+  useEffect(function() {
+    if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [messages, sending]);
+
+  useEffect(function() {
+    setTimeout(function() { if (inputRef.current) inputRef.current.focus(); }, 50);
+  }, []);
+
+  var send = async function() {
+    var text = (input || '').trim();
+    if (!text || sending) return;
+    var userMsg = { role: 'user', content: text };
+    var next = messages.concat([userMsg]);
+    setMessages(next);
+    setInput('');
+    setSending(true);
+    try {
+      var resp = await fetch(API_BASE + '/api/delegation/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: next })
+      });
+      var data = await resp.json();
+      if (data.error) {
+        setMessages(next.concat([{ role: 'assistant', content: '⚠️ ' + data.error, error: true }]));
+      } else {
+        setMessages(next.concat([{ role: 'assistant', content: data.reply || '(empty response)' }]));
+      }
+    } catch (e) {
+      setMessages(next.concat([{ role: 'assistant', content: '⚠️ Request failed: ' + e.message, error: true }]));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  var onKeyDown = function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  };
+
+  var clearChat = function() {
+    if (messages.length === 0) return;
+    if (window.confirm('Clear this conversation? (Delegation chats are not saved.)')) {
+      setMessages([]);
+    }
+  };
+
+  if (info.configured === false) {
+    return (
+      <div style={{padding:'32px', maxWidth:'640px', margin:'0 auto', color:'var(--text-secondary)'}}>
+        <h2 style={{color:'var(--text)', marginBottom:'12px'}}>Delegation model not configured</h2>
+        <p style={{lineHeight:'1.6'}}>
+          This view lets you chat directly with whatever model is set as your
+          delegation target in <code>~/.hermes/config.yaml</code>, bypassing
+          the main agent loop. Add a <code>delegation</code> block like:
+        </p>
+        <pre style={{background:'var(--bg-secondary)', padding:'12px', borderRadius:'6px', fontSize:'12px', marginTop:'12px'}}>{
+`delegation:
+  model: qwen/qwen3.6-plus
+  provider: openrouter
+  base_url: ''
+  api_key: ''`
+        }</pre>
+        <p style={{marginTop:'12px', fontSize:'13px'}}>
+          Restart the server after editing. Then refresh this page.
+        </p>
+      </div>
+    );
+  }
+
+  var label = info.label || info.model || 'delegation model';
+
+  return (
+    <div style={{display:'flex', flexDirection:'column', height:'100%', padding:'0'}}>
+      <div style={{padding:'12px 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0}}>
+        <div style={{fontSize:'13px', color:'var(--text-secondary)'}}>
+          Talking directly to <strong style={{color:'var(--text)'}}>{label}</strong>
+          {info.provider && <span style={{opacity:0.6, marginLeft:'8px'}}>via {info.provider}</span>}
+          <span style={{marginLeft:'12px', opacity:0.5}}>· no tools, no system prompt, no session</span>
+        </div>
+        <button onClick={clearChat} disabled={messages.length === 0}
+          style={{background:'transparent', border:'1px solid var(--border)', color:'var(--text-secondary)', padding:'4px 10px', borderRadius:'4px', fontSize:'12px', cursor: messages.length === 0 ? 'default' : 'pointer', opacity: messages.length === 0 ? 0.4 : 1}}>
+          Clear
+        </button>
+      </div>
+
+      <div ref={bodyRef} style={{flex:1, overflowY:'auto', padding:'20px'}}>
+        {messages.length === 0 && !sending && (
+          <div style={{textAlign:'center', color:'var(--text-secondary)', opacity:0.6, marginTop:'60px', fontSize:'14px'}}>
+            Ask {label} anything. You're the orchestrator here.
+          </div>
+        )}
+        {messages.map(function(m, i) {
+          return (
+            <div key={i} style={{marginBottom:'16px', display:'flex', flexDirection:'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
+              <div style={{fontSize:'11px', color:'var(--text-secondary)', marginBottom:'4px', opacity:0.7}}>
+                {m.role === 'user' ? 'You' : label}
+              </div>
+              <div style={{
+                maxWidth:'80%',
+                padding:'10px 14px',
+                borderRadius:'10px',
+                background: m.role === 'user' ? 'var(--accent-bg, rgba(120,140,200,0.15))' : (m.error ? 'rgba(220,80,80,0.1)' : 'var(--bg-secondary)'),
+                color: m.error ? '#e89090' : 'var(--text)',
+                whiteSpace:'pre-wrap', wordBreak:'break-word', fontSize:'14px', lineHeight:'1.5'
+              }}>
+                {m.content}
+              </div>
+            </div>
+          );
+        })}
+        {sending && (
+          <div style={{fontSize:'12px', color:'var(--text-secondary)', opacity:0.7, marginTop:'8px'}}>
+            {label} is thinking…
+          </div>
+        )}
+      </div>
+
+      <div style={{padding:'12px 20px', borderTop:'1px solid var(--border)', flexShrink:0}}>
+        <div style={{display:'flex', gap:'8px'}}>
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={function(e) { setInput(e.target.value); }}
+            onKeyDown={onKeyDown}
+            placeholder={'Message ' + label + '… (Enter to send, Shift+Enter for newline)'}
+            disabled={sending}
+            rows={2}
+            style={{flex:1, resize:'none', background:'var(--bg-secondary)', border:'1px solid var(--border)', color:'var(--text)', padding:'10px 12px', borderRadius:'6px', fontSize:'14px', fontFamily:'inherit'}}
+          />
+          <button onClick={send} disabled={sending || !input.trim()}
+            style={{padding:'0 18px', background:'var(--accent, #6fb3c2)', color:'white', border:'none', borderRadius:'6px', fontWeight:'600', cursor: (sending || !input.trim()) ? 'default' : 'pointer', opacity: (sending || !input.trim()) ? 0.5 : 1}}>
+            {sending ? '…' : 'Send'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main App ── */
 /* ── Status Bar ── */
 function StatusBar({ connected, conversations }) {
@@ -4892,6 +5055,14 @@ function App() {
     });
   };
   const [mcpTools, setMcpTools] = useState([]);
+  // Delegation model info — drives the "Ask <Model>" nav item label
+  const [delegationInfo, setDelegationInfo] = useState({ configured: null, label: '' });
+  useEffect(function() {
+    fetch(API_BASE + '/api/delegation/info')
+      .then(function(r) { return r.json(); })
+      .then(function(d) { setDelegationInfo(d || { configured: false }); })
+      .catch(function() { setDelegationInfo({ configured: false }); });
+  }, []);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(getStoredTheme);
@@ -6344,6 +6515,12 @@ function App() {
             <span className="nav-item-icon" style={{color:'#7a9cc4'}}><Icon name="message-square" size={15}/></span>
             <span className="nav-item-label">Chat</span>
           </div>
+          {delegationInfo.configured !== false && (
+            <div className={"nav-item " + (currentView === 'delegation' ? 'active' : '')} onClick={function() { setCurrentView('delegation'); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Chat directly with the delegation model (bypasses main agent loop)">
+              <span className="nav-item-icon" style={{color:'#d48aa8'}}><Icon name="message-circle" size={15}/></span>
+              <span className="nav-item-label">Ask {delegationInfo.label || '…'}</span>
+            </div>
+          )}
           <div className={"nav-item " + (currentView === 'files' ? 'active' : '')} onClick={function() { setCurrentView('files'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon" style={{color:'#c9a754'}}><Icon name="folder" size={15}/></span>
             <span className="nav-item-label">Files</span>
@@ -6637,7 +6814,7 @@ function App() {
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">
-                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : 'Skills'}
+                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
               </div>
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
@@ -6653,6 +6830,7 @@ function App() {
             {currentView === 'jobs' && <JobsView />}
             {currentView === 'memory' && <MemoryView />}
             {currentView === 'skills' && <SkillsView />}
+            {currentView === 'delegation' && <DelegationChatView />}
           </React.Fragment>
         )}
       </div>
