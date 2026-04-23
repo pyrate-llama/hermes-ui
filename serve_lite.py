@@ -130,6 +130,46 @@ def _resolve_model_and_credentials():
     return model, provider, base_url, api_key
 
 
+def _resolve_delegation_credentials():
+    """Read delegation.* from config.yaml and resolve credentials.
+
+    Returns (model, provider, base_url, api_key). Any can be None if unset.
+    Used by the UI's direct-to-delegation-model sidechannel so users can chat
+    with their configured delegation model (Qwen, DeepSeek, whatever) without
+    paying MiniMax's orchestration tokens on every turn.
+    """
+    import yaml
+    config_path = os.path.join(HERMES_HOME, "config.yaml")
+    model = None
+    provider = None
+    base_url = None
+    api_key = None
+
+    if os.path.exists(config_path):
+        try:
+            with open(config_path) as f:
+                cfg = yaml.safe_load(f) or {}
+            d = cfg.get("delegation", {}) or {}
+            model = (str(d.get("model") or "").strip()) or None
+            provider = (str(d.get("provider") or "").strip()) or None
+            base_url = (str(d.get("base_url") or "").strip()) or None
+            api_key = (str(d.get("api_key") or "").strip()) or None
+        except Exception as e:
+            print(f"[serve] WARNING: Failed to read delegation config: {e}", flush=True)
+
+    # Fill in whatever the config didn't specify via Hermes' provider resolver.
+    if provider and (not api_key or not base_url):
+        try:
+            from hermes_cli.runtime_provider import resolve_runtime_provider
+            rt = resolve_runtime_provider(requested=provider)
+            api_key = api_key or rt.get("api_key")
+            base_url = base_url or rt.get("base_url")
+        except Exception as e:
+            print(f"[serve] WARNING: delegation resolve_runtime_provider failed: {e}", flush=True)
+
+    return model, provider, base_url, api_key
+
+
 # ── Concurrency infrastructure ─────────────────────────────────────────────
 # Global lock for os.environ writes — prevents concurrent agent threads from
 # clobbering each other's env vars (HERMES_SESSION_KEY, TERMINAL_CWD, etc.)
@@ -1264,6 +1304,88 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self._json({"dates": {}})
 
+    # ── Delegation direct-chat API ─────────────────────────────────────────
+    # Lets the UI talk directly to the delegation model (bypassing MiniMax /
+    # the main agent loop). Reads whatever delegation.* is in config.yaml so
+    # it works for any fork — OpenRouter Qwen, Together, Groq, etc.
+    def _handle_delegation_info(self):
+        """GET /api/delegation/info — return {configured, model, label}."""
+        try:
+            model, provider, base_url, api_key = _resolve_delegation_credentials()
+            configured = bool(model and (api_key or provider))
+            # Pretty label: "qwen/qwen3.6-plus" → "qwen3.6-plus"
+            label = (model or "").split("/")[-1] if model else ""
+            self._json({
+                "configured": configured,
+                "model": model or "",
+                "provider": provider or "",
+                "label": label,
+            })
+        except Exception as e:
+            self._json({"configured": False, "error": str(e)})
+
+    def _handle_delegation_chat(self):
+        """POST /api/delegation/chat — proxy a chat completion to delegation model.
+
+        Request:  {"messages": [{"role": "...", "content": "..."}, ...]}
+        Response: {"reply": "..."} or {"error": "..."}
+        """
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length) if length else b""
+            data = json.loads(body) if body else {}
+        except Exception as e:
+            self._json({"error": f"invalid request body: {e}"}, 400)
+            return
+
+        messages = data.get("messages") or []
+        if not isinstance(messages, list) or not messages:
+            self._json({"error": "messages required (non-empty list)"}, 400)
+            return
+
+        model, provider, base_url, api_key = _resolve_delegation_credentials()
+        if not model:
+            self._json({"error": "No delegation model configured. Set delegation.model in ~/.hermes/config.yaml"}, 400)
+            return
+        if not api_key:
+            self._json({"error": f"No API key resolved for delegation provider '{provider or 'unknown'}'. Check provider credentials."}, 400)
+            return
+        if not base_url:
+            # Sensible fallback for common provider
+            if provider == "openrouter":
+                base_url = "https://openrouter.ai/api/v1"
+            else:
+                self._json({"error": f"No base_url for delegation provider '{provider}'"}, 400)
+                return
+
+        # OpenAI-compatible chat completions (covers OpenRouter, Together, Groq,
+        # DeepSeek, Fireworks, Ollama, LiteLLM, and most self-hosted endpoints).
+        url = base_url.rstrip("/") + "/chat/completions"
+        payload = {"model": model, "messages": messages}
+
+        try:
+            import urllib.request as _ur
+            req = _ur.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                },
+                method="POST",
+            )
+            with _ur.urlopen(req, timeout=180) as resp:
+                resp_body = resp.read().decode("utf-8", errors="replace")
+            resp_data = json.loads(resp_body)
+            reply = ""
+            choices = resp_data.get("choices") or []
+            if choices:
+                msg = (choices[0] or {}).get("message") or {}
+                reply = msg.get("content") or ""
+            self._json({"reply": reply, "model": model})
+        except Exception as e:
+            self._json({"error": f"delegation call failed: {e}"}, 502)
+
     # ── Request routing ──
     def do_GET(self):
         if self.path == "/health":
@@ -1298,6 +1420,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_toolsets()
         elif self.path == "/cron/list":
             self._handle_cron_list()
+        elif self.path == "/api/delegation/info":
+            self._handle_delegation_info()
         else:
             super().do_GET()
 
@@ -1326,6 +1450,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._server_pull_restart()
         elif self.path.startswith("/server/restart"):
             self._server_restart()
+        elif self.path == "/api/delegation/chat":
+            self._handle_delegation_chat()
         else:
             self._json({"error": "Not found"}, 404)
 
