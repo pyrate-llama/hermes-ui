@@ -609,6 +609,18 @@
     align-items: center; justify-content: space-between; gap: 10px;
   }
   .paused-banner-text { font-size: 13px; color: var(--warning); font-weight: 500; }
+  .steer-flash {
+    background: rgba(69,136,224,0.12); border: 1px solid var(--accent);
+    border-radius: 6px; padding: 8px 12px; font-size: 12.5px;
+    color: var(--accent); font-weight: 500; display: flex;
+    align-items: center; gap: 8px;
+    animation: steer-flash-slide 180ms cubic-bezier(0.4,0,0.2,1);
+  }
+  .steer-flash-preview { opacity: 0.85; font-weight: 400; }
+  @keyframes steer-flash-slide {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
   .cancel-resume {
     background: none; border: 1px solid var(--warning); color: var(--warning);
     padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
@@ -5069,6 +5081,10 @@ function App() {
   };
   const [personality, setPersonality] = useState('default');
   const [connected, setConnected] = useState(null);
+  // Active model name (from /health). Used by the composer to decide whether
+  // to send pasted/dropped images via the native multimodal path (vision-
+  // capable) or route through the Gemini-describe fallback (e.g. MiniMax).
+  const [currentModel, setCurrentModel] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [pendingImages, setPendingImages] = useState([]);
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -5177,6 +5193,14 @@ function App() {
       try {
         const r = await fetch(API_BASE + '/health');
         setConnected(r.ok);
+        // Stash the active model name so the composer can pick the right
+        // image-paste path (native vs Gemini-describe). Parse errors are
+        // benign — we just keep the last known value.
+        try {
+          var hjson = await r.clone().json();
+          var mname = (hjson && (hjson.model || hjson.default_model)) || '';
+          if (mname) setCurrentModel(String(mname));
+        } catch(_) {}
       } catch(e) {
         setConnected(false);
       }
@@ -5329,6 +5353,16 @@ function App() {
       }
       if (apiMessages.length === 0 || apiMessages[apiMessages.length - 1].content !== message) {
         apiMessages.push({ role: 'user', content: message });
+      }
+      // Attach native-multimodal images to the last user message. serve_lite
+      // pulls them off the final user turn and builds OpenAI-style content
+      // blocks for run_conversation. Empty when model isn't vision-capable.
+      var _imgs = (opts.images && opts.images.length) ? opts.images : null;
+      if (_imgs && apiMessages.length > 0) {
+        var _lastIdx = apiMessages.length - 1;
+        if (apiMessages[_lastIdx].role === 'user') {
+          apiMessages[_lastIdx] = Object.assign({}, apiMessages[_lastIdx], { images: _imgs });
+        }
       }
       // Step 1: POST to /api/chat/start to get stream_id
       var _streamStart = Date.now();
@@ -5668,7 +5702,60 @@ function App() {
   };
 
   // ── Image processing ──
+  // Whitelist-based vision-model detection. When the active model can see
+  // images natively, we skip the Gemini-describe round-trip and ship raw
+  // base64 data URLs straight to the agent via /api/chat/start's multimodal
+  // content blocks. MiniMax + GLM + most text-only models stay on the
+  // Gemini fallback path.
+  const isVisionModel = (name) => {
+    if (!name) return false;
+    var n = String(name).toLowerCase();
+    // Explicit deny list first — catches model names that include a vision-
+    // like substring by accident (e.g. "minimax-m2.7-vision-adjacent-thing").
+    if (n.indexOf('minimax') !== -1) return false;
+    if (n.indexOf('glm-4') !== -1 && n.indexOf('v') === -1) return false;
+    // OpenAI: gpt-4o, gpt-4-vision, gpt-4.1, o3*, o4*
+    if (n.indexOf('gpt-4o') !== -1) return true;
+    if (n.indexOf('gpt-4-vision') !== -1) return true;
+    if (n.indexOf('gpt-4.1') !== -1) return true;
+    if (/\bo[34](-|$)/.test(n)) return true;
+    // Anthropic Claude 3+ (3, 3.5, 3.7, 4, opus, sonnet, haiku all see images)
+    if (n.indexOf('claude-3') !== -1) return true;
+    if (n.indexOf('claude-4') !== -1) return true;
+    if (n.indexOf('claude-opus') !== -1) return true;
+    if (n.indexOf('claude-sonnet') !== -1) return true;
+    if (n.indexOf('claude-haiku') !== -1) return true;
+    // Gemini
+    if (n.indexOf('gemini-') !== -1) return true;
+    // Open-source vision models
+    if (n.indexOf('qwen') !== -1 && n.indexOf('vl') !== -1) return true;
+    if (n.indexOf('llava') !== -1) return true;
+    if (n.indexOf('pixtral') !== -1) return true;
+    if (n.indexOf('-vision') !== -1) return true;
+    if (n.indexOf('-vl-') !== -1 || n.endsWith('-vl')) return true;
+    return false;
+  };
+
   const processImages = async (files) => {
+    var canSeeDirectly = isVisionModel(currentModel);
+    // Native fast-path — skip Gemini entirely when the active model can
+    // see the image itself. dataUrl gets forwarded as-is in sendMessage.
+    if (canSeeDirectly) {
+      for (const file of files) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target.result;
+          const imgId = Date.now() + Math.random();
+          setPendingImages(prev => [...prev, {
+            id: imgId, dataUrl: dataUrl, native: true,
+            analyzing: false, description: null,
+            status: 'Ready — sent to model directly',
+          }]);
+        };
+        reader.readAsDataURL(file);
+      }
+      return;
+    }
     if (!config.geminiKey) {
       alert('Add your Gemini API key in Settings to analyze images.\n\nSince MiniMax cannot see images directly, Gemini is used to describe images before sending to Hermes.');
       return;
@@ -6085,9 +6172,16 @@ function App() {
         });
         messageText = messageText + fileBlocks.join('');
       }
+      // Two image paths:
+      //   nativeImages  — raw dataURLs sent as multimodal content blocks
+      //                   (vision-capable models: gpt-4o, claude-3+, gemini, etc.)
+      //   describedImages / failedImages — Gemini-describe fallback
+      //                   (non-vision models: MiniMax, GLM, older text-only)
+      var nativeImages = [];
       if (pendingImages.length) {
-        var describedImages = pendingImages.filter(function(img) { return img.description; });
-        var failedImages = pendingImages.filter(function(img) { return !img.description; });
+        nativeImages = pendingImages.filter(function(img) { return img.native && img.dataUrl; });
+        var describedImages = pendingImages.filter(function(img) { return !img.native && img.description; });
+        var failedImages = pendingImages.filter(function(img) { return !img.native && !img.description; });
         if (describedImages.length > 0) {
           var imageDesc = describedImages.map(function(img, i) {
             return '[Image ' + (i + 1) + ' description from Gemini Vision]:\n' + img.description;
@@ -6320,6 +6414,9 @@ function App() {
         {
           baseSystemPrompt: (config && config.baseSystemPrompt) || '',
           applyBehavioralGuidelines: !!(config && config.applyBehavioralGuidelines === true),
+          // Native multimodal images for vision-capable models. Empty when
+          // the active model routes through Gemini-describe (MiniMax, etc.).
+          images: nativeImages.map(function(img) { return { dataUrl: img.dataUrl }; }),
           // Mirrors nesquena/hermes-webui messages.js 481-490: when the backend
           // compacts context mid-stream, insert a visible divider into the
           // transcript and flag the conversation so the sidebar 🔄 icon shows.
@@ -6446,11 +6543,57 @@ function App() {
     }
   };
 
-  // ── Pause / Stop / Interject ──
+  // ── Pause / Stop / Interject / Steer ──
   const sendInterjection = async (text) => {
     if (!text.trim()) return;
     setPausedSessionIds(prev => prev.filter(id => id !== activeConvId));
     await sendMessage(text);
+  };
+
+  // Steer: no-pause nudge. Uses hermes-agent v0.11.0's AIAgent.steer() via
+  // /api/chat/steer — the text is queued onto the active agent's
+  // _pending_steer buffer and gets appended to the last tool result before
+  // the next LLM call, without interrupting the current turn. Unlike
+  // sendInterjection (which cancels + resends), steer preserves the agent's
+  // in-flight LLM call and delivers the nudge inline.
+  const [steerFlash, setSteerFlash] = useState(null);  // transient UI: "Steered: <preview>"
+  const steer = async (text) => {
+    if (!text || !text.trim()) return;
+    var sid = activeConvId;
+    var entry = sid ? streamingMap.current[sid] : null;
+    if (!entry || !entry.streamId) {
+      // Not streaming — fall back to a normal send so Enter still works.
+      await sendMessage(text);
+      return;
+    }
+    try {
+      var r = await fetch(API_BASE + '/api/chat/steer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stream_id: entry.streamId, text: text }),
+      });
+      var data = await r.json().catch(function(){ return {}; });
+      if (!r.ok || !data.ok) {
+        // Older hermes-agent without .steer(), or stream already finished.
+        // Graceful fallback: treat as the classic "auto-pause + interject"
+        // flow so the user's typed message isn't lost.
+        if (data && (data.code === 'unsupported' || data.code === 'not_active')) {
+          addLocalLog('WARN  /steer unavailable (' + data.code + ') — falling back to pause+interject');
+          pauseStreaming();
+          await sendInterjection(text);
+          return;
+        }
+        throw new Error((data && data.error) || ('HTTP ' + r.status));
+      }
+      setInput('');
+      addLocalLog('INFO  [steer] nudge delivered (' + text.length + ' chars)');
+      var preview = text.length > 60 ? text.slice(0, 57) + '...' : text;
+      setSteerFlash(preview);
+      setTimeout(function() { setSteerFlash(null); }, 2500);
+    } catch (e) {
+      console.error('Steer failed:', e);
+      addLocalLog('ERROR /steer failed: ' + (e && e.message));
+    }
   };
 
   const [pausedSessionIds, setPausedSessionIds] = useState([]);
@@ -6808,8 +6951,9 @@ function App() {
                         <img src={img.dataUrl} alt="Preview" onClick={function(e) { e.stopPropagation(); setLightboxSrc(img.dataUrl); }} />
                         <button className="image-preview-remove" onClick={() => removeImage(img.id)}>x</button>
                         {img.analyzing && <div className="analyzing-badge">{'Analyzing with Gemini...'}</div>}
-                        {!img.analyzing && img.description && <div className="analyzing-badge" style={{background:'rgba(85,192,136,0.85)'}}>{'Ready'}</div>}
-                        {!img.analyzing && !img.description && <div className="analyzing-badge" style={{background:'rgba(224,85,85,0.85)'}} title={img.status || 'Analysis failed'}>{'Failed'}</div>}
+                        {!img.analyzing && img.native && <div className="analyzing-badge" style={{background:'rgba(69,136,224,0.85)'}} title="Will be sent to the model directly (vision-capable)">{'Vision'}</div>}
+                        {!img.analyzing && !img.native && img.description && <div className="analyzing-badge" style={{background:'rgba(85,192,136,0.85)'}}>{'Ready'}</div>}
+                        {!img.analyzing && !img.native && !img.description && <div className="analyzing-badge" style={{background:'rgba(224,85,85,0.85)'}} title={img.status || 'Analysis failed'}>{'Failed'}</div>}
                       </div>
                     ))}
                   </div>
@@ -6825,6 +6969,12 @@ function App() {
                         <button className="file-chip-remove" onClick={function() { removeFile(f.id); }}>{'×'}</button>
                       </div>
                     ); })}
+                  </div>
+                )}
+                {steerFlash && (
+                  <div className="steer-flash">
+                    <span>↪ Steered</span>
+                    <span className="steer-flash-preview">{steerFlash}</span>
                   </div>
                 )}
                 {isPaused && (
@@ -6852,15 +7002,18 @@ function App() {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         if (isStreaming && !isPaused && input.trim()) {
-                          // Auto-interject: mirror manual Pause → type → Send flow
-                          pauseStreaming();
-                          sendInterjection(input);
+                          // Steer: no-pause nudge. Hands the text to the
+                          // live agent via /api/chat/steer — the agent
+                          // appends it to the next tool result without
+                          // interrupting the LLM call. Replaces the old
+                          // auto-pause-then-interject flow.
+                          steer(input);
                         } else {
                           isPaused ? sendInterjection(input) : sendMessage(input);
                         }
                       }
                     }}
-                    placeholder={connected === false ? 'Hermes API not connected...' : isPaused ? 'Type your interjection...' : isStreaming ? 'Type + ⏎ to interject (auto-pause)...' : anyAnalyzing ? 'Waiting for image analysis...' : 'Message Hermes... (paste/drop images or files)'}
+                    placeholder={connected === false ? 'Hermes API not connected...' : isPaused ? 'Type your interjection...' : isStreaming ? 'Type + ⏎ to steer (no pause)...' : anyAnalyzing ? 'Waiting for image analysis...' : 'Message Hermes... (paste/drop images or files)'}
                     rows={1}
                     disabled={connected === false}
                   />
@@ -6881,7 +7034,7 @@ function App() {
                         <button className="send-btn stop-btn" onClick={stopStreamingAction} title="Stop">
                           <svg width="16" height="16" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
                         </button>
-                        <button className="send-btn" onClick={function(){ pauseStreaming(); sendInterjection(input); }} disabled={!input.trim()} title="Interject (auto-pauses then sends)">
+                        <button className="send-btn" onClick={function(){ steer(input); }} disabled={!input.trim()} title="Steer (nudge without pausing — uses hermes-agent /steer)">
                           <Icon name="send" size={16}/>
                         </button>
                       </React.Fragment>
@@ -6898,7 +7051,7 @@ function App() {
                 </div>
                 <div className="input-hint">
                   {isStreaming ? (
-                    <span><kbd>⏎</kbd> interject · Pause · Stop to cancel</span>
+                    <span><kbd>⏎</kbd> steer · Pause · Stop to cancel</span>
                   ) : isPaused ? (
                     <span><kbd>⏎</kbd> send interjection · Dismiss to keep partial</span>
                   ) : (

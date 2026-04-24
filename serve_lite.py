@@ -560,11 +560,43 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
         except ImportError:
             pass
 
-        # Extract just the latest user message text
+        # Extract just the latest user message text, plus any attached images
+        # (dataURL or http URL) that the frontend marked for the native
+        # multimodal path. Images are only honored on the FINAL user message
+        # — older turns are persisted text-only to keep session.json small
+        # and to avoid replaying huge base64 blobs on every turn.
         user_msg = ""
+        user_images = []
         for m in reversed(messages):
             if m.get("role") == "user":
-                user_msg = m.get("content", "")
+                _raw_content = m.get("content", "")
+                if isinstance(_raw_content, str):
+                    user_msg = _raw_content
+                elif isinstance(_raw_content, list):
+                    # Frontend sent pre-built multimodal blocks — rejoin text for
+                    # persistence + keep images as-is for the model.
+                    _text_parts = []
+                    for _blk in _raw_content:
+                        if isinstance(_blk, dict):
+                            if _blk.get("type") == "text":
+                                _text_parts.append(str(_blk.get("text") or ""))
+                            elif _blk.get("type") in ("image_url", "input_image"):
+                                user_images.append(_blk)
+                    user_msg = "\n".join(_p for _p in _text_parts if _p)
+                # Sidecar images array (our UI convention — easier than
+                # asking the frontend to build OpenAI content blocks).
+                _sidecar = m.get("images") or []
+                if isinstance(_sidecar, list):
+                    for _im in _sidecar:
+                        if not isinstance(_im, dict):
+                            continue
+                        _url = _im.get("dataUrl") or _im.get("url")
+                        if not _url or not isinstance(_url, str):
+                            continue
+                        user_images.append({
+                            "type": "image_url",
+                            "image_url": {"url": _url},
+                        })
                 break
 
         # Workspace context prefix (matches hermes-webui behaviour)
@@ -629,8 +661,28 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
         )
         _ckpt_thread.start()
 
+        # When the user attached images for a vision-capable model, pass
+        # them as native multimodal content blocks to run_conversation —
+        # the agent (v0.11.0+) handles ``image_url`` + ``input_image``
+        # blocks natively. ``persist_user_message`` stays plain-text so
+        # transcripts don't bloat with base64 blobs. Non-vision models
+        # never reach this branch because the UI routes them through the
+        # Gemini-describe fallback and strips .images before POSTing.
+        if user_images:
+            _agent_user_msg = [
+                {"type": "text", "text": workspace_ctx + user_msg},
+                *user_images,
+            ]
+            print(
+                f"[serve] run_conversation multimodal: text_len={len(user_msg)} "
+                f"images={len(user_images)}",
+                flush=True,
+            )
+        else:
+            _agent_user_msg = workspace_ctx + user_msg
+
         result = agent.run_conversation(
-            user_message=workspace_ctx + user_msg,
+            user_message=_agent_user_msg,
             system_message=workspace_system_msg,
             conversation_history=clean_history,
             task_id=session_id,
@@ -646,10 +698,35 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
         # overwriting here would replace them with the agent's
         # partial/empty run_conversation result (nesq #893 companion fix).
         if not cancel_event.is_set():
-            session["messages"] = _restore_reasoning_metadata(
+            _merged = _restore_reasoning_metadata(
                 _previous_messages,
                 result.get("messages") or session.get("messages") or [],
             )
+            # Collapse any multimodal user content back to plain text before
+            # persisting. The agent saw the image in-turn; we don't want to
+            # replay 2MB+ of base64 on every subsequent turn of this chat —
+            # users can re-paste if they need the model to re-see it. The
+            # `_image_count` tag lets the UI render an attachment indicator
+            # without keeping the bytes.
+            for _m in _merged:
+                if not isinstance(_m, dict):
+                    continue
+                if _m.get("role") != "user":
+                    continue
+                _c = _m.get("content")
+                if not isinstance(_c, list):
+                    continue
+                _texts, _img_count = [], 0
+                for _blk in _c:
+                    if isinstance(_blk, dict):
+                        if _blk.get("type") == "text":
+                            _texts.append(str(_blk.get("text") or ""))
+                        elif _blk.get("type") in ("image_url", "input_image"):
+                            _img_count += 1
+                _m["content"] = "\n".join(_t for _t in _texts if _t)
+                if _img_count:
+                    _m["_image_count"] = _img_count
+            session["messages"] = _merged
             _save_session(session_id, session)  # Persist to disk (matches webui s.save())
 
         # Detect silent agent failure (no assistant reply produced)
@@ -996,6 +1073,54 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         stream_id = parse_qs(parsed.query).get("stream_id", [""])[0]
         self._json({"active": stream_id in STREAMS, "stream_id": stream_id})
+
+    def _handle_chat_steer(self):
+        """Inject a no-pause nudge into the live agent turn.
+
+        Calls ``agent.steer(text)`` which stashes the text into
+        ``_pending_steer``; the agent loop appends it to the last tool
+        result before the next API call. Unlike /api/chat/cancel, this
+        does NOT interrupt the current LLM call — the model keeps running
+        and the nudge lands on the next iteration.
+
+        Requires hermes-agent v0.11.0+ (exposes ``AIAgent.steer``). On
+        older builds we return 501 so the UI can fall back to the classic
+        pause-then-interject flow.
+        """
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0)) or 0) or b"{}")
+        except Exception as e:
+            return self._json({"ok": False, "error": f"bad json: {e}"}, 400)
+        stream_id = str(body.get("stream_id") or "").strip()
+        text = str(body.get("text") or "").strip()
+        if not stream_id:
+            return self._json({"ok": False, "error": "stream_id required"}, 400)
+        if not text:
+            return self._json({"ok": False, "error": "text required"}, 400)
+        with STREAMS_LOCK:
+            agent = AGENT_INSTANCES.get(stream_id)
+        if agent is None:
+            # Stream already finished, or never existed. Frontend should
+            # treat as "too late — send as a new message instead".
+            return self._json({"ok": False, "error": "stream not active", "code": "not_active"}, 409)
+        steer_fn = getattr(agent, "steer", None)
+        if not callable(steer_fn):
+            return self._json({
+                "ok": False,
+                "error": "agent build does not support steer — update hermes-agent to v0.11.0+",
+                "code": "unsupported",
+            }, 501)
+        try:
+            accepted = bool(steer_fn(text))
+        except Exception as e:
+            print(f"[serve] /api/chat/steer agent.steer() failed: {e!r}", flush=True)
+            return self._json({"ok": False, "error": str(e)}, 500)
+        print(
+            f"[serve] /api/chat/steer stream={stream_id[:8]} accepted={accepted} "
+            f"len={len(text)}",
+            flush=True,
+        )
+        return self._json({"ok": True, "accepted": accepted})
 
     def _handle_chat_sync(self, messages, session_id):
         """Synchronous chat fallback (no streaming)."""
@@ -1654,6 +1779,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_chat_start()
         elif self.path == "/api/chat/cancel":
             self._handle_cancel()
+        elif self.path == "/api/chat/steer":
+            self._handle_chat_steer()
         elif self.path == "/v1/chat/completions" or self.path == "/api/chat":
             self._handle_chat_start()  # backwards compat — same two-step flow
         elif self.path.startswith("/terminal/exec"):
