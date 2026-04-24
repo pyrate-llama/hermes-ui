@@ -616,6 +616,12 @@
     align-items: center; gap: 8px;
     animation: steer-flash-slide 180ms cubic-bezier(0.4,0,0.2,1);
   }
+  .steer-flash.applied {
+    background: rgba(85,192,136,0.12); border-color: #55c088; color: #55c088;
+  }
+  .steer-flash.late {
+    background: rgba(224,163,69,0.12); border-color: #e0a345; color: #e0a345;
+  }
   .steer-flash-preview { opacity: 0.85; font-weight: 400; }
   @keyframes steer-flash-slide {
     from { opacity: 0; transform: translateY(-4px); }
@@ -5339,7 +5345,8 @@ function App() {
       // Two-step flow matching hermes-webui:
       // 1. POST /api/chat/start → {stream_id}
       // 2. EventSource /api/chat/stream?stream_id=X → named SSE events
-      // options: { baseSystemPrompt?: string, applyBehavioralGuidelines?: boolean }
+      // options: { baseSystemPrompt?: string, applyBehavioralGuidelines?: boolean,
+      //            onSteerEvent?: function }
       var opts = options || {};
       // Build messages array for the API
       var apiMessages = [];
@@ -5562,6 +5569,31 @@ function App() {
           }
         });
 
+        source.addEventListener('steer_applied', function(e) {
+          var d = {};
+          try { d = JSON.parse(e.data); } catch(err) {}
+          if (opts.onSteerEvent) {
+            opts.onSteerEvent({
+              type: 'applied',
+              items: d.items || [],
+              count: d.count || 0,
+            });
+          }
+        });
+
+        source.addEventListener('steer_late', function(e) {
+          var d = {};
+          try { d = JSON.parse(e.data); } catch(err) {}
+          if (opts.onSteerEvent) {
+            opts.onSteerEvent({
+              type: 'late',
+              text: d.text || '',
+              items: d.items || [],
+              count: d.count || 0,
+            });
+          }
+        });
+
         source.addEventListener('done', function(e) {
           source.close();
           var d = JSON.parse(e.data);
@@ -5658,6 +5690,29 @@ function App() {
                 source2.addEventListener('token', function(e2) {
                   var d2 = JSON.parse(e2.data);
                   if (d2.text) { fullContent = processReasoningDelta(d2.text); onChunk(fullContent); }
+                });
+                source2.addEventListener('steer_applied', function(e2) {
+                  var d2 = {};
+                  try { d2 = JSON.parse(e2.data); } catch(err) {}
+                  if (opts.onSteerEvent) {
+                    opts.onSteerEvent({
+                      type: 'applied',
+                      items: d2.items || [],
+                      count: d2.count || 0,
+                    });
+                  }
+                });
+                source2.addEventListener('steer_late', function(e2) {
+                  var d2 = {};
+                  try { d2 = JSON.parse(e2.data); } catch(err) {}
+                  if (opts.onSteerEvent) {
+                    opts.onSteerEvent({
+                      type: 'late',
+                      text: d2.text || '',
+                      items: d2.items || [],
+                      count: d2.count || 0,
+                    });
+                  }
                 });
                 source2.addEventListener('error', function() {
                   source2.close();
@@ -6440,6 +6495,22 @@ function App() {
               });
             });
           },
+          onSteerEvent: function(ev) {
+            var first = ev && ev.items && ev.items.length ? ev.items[0] : null;
+            var preview = (first && first.preview) || (ev && ev.text) || '';
+            if (ev && ev.type === 'applied') {
+              addLocalLog('INFO  [steer] applied' + (ev.count ? ' (' + ev.count + ')' : ''));
+              showSteerFlash('applied', preview);
+            } else if (ev && ev.type === 'late') {
+              addLocalLog('WARN  [steer] arrived too late; restored to composer');
+              if (ev.text) {
+                setInput(function(cur) {
+                  return cur && cur.trim() ? cur + '\n' + ev.text : ev.text;
+                });
+              }
+              showSteerFlash('late', preview || 'Restored to composer');
+            }
+          },
         }
       );
     } catch (err) {
@@ -6556,7 +6627,18 @@ function App() {
   // the next LLM call, without interrupting the current turn. Unlike
   // sendInterjection (which cancels + resends), steer preserves the agent's
   // in-flight LLM call and delivers the nudge inline.
-  const [steerFlash, setSteerFlash] = useState(null);  // transient UI: "Steered: <preview>"
+  const [steerFlash, setSteerFlash] = useState(null);  // transient UI: queued/applied/late steer status
+  const steerFlashTimerRef = useRef(null);
+  const showSteerFlash = (kind, text) => {
+    var preview = text || '';
+    if (preview.length > 60) preview = preview.slice(0, 57) + '...';
+    if (steerFlashTimerRef.current) clearTimeout(steerFlashTimerRef.current);
+    setSteerFlash({ kind: kind, preview: preview });
+    steerFlashTimerRef.current = setTimeout(function() {
+      setSteerFlash(null);
+      steerFlashTimerRef.current = null;
+    }, kind === 'late' ? 4200 : 2500);
+  };
   const steer = async (text) => {
     if (!text || !text.trim()) return;
     var sid = activeConvId;
@@ -6586,10 +6668,8 @@ function App() {
         throw new Error((data && data.error) || ('HTTP ' + r.status));
       }
       setInput('');
-      addLocalLog('INFO  [steer] nudge delivered (' + text.length + ' chars)');
-      var preview = text.length > 60 ? text.slice(0, 57) + '...' : text;
-      setSteerFlash(preview);
-      setTimeout(function() { setSteerFlash(null); }, 2500);
+      addLocalLog('INFO  [steer] queued (' + text.length + ' chars)');
+      showSteerFlash('queued', text);
     } catch (e) {
       console.error('Steer failed:', e);
       addLocalLog('ERROR /steer failed: ' + (e && e.message));
@@ -6705,6 +6785,12 @@ function App() {
   const openSearchModal = () => setShowSearchModal(true);
 
   const anyAnalyzing = pendingImages.some(img => img.analyzing);
+
+  useEffect(() => {
+    return function() {
+      if (steerFlashTimerRef.current) clearTimeout(steerFlashTimerRef.current);
+    };
+  }, []);
 
   // ── Clipboard paste handler ──
   useEffect(() => {
@@ -6972,9 +7058,11 @@ function App() {
                   </div>
                 )}
                 {steerFlash && (
-                  <div className="steer-flash">
-                    <span>↪ Steered</span>
-                    <span className="steer-flash-preview">{steerFlash}</span>
+                  <div className={'steer-flash ' + (steerFlash.kind || '')}>
+                    <span>
+                      {steerFlash.kind === 'applied' ? '✓ Steer applied' : steerFlash.kind === 'late' ? '↪ Steer saved' : '↪ Steer queued'}
+                    </span>
+                    <span className="steer-flash-preview">{steerFlash.preview}</span>
                   </div>
                 )}
                 {isPaused && (

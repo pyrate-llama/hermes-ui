@@ -285,6 +285,7 @@ CANCEL_FLAGS = {}   # stream_id -> threading.Event
 AGENT_INSTANCES = {} # stream_id -> agent instance (for cancel/interrupt)
 STREAM_PARTIAL_TEXT = {}  # stream_id -> str, accumulated tokens for cancel-preserve (nesq #893)
 STREAM_SESSIONS = {}  # stream_id -> session_id, so cancel_stream can persist partial content
+STREAM_STEER_STATE = {}  # stream_id -> {"next_id": int, "pending": [steer_record, ...]}
 
 # session_id -> dict (in-memory cache, persisted to disk like webui)
 SESSIONS = {}
@@ -303,6 +304,50 @@ def _save_session(session_id, session_data):
             json.dump(session_data, f, ensure_ascii=False)
     except Exception as e:
         print(f"[serve] WARNING: Failed to save session {session_id}: {e}", flush=True)
+
+
+def _steer_preview(text, limit=80):
+    """Return a compact one-line preview for UI/log payloads."""
+    s = " ".join(str(text or "").split())
+    if len(s) > limit:
+        return s[:limit - 3] + "..."
+    return s
+
+
+def _ensure_stream_steer_state(stream_id):
+    """Return the per-stream steer bookkeeping dict, creating it if needed."""
+    state = STREAM_STEER_STATE.get(stream_id)
+    if state is None:
+        state = {"next_id": 1, "pending": []}
+        STREAM_STEER_STATE[stream_id] = state
+    return state
+
+
+def _queue_stream_steer(stream_id, text):
+    """Record one accepted /steer so UI feedback can track its lifecycle."""
+    with STREAMS_LOCK:
+        state = _ensure_stream_steer_state(stream_id)
+        steer_id = state["next_id"]
+        state["next_id"] += 1
+        record = {
+            "id": steer_id,
+            "text": text,
+            "preview": _steer_preview(text),
+            "accepted_at": time.time(),
+        }
+        state["pending"].append(record)
+        return dict(record)
+
+
+def _drain_stream_steers(stream_id):
+    """Pop all still-pending steer records for this stream."""
+    with STREAMS_LOCK:
+        state = STREAM_STEER_STATE.get(stream_id)
+        if not state or not state.get("pending"):
+            return []
+        pending = list(state["pending"])
+        state["pending"].clear()
+        return pending
 
 
 def _load_session(session_id):
@@ -366,6 +411,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
         CANCEL_FLAGS[stream_id] = cancel_event
         STREAM_PARTIAL_TEXT[stream_id] = ''
         STREAM_SESSIONS[stream_id] = session_id
+        _ensure_stream_steer_state(stream_id)
 
     def put(event, data):
         if cancel_event.is_set() and event not in ("cancel", "error"):
@@ -490,6 +536,25 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
                 # the first reliable mid-run signal.
                 _checkpoint_activity[0] += 1
 
+        def on_step(api_call_count, prev_tools):
+            # /steer is actually applied at the start of the NEXT agent
+            # iteration, right before the next API call is built. The agent
+            # only has something to inject into if the previous iteration
+            # produced tool results, so use prev_tools as the guard.
+            if not prev_tools or not any(t.get("result") is not None for t in prev_tools):
+                return
+            applied = _drain_stream_steers(stream_id)
+            if not applied:
+                return
+            put("steer_applied", {
+                "count": len(applied),
+                "api_call": api_call_count,
+                "items": [
+                    {"id": item.get("id"), "preview": item.get("preview", "")}
+                    for item in applied
+                ],
+            })
+
         # Build the agent.
         # Guard newer AIAgent params via signature introspection so we degrade
         # gracefully on older hermes-agent builds (matches nesquena/hermes-webui
@@ -510,6 +575,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
             stream_delta_callback=on_token,
             reasoning_callback=on_reasoning,
             tool_progress_callback=on_tool,
+            step_callback=on_step,
         )
 
         # Pin Honcho memory sessions to the stable WebUI session ID. Without
@@ -788,6 +854,24 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
         input_tokens = getattr(agent, "session_prompt_tokens", 0) or 0
         output_tokens = getattr(agent, "session_completion_tokens", 0) or 0
         estimated_cost = getattr(agent, "session_estimated_cost_usd", None)
+        _late_steer = result.get("pending_steer")
+        if _late_steer:
+            late_items = _drain_stream_steers(stream_id)
+            if not late_items:
+                late_items = [{
+                    "id": None,
+                    "text": str(_late_steer),
+                    "preview": _steer_preview(_late_steer),
+                    "accepted_at": time.time(),
+                }]
+            put("steer_late", {
+                "text": str(_late_steer),
+                "count": len(late_items),
+                "items": [
+                    {"id": item.get("id"), "preview": item.get("preview", "")}
+                    for item in late_items
+                ],
+            })
 
         put("done", {
             "session": {
@@ -829,6 +913,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
             AGENT_INSTANCES.pop(stream_id, None)
             STREAM_PARTIAL_TEXT.pop(stream_id, None)
             STREAM_SESSIONS.pop(stream_id, None)
+            STREAM_STEER_STATE.pop(stream_id, None)
 
 
 def cancel_stream(stream_id):
@@ -1115,12 +1200,21 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             print(f"[serve] /api/chat/steer agent.steer() failed: {e!r}", flush=True)
             return self._json({"ok": False, "error": str(e)}, 500)
+        steer_meta = None
+        if accepted:
+            steer_meta = _queue_stream_steer(stream_id, text)
         print(
             f"[serve] /api/chat/steer stream={stream_id[:8]} accepted={accepted} "
             f"len={len(text)}",
             flush=True,
         )
-        return self._json({"ok": True, "accepted": accepted})
+        payload = {"ok": True, "accepted": accepted}
+        if steer_meta:
+            payload["steer"] = {
+                "id": steer_meta["id"],
+                "preview": steer_meta["preview"],
+            }
+        return self._json(payload)
 
     def _handle_chat_sync(self, messages, session_id):
         """Synchronous chat fallback (no streaming)."""
