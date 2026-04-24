@@ -38,7 +38,7 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 ~45 commits since v2.0 (April 2026).
 
 **New features**
-- **Command palette** (`Ctrl/Cmd+K`) — fuzzy search across chats and skills (nesq-style)
+- **Command palette** (`Ctrl/Cmd+K`) — fuzzy search across chats and skills
 - **Document upload in chat** — drop `.txt`, `.md`, `.pdf`, `.json`, `.csv`, `.py`, `.js`, `.ts` files directly into the composer
 - **Artifact panel** — auto-detects HTML, SVG, PDF, and CSV output and renders live previews in a widening right panel
 - **MCP Tools modal** — categorized view of all connected servers (Web, Browser, Terminal, Files, Code, etc.)

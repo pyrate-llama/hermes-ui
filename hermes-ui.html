@@ -2204,23 +2204,58 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
     onClose();
   };
 
+  // Poll /health until the restarted server comes back up, then reload.
+  // Ported from nesquena/hermes-webui #874 — replaces blind setTimeout(reload, 3000)
+  // which used to reload while the server was still coming up, yielding a blank
+  // page and requiring the user to refresh again manually.
+  const waitForServerUp = (onTick) => {
+    var start = Date.now();
+    var maxMs = 30000; // 30s cap — matches nesq
+    return new Promise(function(resolve) {
+      var tick = function() {
+        var elapsed = Math.floor((Date.now() - start) / 1000);
+        if (onTick) onTick(elapsed);
+        fetch(API_BASE + '/health', { cache: 'no-store' })
+          .then(function(r) {
+            if (r && r.ok) { resolve(true); return; }
+            if (Date.now() - start > maxMs) { resolve(false); return; }
+            setTimeout(tick, 600);
+          })
+          .catch(function() {
+            if (Date.now() - start > maxMs) { resolve(false); return; }
+            setTimeout(tick, 600);
+          });
+      };
+      // Give the server a beat to actually shut down before we start polling,
+      // otherwise the first /health hits the old process and resolves instantly.
+      setTimeout(tick, 800);
+    });
+  };
+
   const handleRestart = async () => {
     setServerStatus('Restarting server...');
-    try {
-      await fetch(API_BASE + '/server/restart', { method: 'POST' });
-      setServerStatus('Server restarting — refreshing in 3s...');
-      setTimeout(() => window.location.reload(), 3000);
-    } catch(e) { setServerStatus('Restart signal sent — refreshing in 3s...'); setTimeout(() => window.location.reload(), 3000); }
+    try { await fetch(API_BASE + '/server/restart', { method: 'POST' }); } catch(e) {}
+    var ok = await waitForServerUp(function(sec) {
+      setServerStatus('Waiting for server (' + sec + 's)...');
+    });
+    setServerStatus(ok ? 'Server back up — reloading...' : 'Timed out — reloading anyway...');
+    window.location.reload();
   };
 
   const handlePullRestart = async () => {
     setServerStatus('Pulling updates & restarting...');
+    var pullText = 'done';
     try {
       var r = await fetch(API_BASE + '/server/pull-restart', { method: 'POST' });
       var data = await r.json();
-      setServerStatus('Pull: ' + (data.pull || 'done') + ' — refreshing in 3s...');
-      setTimeout(() => window.location.reload(), 3000);
-    } catch(e) { setServerStatus('Update signal sent — refreshing in 3s...'); setTimeout(() => window.location.reload(), 3000); }
+      pullText = data.pull || 'done';
+    } catch(e) {}
+    setServerStatus('Pull: ' + pullText + ' — waiting for server...');
+    var ok = await waitForServerUp(function(sec) {
+      setServerStatus('Pull: ' + pullText + ' — waiting for server (' + sec + 's)...');
+    });
+    setServerStatus(ok ? 'Updated — reloading...' : 'Timed out — reloading anyway...');
+    window.location.reload();
   };
 
   return (
@@ -5528,8 +5563,22 @@ function App() {
 
         source.addEventListener('cancel', function(e) {
           source.close();
+          // Pull the preserved _partial message off the session so Stop
+          // doesn't lose what the model already generated (nesq #893/#882).
+          var cancelSession = null;
+          try { cancelSession = JSON.parse(e.data || '{}').session || null; } catch(_e) {}
+          if (cancelSession && Array.isArray(cancelSession.messages) && cancelSession.messages.length) {
+            for (var i = cancelSession.messages.length - 1; i >= 0; i--) {
+              var m = cancelSession.messages[i];
+              if (m && m.role === 'assistant' && m._partial) {
+                var pc = m.content || '';
+                if (typeof pc === 'string' && pc.trim()) fullContent = pc;
+                break;
+              }
+            }
+          }
           wrappedOnDone(fullContent);
-          resolve({ content: fullContent, usage: streamUsage });
+          resolve({ content: fullContent, usage: streamUsage, session: cancelSession, cancelled: true });
         });
 
         source.addEventListener('error', function(e) {

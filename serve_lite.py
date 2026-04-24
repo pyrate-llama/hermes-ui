@@ -283,6 +283,8 @@ STREAMS = {}
 STREAMS_LOCK = threading.Lock()
 CANCEL_FLAGS = {}   # stream_id -> threading.Event
 AGENT_INSTANCES = {} # stream_id -> agent instance (for cancel/interrupt)
+STREAM_PARTIAL_TEXT = {}  # stream_id -> str, accumulated tokens for cancel-preserve (nesq #893)
+STREAM_SESSIONS = {}  # stream_id -> session_id, so cancel_stream can persist partial content
 
 # session_id -> dict (in-memory cache, persisted to disk like webui)
 SESSIONS = {}
@@ -362,6 +364,8 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
     cancel_event = threading.Event()
     with STREAMS_LOCK:
         CANCEL_FLAGS[stream_id] = cancel_event
+        STREAM_PARTIAL_TEXT[stream_id] = ''
+        STREAM_SESSIONS[stream_id] = session_id
 
     def put(event, data):
         if cancel_event.is_set() and event not in ("cancel", "error"):
@@ -444,6 +448,14 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
                 return
             _token_sent = True
             full_text += text
+            # Accumulate for cancel-preserve (nesq #893) — so if the user hits
+            # Stop mid-stream we can persist what was generated so far.
+            try:
+                with STREAMS_LOCK:
+                    if stream_id in STREAM_PARTIAL_TEXT:
+                        STREAM_PARTIAL_TEXT[stream_id] += str(text)
+            except Exception:
+                pass
             put("token", {"text": text})
 
         def on_reasoning(text):
@@ -628,11 +640,17 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
         # Update session with agent's messages (includes tool_calls + tool results).
         # Merge reasoning metadata back from the prior turn, since API-safe
         # sanitization stripped it before send (matches webui's _restore_reasoning_metadata).
-        session["messages"] = _restore_reasoning_metadata(
-            _previous_messages,
-            result.get("messages") or session.get("messages") or [],
-        )
-        _save_session(session_id, session)  # Persist to disk (matches webui s.save())
+        #
+        # Skip this if the user cancelled — cancel_stream() already wrote the
+        # preserved `_partial` + `_error` markers to the session, and
+        # overwriting here would replace them with the agent's
+        # partial/empty run_conversation result (nesq #893 companion fix).
+        if not cancel_event.is_set():
+            session["messages"] = _restore_reasoning_metadata(
+                _previous_messages,
+                result.get("messages") or session.get("messages") or [],
+            )
+            _save_session(session_id, session)  # Persist to disk (matches webui s.save())
 
         # Detect silent agent failure (no assistant reply produced)
         _assistant_added = any(
@@ -732,10 +750,18 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
             STREAMS.pop(stream_id, None)
             CANCEL_FLAGS.pop(stream_id, None)
             AGENT_INSTANCES.pop(stream_id, None)
+            STREAM_PARTIAL_TEXT.pop(stream_id, None)
+            STREAM_SESSIONS.pop(stream_id, None)
 
 
 def cancel_stream(stream_id):
-    """Signal an in-flight stream to cancel. Returns True if the stream existed."""
+    """Signal an in-flight stream to cancel. Returns True if the stream existed.
+
+    Also preserves any partial streamed content as a `_partial: True` message on
+    the session, followed by a `*Task cancelled.*` `_error: True` marker — so
+    users can see what the agent had generated before they hit Stop, rather
+    than losing the whole turn. Ported from nesquena/hermes-webui #893.
+    """
     with STREAMS_LOCK:
         if stream_id not in STREAMS:
             return False
@@ -748,12 +774,67 @@ def cancel_stream(stream_id):
                 agent.interrupt("Cancelled by user")
             except Exception:
                 pass
+        # Snapshot partial text + session_id under lock, then release before
+        # doing any session I/O (which takes a different lock).
+        _cancel_partial_text = STREAM_PARTIAL_TEXT.get(stream_id, '')
+        _cancel_session_id = STREAM_SESSIONS.get(stream_id)
         q = STREAMS.get(stream_id)
-        if q:
-            try:
-                q.put_nowait(("cancel", {"message": "Cancelled by user"}))
-            except Exception:
-                pass
+
+    # Persist partial content (outside STREAMS_LOCK) so the user doesn't lose
+    # what the model had already generated.
+    try:
+        partial_text = _cancel_partial_text.strip() if _cancel_partial_text else ''
+        if partial_text and _cancel_session_id:
+            import re as _re
+            # Strip both well-formed and unclosed <think>/<thinking> blocks so
+            # raw chain-of-thought never leaks into saved messages.
+            _stripped = _re.sub(r'<think(?:ing)?\b[^>]*>.*?</think(?:ing)?>',
+                                '', partial_text,
+                                flags=_re.DOTALL | _re.IGNORECASE).strip()
+            _stripped = _re.sub(r'<think(?:ing)?\b[^>]*>.*',
+                                '', _stripped,
+                                flags=_re.DOTALL | _re.IGNORECASE).strip()
+            if _stripped:
+                sess = _get_or_create_session(_cancel_session_id)
+                with SESSIONS_LOCK:
+                    sess.setdefault('messages', []).append({
+                        'role': 'assistant',
+                        'content': _stripped,
+                        '_partial': True,
+                        'timestamp': int(time.time()),
+                    })
+                    sess['messages'].append({
+                        'role': 'assistant',
+                        'content': '*Task cancelled.*',
+                        '_error': True,
+                        'timestamp': int(time.time()),
+                    })
+                _save_session(_cancel_session_id, sess)
+    except Exception as _e:
+        print(f"[serve] WARNING: cancel-preserve failed for {stream_id}: {_e}", flush=True)
+
+    # Push the cancel event last, bundling the updated session so the
+    # frontend can render the preserved _partial + _error messages without
+    # a separate re-fetch (nesq #882 cancel-message ordering fix).
+    _session_payload = None
+    if _cancel_session_id:
+        try:
+            _sess = _get_or_create_session(_cancel_session_id)
+            _session_payload = {
+                "session_id": _cancel_session_id,
+                "messages": list(_sess.get("messages", [])),
+                "model": _sess.get("model"),
+            }
+        except Exception:
+            _session_payload = None
+    if q:
+        try:
+            q.put_nowait(("cancel", {
+                "message": "Cancelled by user",
+                "session": _session_payload,
+            }))
+        except Exception:
+            pass
     return True
 
 
