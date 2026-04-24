@@ -93,6 +93,48 @@ for _sp in _venv_site:
 # Lazy-loaded agent class
 _AIAgent = None
 
+_PROVIDER_ENV_VARS = {
+    "openrouter": "OPENROUTER_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "google": "GOOGLE_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+    "x-ai": "XAI_API_KEY",
+    "mistralai": "MISTRAL_API_KEY",
+    "minimax": "MINIMAX_API_KEY",
+    "zai": "GLM_API_KEY",
+    "kimi-coding": "KIMI_API_KEY",
+    "opencode-zen": "OPENCODE_ZEN_API_KEY",
+    "opencode-go": "OPENCODE_GO_API_KEY",
+    "ollama": "OLLAMA_API_KEY",
+    "ollama-cloud": "OLLAMA_API_KEY",
+}
+
+_PROVIDER_DISPLAY = {
+    "openrouter": "OpenRouter",
+    "anthropic": "Anthropic",
+    "openai": "OpenAI",
+    "google": "Google AI",
+    "gemini": "Gemini",
+    "deepseek": "DeepSeek",
+    "x-ai": "xAI",
+    "mistralai": "Mistral",
+    "minimax": "MiniMax",
+    "zai": "Z.AI",
+    "kimi-coding": "Kimi",
+    "opencode-zen": "OpenCode Zen",
+    "opencode-go": "OpenCode Go",
+    "ollama": "Ollama",
+    "ollama-cloud": "Ollama Cloud",
+    "nous": "Nous",
+    "openai-codex": "OpenAI Codex",
+    "copilot": "GitHub Copilot",
+    "qwen-oauth": "Qwen OAuth",
+}
+
+_OAUTH_PROVIDERS = {"nous", "openai-codex", "copilot", "qwen-oauth"}
+
 def _get_ai_agent():
     """Import AIAgent from hermes-agent, retrying if needed."""
     global _AIAgent
@@ -178,6 +220,132 @@ def _resolve_delegation_credentials():
             print(f"[serve] WARNING: delegation resolve_runtime_provider failed: {e}", flush=True)
 
     return model, provider, base_url, api_key
+
+def _load_env_values():
+    env_path = pathlib.Path(HERMES_HOME) / ".env"
+    values = {}
+    if not env_path.exists():
+        return values
+    try:
+        for raw in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip().strip('"').strip("'")
+    except Exception:
+        return {}
+    return values
+
+def _write_env_update(env_var, value):
+    env_path = pathlib.Path(HERMES_HOME) / ".env"
+    clean = (str(value or "").strip()) or None
+    if clean and ("\n" in clean or "\r" in clean):
+        raise ValueError("API key must not contain newline characters.")
+
+    with _ENV_LOCK:
+        lines = []
+        seen = False
+        if env_path.exists():
+            try:
+                lines = env_path.read_text(encoding="utf-8").splitlines()
+            except Exception:
+                lines = []
+
+        next_lines = []
+        for raw in lines:
+            stripped = raw.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                key = stripped.split("=", 1)[0].strip()
+                if key == env_var:
+                    seen = True
+                    if clean:
+                        next_lines.append(f"{env_var}={clean}")
+                    continue
+            next_lines.append(raw)
+
+        if clean and not seen:
+            if next_lines and next_lines[-1].strip():
+                next_lines.append("")
+            next_lines.append(f"{env_var}={clean}")
+
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        mode = 0o600
+        fd = os.open(str(env_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("\n".join(next_lines) + ("\n" if next_lines else ""))
+        try:
+            env_path.chmod(mode)
+        except OSError:
+            pass
+
+        if clean:
+            os.environ[env_var] = clean
+        else:
+            os.environ.pop(env_var, None)
+
+def _read_provider_config_status():
+    import yaml
+
+    cfg = {}
+    cfg_path = pathlib.Path(HERMES_HOME) / "config.yaml"
+    if cfg_path.exists():
+        try:
+            cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            cfg = {}
+
+    model_cfg = cfg.get("model", {}) if isinstance(cfg.get("model"), dict) else {}
+    providers_cfg = cfg.get("providers", {}) if isinstance(cfg.get("providers"), dict) else {}
+    active_provider = str(model_cfg.get("provider") or "").strip().lower()
+    env_values = _load_env_values()
+    known = set(_PROVIDER_ENV_VARS) | set(_OAUTH_PROVIDERS) | set(providers_cfg)
+    if active_provider:
+        known.add(active_provider)
+
+    providers = []
+    for pid in sorted(known):
+        env_var = _PROVIDER_ENV_VARS.get(pid)
+        is_oauth = pid in _OAUTH_PROVIDERS
+        key_source = "none"
+        has_key = False
+        if is_oauth:
+            key_source = "oauth"
+            try:
+                from hermes_cli.auth import get_auth_status
+                auth_status = get_auth_status(pid)
+                has_key = bool(isinstance(auth_status, dict) and auth_status.get("logged_in"))
+            except Exception:
+                has_key = False
+        elif env_var and env_values.get(env_var):
+            has_key = True
+            key_source = "env_file"
+        elif env_var and os.environ.get(env_var):
+            has_key = True
+            key_source = "env_var"
+        else:
+            provider_cfg = providers_cfg.get(pid, {}) if isinstance(providers_cfg, dict) else {}
+            provider_key = provider_cfg.get("api_key") if isinstance(provider_cfg, dict) else None
+            model_key = model_cfg.get("api_key") if active_provider == pid else None
+            if str(provider_key or model_key or "").strip():
+                has_key = True
+                key_source = "config_yaml"
+
+        providers.append({
+            "id": pid,
+            "display_name": _PROVIDER_DISPLAY.get(pid, pid.replace("-", " ").title()),
+            "env_var": env_var or "",
+            "has_key": has_key,
+            "configurable": bool(env_var and not is_oauth),
+            "key_source": key_source,
+            "active": pid == active_provider,
+        })
+
+    return {
+        "providers": providers,
+        "active_provider": active_provider,
+        "default_model": model_cfg.get("default", ""),
+    }
 
 
 # ── Concurrency infrastructure ─────────────────────────────────────────────
@@ -1272,6 +1440,62 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             "uptime": int(time.time() - _START_TIME),
         })
 
+    def _handle_providers(self):
+        try:
+            self._json(_read_provider_config_status())
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+
+    def _handle_provider_key_save(self):
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            provider_id = str(body.get("provider") or "").strip().lower()
+            api_key = body.get("api_key")
+            if not provider_id:
+                return self._json({"ok": False, "error": "provider is required"}, 400)
+            if provider_id in _OAUTH_PROVIDERS:
+                display = _PROVIDER_DISPLAY.get(provider_id, provider_id)
+                return self._json({"ok": False, "error": f"{display} uses OAuth. Configure it with Hermes CLI."}, 400)
+            env_var = _PROVIDER_ENV_VARS.get(provider_id)
+            if not env_var:
+                return self._json({"ok": False, "error": "No known API-key slot for this provider"}, 400)
+            if api_key is not None:
+                api_key = str(api_key).strip()
+            if api_key and len(api_key) < 8:
+                return self._json({"ok": False, "error": "API key appears too short"}, 400)
+            _write_env_update(env_var, api_key)
+            self._json({
+                "ok": True,
+                "provider": provider_id,
+                "display_name": _PROVIDER_DISPLAY.get(provider_id, provider_id),
+                "action": "updated" if api_key else "removed",
+                "status": _read_provider_config_status(),
+            })
+        except ValueError as e:
+            self._json({"ok": False, "error": str(e)}, 400)
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 500)
+
+    def _handle_provider_key_delete(self):
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            provider_id = str(body.get("provider") or "").strip().lower()
+            if not provider_id:
+                return self._json({"ok": False, "error": "provider is required"}, 400)
+            env_var = _PROVIDER_ENV_VARS.get(provider_id)
+            if not env_var:
+                return self._json({"ok": False, "error": "No managed API key for this provider"}, 400)
+            _write_env_update(env_var, None)
+            self._json({
+                "ok": True,
+                "provider": provider_id,
+                "display_name": _PROVIDER_DISPLAY.get(provider_id, provider_id),
+                "action": "removed",
+                "status": _read_provider_config_status(),
+            })
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 500)
+
     # ── UI conversations (local JSON file) ──
     CONV_PATH = os.path.join(HERMES_HOME, "ui-conversations.json")
 
@@ -1859,6 +2083,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_skills()
         elif self.path == "/api/tools/toolsets" or self.path.startswith("/api/tools/toolsets?"):
             self._handle_toolsets()
+        elif self.path == "/api/providers":
+            self._handle_providers()
         elif self.path == "/cron/list":
             self._handle_cron_list()
         elif self.path == "/api/delegation/info":
@@ -1897,6 +2123,10 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._server_restart()
         elif self.path == "/api/delegation/chat":
             self._handle_delegation_chat()
+        elif self.path == "/api/providers":
+            self._handle_provider_key_save()
+        elif self.path == "/api/providers/delete":
+            self._handle_provider_key_delete()
         else:
             self._json({"error": "Not found"}, 404)
 
