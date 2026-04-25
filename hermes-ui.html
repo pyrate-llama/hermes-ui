@@ -1512,6 +1512,26 @@
     display: flex; align-items: center; gap: 5px;
     transition: color 0.2s;
   }
+  .context-meter {
+    gap: 7px;
+    min-width: 156px;
+  }
+  .context-meter-label {
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+  .context-meter-track {
+    width: 54px; height: 5px; border-radius: 999px;
+    overflow: hidden; background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .context-meter-fill {
+    display: block; height: 100%; min-width: 3px; border-radius: inherit;
+    background: var(--success); transition: width 0.25s ease, background 0.25s ease;
+  }
+  .context-meter.medium .context-meter-fill { background: #d8a844; }
+  .context-meter.high .context-meter-fill { background: #e0a055; }
+  .context-meter.full .context-meter-fill { background: var(--danger); }
   .status-bar-caps {
     display: flex; align-items: center; gap: 4px;
     max-width: 42vw; overflow: hidden;
@@ -2155,6 +2175,59 @@ function generateSessionTitle(messages) {
 
 function formatTokens(input, output) {
   return (input || 0).toLocaleString() + ' in / ' + (output || 0).toLocaleString() + ' out';
+}
+
+function compactTokenCount(n) {
+  n = Math.max(0, Math.round(Number(n) || 0));
+  if (n >= 1000000) return (n / 1000000).toFixed(n >= 10000000 ? 0 : 1).replace(/\.0$/, '') + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, '') + 'k';
+  return String(n);
+}
+
+function usageInputTokens(usage) {
+  if (!usage) return 0;
+  return Number(usage.input_tokens || usage.prompt_tokens || 0) || 0;
+}
+
+function usageOutputTokens(usage) {
+  if (!usage) return 0;
+  return Number(usage.output_tokens || usage.completion_tokens || 0) || 0;
+}
+
+function estimateMessageTokens(messages) {
+  var chars = 0;
+  (messages || []).forEach(function(m) {
+    var content = m && m.content;
+    if (typeof content === 'string') {
+      chars += content.length;
+    } else if (Array.isArray(content)) {
+      content.forEach(function(part) {
+        if (part && typeof part.text === 'string') chars += part.text.length;
+        else if (part && typeof part.content === 'string') chars += part.content.length;
+      });
+    }
+  });
+  return Math.ceil(chars / 4);
+}
+
+function getContextPressure(messages, sessionTokens) {
+  var input = Number(sessionTokens && sessionTokens.input) || 0;
+  var output = Number(sessionTokens && sessionTokens.output) || 0;
+  var exactTotal = input + output;
+  var estimatedTotal = exactTotal || estimateMessageTokens(messages);
+  var workingBudget = 128000;
+  var percent = Math.min(100, Math.round((estimatedTotal / workingBudget) * 100));
+  var level = 'low';
+  var label = 'Low';
+  if (percent >= 90) { level = 'full'; label = 'Full'; }
+  else if (percent >= 62) { level = 'high'; label = 'High'; }
+  else if (percent >= 25) { level = 'medium'; label = 'Med'; }
+  var source = exactTotal ? 'usage data' : 'text estimate';
+  var title = 'Context ' + label + ': ' + compactTokenCount(estimatedTotal) + ' tokens, about ' + percent + '% of a 128k working budget (' + source + ')';
+  if (exactTotal) {
+    title += ' - ' + compactTokenCount(input) + ' in / ' + compactTokenCount(output) + ' out';
+  }
+  return { total: estimatedTotal, percent: percent, level: level, label: label, title: title };
 }
 
 function inferModelCapabilities(modelName, providerName, serverCaps) {
@@ -5169,11 +5242,12 @@ function DelegationChatView() {
 
 /* ── Main App ── */
 /* ── Status Bar ── */
-function StatusBar({ connected, conversations }) {
+function StatusBar({ connected, conversations, messages, sessionTokens }) {
   var [stats, setStats] = useState({ model: '...', provider: '', capabilities: null, memory: 0, uptime: '' });
   // Derive sessions count reactively from props so it stays in sync as chats load.
   // (Previous version captured conversations in a stale closure inside useEffect[].)
   var sessionsCount = conversations ? conversations.length : 0;
+  var contextPressure = getContextPressure(messages, sessionTokens);
 
   useEffect(function() {
     var fetchStats = async function() {
@@ -5239,6 +5313,14 @@ function StatusBar({ connected, conversations }) {
       <div className="status-bar-item" title="Total sessions">
         <span>{'💬'}</span> <span>{sessionsCount} sessions</span>
       </div>
+      <div className="status-bar-sep"></div>
+      <div className={'status-bar-item context-meter ' + contextPressure.level} title={contextPressure.title}>
+        <Icon name="activity" size={13}/>
+        <span className="context-meter-label">Context {contextPressure.label}</span>
+        <span className="context-meter-track" aria-hidden="true">
+          <span className="context-meter-fill" style={{width: Math.max(3, contextPressure.percent) + '%'}}></span>
+        </span>
+      </div>
       {stats.uptime && (
         <React.Fragment>
           <div className="status-bar-sep"></div>
@@ -5249,7 +5331,7 @@ function StatusBar({ connected, conversations }) {
       )}
       <div style={{flex:1}}></div>
       <div className="status-bar-item" style={{opacity:0.5}}>
-        <span>Hermes v1.0</span>
+        <span>Hermes UI v3.0</span>
       </div>
     </div>
   );
@@ -7323,6 +7405,8 @@ function App() {
       if (!usage) {
         console.log('[tokens] No usage data from API for this response');
       }
+      var usageInput = usageInputTokens(usage);
+      var usageOutput = usageOutputTokens(usage);
       // Final sync: persist messages and token usage into conversation for localStorage save.
       // updateStreamMessages already keeps conversations in sync during streaming,
       // but do one final write from messagesRef to be safe.
@@ -7333,8 +7417,8 @@ function App() {
             if (c.id !== sessionId) return c;
             var update = { messages: messagesRef.current };
             if (usage) {
-              update.input_tokens = (c.input_tokens || 0) + (usage.prompt_tokens || 0);
-              update.output_tokens = (c.output_tokens || 0) + (usage.completion_tokens || 0);
+              update.input_tokens = (c.input_tokens || 0) + usageInput;
+              update.output_tokens = (c.output_tokens || 0) + usageOutput;
               console.log('[tokens] Updated conversation tokens:', update.input_tokens, 'in /', update.output_tokens, 'out');
             }
             update.last_active_at = new Date().toISOString();
@@ -7349,8 +7433,8 @@ function App() {
             return prev.map(function(c) {
               if (c.id !== sessionId) return c;
               return Object.assign({}, c, {
-                input_tokens: (c.input_tokens || 0) + (usage.prompt_tokens || 0),
-                output_tokens: (c.output_tokens || 0) + (usage.completion_tokens || 0),
+                input_tokens: (c.input_tokens || 0) + usageInput,
+                output_tokens: (c.output_tokens || 0) + usageOutput,
                 last_active_at: new Date().toISOString(),
                 unread_count: c.unread_count || 1,
               });
@@ -8116,7 +8200,7 @@ function App() {
 
     </div>
     {/* Status Bar */}
-    <StatusBar connected={connected} conversations={conversations} />
+    <StatusBar connected={connected} conversations={conversations} messages={messages} sessionTokens={sessionTokens} />
 
     {/* Mobile Bottom Navigation */}
     <div className="mobile-bottom-nav">

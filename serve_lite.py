@@ -71,8 +71,8 @@ PORT = 3333
 
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
-# GitHub. Keep in sync with the git tag (e.g. "2.6" corresponds to v2.6).
-__version__ = "2.6"
+# GitHub. Keep in sync with the git tag (e.g. "3.0" corresponds to v3.0).
+__version__ = "3.0"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
 
 # Cache for the latest-release lookup so we don't hammer GitHub. Stores
@@ -2036,7 +2036,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                 cache["ts"] = now
                 cache["data"] = payload
 
-            # tag_name is like "v2.6" — strip the leading "v" for comparison.
+            # tag_name is like "v3.0" — strip the leading "v" for comparison.
             tag = (payload or {}).get("tag_name") or ""
             latest = tag.lstrip("v") or None
             html_url = (payload or {}).get("html_url") or None
