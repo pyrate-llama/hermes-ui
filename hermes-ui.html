@@ -76,6 +76,16 @@
       radial-gradient(ellipse 120% 90% at 50% 0%, transparent 40%, rgba(0,0,0,0.35) 100%),
       radial-gradient(ellipse 100% 80% at 50% 100%, transparent 50%, rgba(0,0,0,0.25) 100%);
   }
+  /* Filler background image — architectural ruins, screen-blended overlay for subtle depth */
+  .app-filler-bg {
+    position: fixed; inset: 0; pointer-events: none; z-index: 9998;
+    mix-blend-mode: screen;
+    opacity: var(--filler-opacity, 0.06);
+  }
+  .app-filler-bg img {
+    width: 100%; height: 150vh; object-fit: cover; object-position: top left;
+    filter: brightness(1.5);
+  }
   /* Faint noise overlay — data-URI SVG fractal noise, very low opacity */
   .app-noise {
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
@@ -206,6 +216,31 @@
     display: flex; align-items: center; gap: 6px;
     white-space: nowrap; flex-shrink: 0;
   }
+  .model-capabilities {
+    display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+    min-width: 0;
+  }
+  .model-capability {
+    display: inline-flex; align-items: center; gap: 4px;
+    height: 22px; padding: 0 7px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.025);
+    color: var(--text-secondary);
+    font-size: 10px; font-weight: 650; line-height: 1;
+    white-space: nowrap;
+  }
+  .model-capability.active {
+    color: var(--text-primary);
+    background: rgba(69,136,224,0.10);
+    border-color: rgba(69,136,224,0.28);
+  }
+  .model-capability.warn {
+    color: var(--warning);
+    background: rgba(232,176,74,0.08);
+    border-color: rgba(232,176,74,0.22);
+  }
+  .model-capability.muted { opacity: 0.72; }
   .status-dot {
     width: 7px; height: 7px; border-radius: 50%;
     background: var(--success); opacity: 0.9;
@@ -266,9 +301,17 @@
     margin-bottom: 20px; display: flex; flex-direction: column;
     max-width: 100%; animation: slideIn 0.3s ease-out;
   }
+  .message.search-hit .message-content {
+    animation: searchHitGlow 1.6s ease-out;
+  }
   @keyframes slideIn {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes searchHitGlow {
+    0% { box-shadow: 0 0 0 3px rgba(124,111,224,0.34), 0 18px 44px rgba(124,111,224,0.2); }
+    55% { box-shadow: 0 0 0 2px rgba(124,111,224,0.2), 0 12px 30px rgba(124,111,224,0.12); }
+    100% { box-shadow: 0 0 0 0 rgba(124,111,224,0); }
   }
 
   .message-header {
@@ -1356,6 +1399,10 @@
     display: flex; align-items: center; gap: 5px;
     transition: color 0.2s;
   }
+  .status-bar-caps {
+    display: flex; align-items: center; gap: 4px;
+    max-width: 42vw; overflow: hidden;
+  }
   .status-bar-item:hover { color: var(--text-secondary); }
   .status-dot-live {
     width: 6px; height: 6px; border-radius: 50%; background: var(--success);
@@ -1492,6 +1539,21 @@
   [data-theme="dawn"] .stat-card.tokens { --stat-color: #c89020; }
   [data-theme="dawn"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
   [data-theme="dawn"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.15); }
+  [data-theme="dawn"] .floating-sidebar-btn {
+    background: linear-gradient(135deg, rgba(96,80,176,0.1), rgba(244,242,240,0.85));
+    border-color: rgba(0,0,0,0.08);
+  }
+  [data-theme="dawn"] .floating-sidebar-btn:hover {
+    border-color: rgba(96,80,176,0.3);
+    box-shadow: 0 4px 16px rgba(96,80,176,0.15);
+  }
+  [data-theme="dawn"] .app-filler-bg {
+    mix-blend-mode: multiply;
+    opacity: var(--filler-opacity, 0.06);
+  }
+  [data-theme="dawn"] .app-filler-bg img {
+    filter: brightness(0.8);
+  }
 
   /* ── Theme menu (palette button + dropdown) ── */
   .theme-menu { position: relative; flex-shrink: 0; }
@@ -1964,6 +2026,110 @@ function formatTokens(input, output) {
   return (input || 0).toLocaleString() + ' in / ' + (output || 0).toLocaleString() + ' out';
 }
 
+function inferModelCapabilities(modelName, providerName, serverCaps) {
+  var caps = Object.assign({}, serverCaps || {});
+  var n = String(modelName || '').toLowerCase();
+  var provider = String(providerName || '').toLowerCase();
+
+  if (typeof caps.vision !== 'boolean') {
+    caps.vision = false;
+    if (n) {
+      if (n.indexOf('minimax') !== -1) caps.vision = false;
+      else if (n.indexOf('glm-4') !== -1 && n.indexOf('v') === -1) caps.vision = false;
+      else if (
+        n.indexOf('gpt-4o') !== -1 ||
+        n.indexOf('gpt-4-vision') !== -1 ||
+        n.indexOf('gpt-4.1') !== -1 ||
+        /\bo[34](-|$)/.test(n) ||
+        n.indexOf('claude-3') !== -1 ||
+        n.indexOf('claude-4') !== -1 ||
+        n.indexOf('claude-opus') !== -1 ||
+        n.indexOf('claude-sonnet') !== -1 ||
+        n.indexOf('claude-haiku') !== -1 ||
+        n.indexOf('gemini-') !== -1 ||
+        (n.indexOf('qwen') !== -1 && n.indexOf('vl') !== -1) ||
+        n.indexOf('llava') !== -1 ||
+        n.indexOf('pixtral') !== -1 ||
+        n.indexOf('-vision') !== -1 ||
+        n.indexOf('-vl-') !== -1 ||
+        n.endsWith('-vl')
+      ) caps.vision = true;
+      else if ((provider === 'anthropic' || provider === 'google' || provider === 'gemini') && n.indexOf('minimax') === -1) caps.vision = true;
+    }
+  }
+
+  if (typeof caps.reasoning !== 'boolean') {
+    caps.reasoning = !!(n && (
+      n.indexOf('gpt-5') !== -1 || n.indexOf('o3') !== -1 || n.indexOf('o4') !== -1 ||
+      n.indexOf('claude') !== -1 || n.indexOf('gemini') !== -1 || n.indexOf('deepseek-r1') !== -1 ||
+      n.indexOf('qwen3') !== -1 || n.indexOf('grok') !== -1
+    ));
+  }
+
+  caps.provider = providerName || caps.provider || '';
+  caps.image_mode = caps.image_mode || (caps.vision ? 'native' : 'gemini_fallback');
+  caps.steer = caps.steer !== false;
+  caps.tools = caps.tools !== false;
+  caps.oauth = !!caps.oauth;
+  caps.live_models = !!caps.live_models;
+  return caps;
+}
+
+function modelNameAlreadyShowsProvider(modelName, providerName) {
+  var model = String(modelName || '').toLowerCase();
+  var provider = String(providerName || '').toLowerCase();
+  if (!model || !provider) return false;
+
+  var normalizedModel = model.replace(/[^a-z0-9]+/g, '');
+  var normalizedProvider = provider.replace(/[^a-z0-9]+/g, '');
+  if (normalizedProvider && normalizedModel.indexOf(normalizedProvider) !== -1) return true;
+
+  var providerAliases = {
+    "anthropic": ["claude"],
+    "google": ["gemini"],
+    "gemini": ["gemini"],
+    "openai": ["gpt", "o3", "o4"],
+    "openai-codex": ["gpt", "codex"],
+    "minimax": ["minimax"],
+    "x-ai": ["grok"],
+    "xai": ["grok"],
+    "mistralai": ["mistral"],
+    "deepseek": ["deepseek"],
+    "zai": ["glm"],
+    "qwen-oauth": ["qwen"],
+    "openrouter": []
+  };
+  var aliases = providerAliases[provider] || [];
+  for (var i = 0; i < aliases.length; i++) {
+    if (model.indexOf(aliases[i]) !== -1) return true;
+  }
+  return false;
+}
+
+function ModelCapabilityPills({ model, provider, capabilities, compact }) {
+  var caps = inferModelCapabilities(model, provider, capabilities);
+  var items = [];
+  if (provider && !modelNameAlreadyShowsProvider(model, provider)) {
+    items.push({ key: 'provider', label: provider, kind: 'active', title: 'Active provider: ' + provider });
+  }
+  items.push(caps.vision
+    ? { key: 'vision', label: compact ? 'Vision' : 'Native vision', kind: 'active', title: 'Images are sent directly to this model.' }
+    : { key: 'vision', label: compact ? 'Gemini img' : 'Gemini image fallback', kind: 'warn', title: 'This model is treated as text-only, so pasted images use the Gemini description fallback.' });
+  if (caps.steer) items.push({ key: 'steer', label: 'Steer', kind: 'active', title: 'Supports mid-run steering.' });
+  if (caps.reasoning) items.push({ key: 'reasoning', label: 'Reasoning', kind: 'active', title: 'Reasoning output or effort controls are likely supported.' });
+  if (caps.tools) items.push({ key: 'tools', label: 'Tools', kind: 'active', title: 'Runs through the Hermes agent tool loop.' });
+  if (caps.oauth) items.push({ key: 'oauth', label: 'OAuth', kind: 'muted', title: 'Provider authentication is managed by Hermes OAuth.' });
+  if (caps.live_models) items.push({ key: 'live', label: 'Live models', kind: 'muted', title: 'Provider can support live model discovery.' });
+  if (compact) items = items.slice(0, 5);
+  return (
+    <div className="model-capabilities">
+      {items.map(function(item) {
+        return <span key={item.key} className={'model-capability ' + (item.kind || '')} title={item.title}>{item.label}</span>;
+      })}
+    </div>
+  );
+}
+
 /* ── Theme definitions ── */
 var THEMES = {
   midnight: { label: 'Midnight', className: 'midnight' },
@@ -2098,7 +2264,7 @@ function ThinkingBubble() {
 }
 ThinkingBubble._latestThought = '';
 
-function MessageBubble({ message, onImageClick, onEdit }) {
+function MessageBubble({ message, onImageClick, onEdit, index, highlighted }) {
   const isUser = message.role === 'user';
   const contentRef = useRef(null);
   const [expandedTools, setExpandedTools] = useState({});
@@ -2144,7 +2310,10 @@ function MessageBubble({ message, onImageClick, onEdit }) {
   }, [message.content]);
 
   return (
-    <div className={"message " + (isUser ? 'user-msg' : 'assistant-msg')}>
+    <div
+      className={"message " + (isUser ? 'user-msg' : 'assistant-msg') + (highlighted ? ' search-hit' : '')}
+      data-message-index={index}
+    >
       <div className="message-header">
         <div className={"message-avatar " + (isUser ? 'user' : 'assistant')}>{isUser ? 'Y' : 'H'}</div>
         <span className="message-role">{isUser ? 'You' : 'Hermes'}</span>
@@ -3039,6 +3208,8 @@ function DashboardView() {
   }
 
   var modelName = (health && (health.model || health.default_model)) || 'Loading...';
+  var providerName = (health && health.provider) || '';
+  var modelCaps = inferModelCapabilities(modelName, providerName, health && health.capabilities);
   var uptime = health && health.uptime ? formatUptime(health.uptime) : '--';
 
   var statCards = [
@@ -3101,6 +3272,7 @@ function DashboardView() {
                 <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>Active model</div>
               </div>
             </div>
+            <ModelCapabilityPills model={modelName} provider={providerName} capabilities={modelCaps} />
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
               <div style={{background:'rgba(255,255,255,0.02)',borderRadius:'8px',padding:'10px'}}>
                 <div style={{fontSize:'10px',color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:'4px'}}>Uptime</div>
@@ -4807,7 +4979,7 @@ function DelegationChatView() {
 /* ── Main App ── */
 /* ── Status Bar ── */
 function StatusBar({ connected, conversations }) {
-  var [stats, setStats] = useState({ model: '...', memory: 0, uptime: '' });
+  var [stats, setStats] = useState({ model: '...', provider: '', capabilities: null, memory: 0, uptime: '' });
   // Derive sessions count reactively from props so it stays in sync as chats load.
   // (Previous version captured conversations in a stale closure inside useEffect[].)
   var sessionsCount = conversations ? conversations.length : 0;
@@ -4819,7 +4991,7 @@ function StatusBar({ connected, conversations }) {
           fetch(API_BASE + '/api/memory').catch(function() { return null; }),
           fetch(API_BASE + '/health').catch(function() { return null; })
         ]);
-        var memCount = 0, model = '...', uptime = '';
+        var memCount = 0, model = '...', provider = '', capabilities = null, uptime = '';
         if (memR && memR.ok) {
           var md = await memR.json();
           // Entries can come as a flat list OR as a single string per target
@@ -4843,9 +5015,11 @@ function StatusBar({ connected, conversations }) {
         if (healthR && healthR.ok) {
           var hd = await healthR.json();
           model = hd.model || hd.default_model || model;
+          provider = hd.provider || '';
+          capabilities = hd.capabilities || null;
           if (hd.uptime) { var hrs = Math.floor(hd.uptime / 3600); var mins = Math.floor((hd.uptime % 3600) / 60); uptime = hrs + 'h ' + mins + 'm'; }
         }
-        setStats({ model: model, memory: memCount, uptime: uptime });
+        setStats({ model: model, provider: provider, capabilities: capabilities, memory: memCount, uptime: uptime });
       } catch(e) {}
     };
     fetchStats();
@@ -4862,6 +5036,9 @@ function StatusBar({ connected, conversations }) {
       <div className="status-bar-sep"></div>
       <div className="status-bar-item" title="Model">
         <span>{'🧠'}</span> <span>{stats.model}</span>
+      </div>
+      <div className="status-bar-caps">
+        <ModelCapabilityPills model={stats.model} provider={stats.provider} capabilities={stats.capabilities} compact={true} />
       </div>
       <div className="status-bar-sep"></div>
       <div className="status-bar-item" title="Memory entries">
@@ -4974,11 +5151,45 @@ function ThemeMenu({ currentTheme, setCurrentTheme }) {
 const SEARCH_SCOPES = [
   { value: 'all',    label: 'All' },
   { value: 'chats',  label: 'Chats' },
+  { value: 'messages', label: 'Messages' },
   { value: 'files',  label: 'Files',  disabled: true },
   { value: 'agents', label: 'Agents', disabled: true },
   { value: 'skills', label: 'Skills', disabled: true },
   { value: 'actions',label: 'Actions',disabled: true },
 ];
+
+function searchMessageText(content) {
+  if (content == null) return '';
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map(function(part) {
+      if (typeof part === 'string') return part;
+      if (!part || typeof part !== 'object') return '';
+      if (typeof part.text === 'string') return part.text;
+      if (typeof part.content === 'string') return part.content;
+      if (part.type === 'image_url') return '[image]';
+      return '';
+    }).join(' ');
+  }
+  if (typeof content === 'object') {
+    if (typeof content.text === 'string') return content.text;
+    if (typeof content.content === 'string') return content.content;
+  }
+  return String(content || '');
+}
+
+function searchSnippet(text, query, maxLen) {
+  var clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  var q = String(query || '').toLowerCase();
+  var idx = clean.toLowerCase().indexOf(q);
+  var limit = maxLen || 150;
+  if (idx < 0) return clean.length > limit ? clean.slice(0, limit - 1) + '…' : clean;
+  var start = Math.max(0, idx - Math.floor(limit / 3));
+  var end = Math.min(clean.length, start + limit);
+  if (end - start < limit) start = Math.max(0, end - limit);
+  return (start > 0 ? '…' : '') + clean.slice(start, end) + (end < clean.length ? '…' : '');
+}
 
 function SearchModal({ open, onClose, conversations, onSelectConversation }) {
   const [query, setQuery] = useState('');
@@ -5012,7 +5223,7 @@ function SearchModal({ open, onClose, conversations, onSelectConversation }) {
       var matches = (conversations || []).filter(function(c) {
         var hay = ((c.title || '') + ' ' + (c.id || '')).toLowerCase();
         return hay.indexOf(q) !== -1;
-      }).slice(0, 40);
+      }).slice(0, scope === 'all' ? 15 : 40);
       for (var i = 0; i < matches.length; i++) {
         var c = matches[i];
         items.push({
@@ -5024,6 +5235,38 @@ function SearchModal({ open, onClose, conversations, onSelectConversation }) {
           meta: c.source === 'telegram' ? 'Telegram' : 'Chat',
           onSelect: function(conv) { return function() { onSelectConversation(conv.id); onClose(); }; }(c),
         });
+      }
+    }
+    if (scope === 'all' || scope === 'messages') {
+      var resultCount = 0;
+      var maxResults = scope === 'all' ? 45 : 80;
+      for (var ci = 0; ci < (conversations || []).length; ci++) {
+        if (resultCount >= maxResults) break;
+        var conv = conversations[ci];
+        var msgs = conv.messages || [];
+        for (var mi = 0; mi < msgs.length; mi++) {
+          if (resultCount >= maxResults) break;
+          var msg = msgs[mi] || {};
+          if (!msg.role || msg.role === 'compaction') continue;
+          var text = searchMessageText(msg.content);
+          if (!text || text.toLowerCase().indexOf(q) === -1) continue;
+          var roleLabel = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Hermes' : msg.role;
+          resultCount++;
+          items.push({
+            id: conv.id + '-' + mi,
+            scope: 'messages',
+            iconName: msg.role === 'user' ? 'mail' : 'message-square',
+            title: (conv.title || 'Untitled') + ' · ' + roleLabel,
+            snippet: searchSnippet(text, q, 170),
+            meta: 'Message',
+            onSelect: function(sessionId, messageIndex) {
+              return function() {
+                onSelectConversation(sessionId, { messageIndex: messageIndex });
+                onClose();
+              };
+            }(conv.id, mi),
+          });
+        }
       }
     }
     return items;
@@ -5067,7 +5310,7 @@ function SearchModal({ open, onClose, conversations, onSelectConversation }) {
               ref={inputRef}
               type="text"
               className="search-modal-input"
-              placeholder="Search chats, files, skills..."
+              placeholder="Search chats and messages..."
               value={query}
               onChange={function(e) { setQuery(e.target.value); }}
               autoFocus
@@ -5337,6 +5580,9 @@ function App() {
   const activeConvRef = useRef(null);
   const conversationsRef = useRef([]);
   const activityLogRef = useRef(null);
+  const pendingSearchJumpRef = useRef(null);
+  const [highlightedMessageIndex, setHighlightedMessageIndex] = useState(null);
+  const [searchJumpNonce, setSearchJumpNonce] = useState(0);
 
   // Health check
   useEffect(() => {
@@ -5363,15 +5609,37 @@ function App() {
 
   // Auto-scroll messages
   useEffect(() => {
+    if (pendingSearchJumpRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isStreaming]);
 
   // Snap to bottom when returning to chat view from another view
   useEffect(() => {
+    if (pendingSearchJumpRef.current) return;
     if (currentView === 'chat' && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
     }
   }, [currentView]);
+
+  // Search results should land on the matched message, not the bottom.
+  useEffect(() => {
+    var jump = pendingSearchJumpRef.current;
+    if (!jump || currentView !== 'chat') return;
+    var raf = window.requestAnimationFrame(function() {
+      var el = document.querySelector('[data-message-index="' + jump.messageIndex + '"]');
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'auto', block: 'center' });
+        setHighlightedMessageIndex(jump.messageIndex);
+        window.setTimeout(function() {
+          setHighlightedMessageIndex(function(current) {
+            return current === jump.messageIndex ? null : current;
+          });
+        }, 1800);
+      }
+      pendingSearchJumpRef.current = null;
+    });
+    return function() { window.cancelAnimationFrame(raf); };
+  }, [messages, currentView, searchJumpNonce]);
 
   // Auto-scroll activity log
   useEffect(() => {
@@ -5908,32 +6176,7 @@ function App() {
   // content blocks. MiniMax + GLM + most text-only models stay on the
   // Gemini fallback path.
   const isVisionModel = (name) => {
-    if (!name) return false;
-    var n = String(name).toLowerCase();
-    // Explicit deny list first — catches model names that include a vision-
-    // like substring by accident (e.g. "minimax-m2.7-vision-adjacent-thing").
-    if (n.indexOf('minimax') !== -1) return false;
-    if (n.indexOf('glm-4') !== -1 && n.indexOf('v') === -1) return false;
-    // OpenAI: gpt-4o, gpt-4-vision, gpt-4.1, o3*, o4*
-    if (n.indexOf('gpt-4o') !== -1) return true;
-    if (n.indexOf('gpt-4-vision') !== -1) return true;
-    if (n.indexOf('gpt-4.1') !== -1) return true;
-    if (/\bo[34](-|$)/.test(n)) return true;
-    // Anthropic Claude 3+ (3, 3.5, 3.7, 4, opus, sonnet, haiku all see images)
-    if (n.indexOf('claude-3') !== -1) return true;
-    if (n.indexOf('claude-4') !== -1) return true;
-    if (n.indexOf('claude-opus') !== -1) return true;
-    if (n.indexOf('claude-sonnet') !== -1) return true;
-    if (n.indexOf('claude-haiku') !== -1) return true;
-    // Gemini
-    if (n.indexOf('gemini-') !== -1) return true;
-    // Open-source vision models
-    if (n.indexOf('qwen') !== -1 && n.indexOf('vl') !== -1) return true;
-    if (n.indexOf('llava') !== -1) return true;
-    if (n.indexOf('pixtral') !== -1) return true;
-    if (n.indexOf('-vision') !== -1) return true;
-    if (n.indexOf('-vl-') !== -1 || n.endsWith('-vl')) return true;
-    return false;
+    return !!inferModelCapabilities(name, null, null).vision;
   };
 
   const processImages = async (files) => {
@@ -6100,7 +6343,15 @@ function App() {
     setInput('');
   };
 
-  const selectConversation = (convId) => {
+  const selectConversation = (convId, options) => {
+    var searchJump = options && Number.isInteger(options.messageIndex)
+      ? { messageIndex: options.messageIndex }
+      : null;
+    pendingSearchJumpRef.current = searchJump;
+    if (searchJump) {
+      setHighlightedMessageIndex(null);
+      setSearchJumpNonce(function(n) { return n + 1; });
+    }
     // 1. Save current messages to the old conversation —
     //    BUT skip if it's currently streaming, because updateStreamMessages
     //    already keeps it in sync and our snapshot may be stale due to React 18 batching.
@@ -6962,6 +7213,7 @@ function App() {
   return (
     <div className="app-wrapper">
     {/* Depth layers — rendered outside .app because .app > * forces position:relative */}
+    <div className="app-filler-bg" aria-hidden="true"><img src="/filler-bg.png" alt="" fetchpriority="low" /></div>
     <div className="ambient-glow-3" aria-hidden="true"></div>
     <div className="app-vignette" aria-hidden="true"></div>
     <div className="app-noise" aria-hidden="true"></div>
@@ -7117,7 +7369,6 @@ function App() {
                 <div className={"status-dot " + (connected === false ? 'disconnected' : '')}></div>
                 {connected === null ? 'Checking...' : connected ? 'Connected' : 'Offline'}
               </div>
-
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
                 <div className="toolbar-pill">
@@ -7137,15 +7388,15 @@ function App() {
                 </div>
               ) : (
                 <div className="messages-container">
-                  {messages.map(msg => (
+                  {messages.map((msg, idx) => (
                     msg.role === 'compaction' ? (
-                      <div key={msg.id} className="compaction-marker">
+                      <div key={msg.id} className="compaction-marker" data-message-index={idx}>
                         <div className="compaction-line" />
                         <span className="compaction-label">{'🔄'} {msg.content}</span>
                         <div className="compaction-line" />
                       </div>
                     ) : editingMessageId === msg.id ? (
-                      <div key={msg.id} className="message user">
+                      <div key={msg.id} className="message user" data-message-index={idx}>
                         <div className="message-header">
                           <div className="message-avatar user">U</div>
                           <span className="message-role">You (editing)</span>
@@ -7164,7 +7415,14 @@ function App() {
                         </div>
                       </div>
                     ) : (
-                      <MessageBubble key={msg.id} message={msg} onImageClick={setLightboxSrc} onEdit={startEditMessage} />
+                      <MessageBubble
+                        key={msg.id}
+                        message={msg}
+                        index={idx}
+                        highlighted={highlightedMessageIndex === idx}
+                        onImageClick={setLightboxSrc}
+                        onEdit={startEditMessage}
+                      />
                     )
                   ))}
                   <div ref={messagesEndRef} />
@@ -7371,7 +7629,7 @@ function App() {
       {lightboxSrc && <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
       {showMCPBrowser && <MCPBrowserModal tools={mcpTools} onClose={() => setShowMCPBrowser(false)} />}
       {showShortcuts && <ShortcutsModal onClose={function(){ setShowShortcuts(false); }} />}
-      <SearchModal open={showSearchModal} onClose={function(){ setShowSearchModal(false); }} conversations={conversations} onSelectConversation={function(id){ selectConversation(id); }} />
+      <SearchModal open={showSearchModal} onClose={function(){ setShowSearchModal(false); }} conversations={conversations} onSelectConversation={function(id, options){ selectConversation(id, options); }} />
       {showWelcome && <WelcomePopup onClose={function(){ setShowWelcome(false); try { localStorage.setItem('hermes-ui-welcomed', '1'); } catch(e){} }} onOpenRemoteSetup={function(){ setShowSettings(true); }} />}
 
     </div>
