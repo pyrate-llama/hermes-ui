@@ -178,7 +178,17 @@
   }
   .conv-item:hover { background: var(--bg-hover); }
   .conv-item.active { background: var(--bg-active); }
+  .conv-item.unread::before {
+    content: ''; position: absolute; right: 9px; top: 9px;
+    width: 6px; height: 6px; border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+  .conv-item.unread:hover::before { opacity: 0.35; }
+  .conv-item.recent:not(.active) .conv-item-date { color: var(--text-secondary); }
   .conv-item-icon { font-size: 14px; opacity: 0.6; flex: 0 0 22px; text-align: center; }
+  .conv-item.unread .conv-item-icon { opacity: 0.95; color: var(--accent); }
+  .conv-item.streaming .conv-item-icon { opacity: 1; color: var(--warning); }
   .conv-item-text { flex: 1 1 auto; min-width: 0; padding-right: 4px; transition: padding-right 0.1s; }
   .conv-item:hover .conv-item-text { padding-right: 48px; }
   .conv-item-title { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -212,7 +222,7 @@
 
   .main {
     flex: 1; display: flex; flex-direction: column;
-    background: var(--bg-primary); min-width: 0;
+    background: var(--bg-primary); min-width: 0; position: relative;
   }
 
   .header {
@@ -323,6 +333,22 @@
   .messages::-webkit-scrollbar { width: 6px; }
   .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   .messages::-webkit-scrollbar-thumb:hover { background: var(--bg-active); }
+  .jump-to-live-btn {
+    position: absolute; right: 24px; bottom: 118px; z-index: 12;
+    width: 34px; height: 34px; border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-strong); color: var(--text-primary);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.32);
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    transition: transform .16s ease, border-color .16s ease, background .16s ease;
+  }
+  .jump-to-live-btn:hover {
+    transform: translateY(-1px);
+    border-color: rgba(128,144,255,0.42);
+    background: rgba(128,144,255,0.12);
+  }
 
   .message {
     margin-bottom: 20px; display: flex; flex-direction: column;
@@ -2076,6 +2102,7 @@ function Icon({ name, size, className, strokeWidth }) {
     case 'menu': return (<svg {...common}><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>);
     case 'x': return (<svg {...common}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>);
     case 'send': return (<svg {...common}><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>);
+    case 'arrow-down': return (<svg {...common}><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>);
     case 'sparkles': return (<svg {...common}><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z"/></svg>);
     case 'plus': return (<svg {...common}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>);
     case 'paperclip': return (<svg {...common}><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>);
@@ -2258,6 +2285,30 @@ function reasoningEffortLabel(value) {
     if (REASONING_EFFORTS[i].value === v) return REASONING_EFFORTS[i].label;
   }
   return 'Auto';
+}
+
+function getConversationActivityTime(conv) {
+  var raw = conv && (conv.last_active_at || conv.updated_at || conv.created);
+  if (!raw) return 0;
+  var ts = typeof raw === 'number' ? raw : Date.parse(raw);
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function formatConversationActivity(conv) {
+  var ts = getConversationActivityTime(conv);
+  if (!ts) return (conv && conv.created) || '';
+  var diff = Math.max(0, Date.now() - ts);
+  var mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'active now';
+  if (mins < 60) return mins + 'm ago';
+  var hours = Math.floor(mins / 60);
+  if (hours < 24) return hours + 'h ago';
+  return (conv && conv.created) || new Date(ts).toLocaleString();
+}
+
+function conversationIsRecent(conv) {
+  var ts = getConversationActivityTime(conv);
+  return !!(ts && (Date.now() - ts) < 30 * 60000);
 }
 
 /* ── Theme definitions ── */
@@ -5561,6 +5612,8 @@ function App() {
   // If the user switched to a different chat, writes to the conversations array instead
   // so the data is preserved and visible when they switch back.
   const updateStreamMessages = (sessionId, updater) => {
+    var isActiveSession = activeConvRef.current === sessionId;
+    var nowIso = new Date().toISOString();
     if (activeConvRef.current === sessionId) {
       // Still viewing this conversation — update messages state normally
       setMessages(updater);
@@ -5572,7 +5625,15 @@ function App() {
         const updated = updater(c.messages || []);
         const userMsgs = updated.filter(m => m.role === 'user').length;
         const tcCount = updated.reduce((sum, m) => sum + (m.toolCalls ? m.toolCalls.length : 0), 0);
-        return { ...c, messages: updated, message_count: updated.length, user_prompt_count: userMsgs, tool_call_count: tcCount };
+        return {
+          ...c,
+          messages: updated,
+          message_count: updated.length,
+          user_prompt_count: userMsgs,
+          tool_call_count: tcCount,
+          last_active_at: nowIso,
+          unread_count: isActiveSession ? 0 : (c.unread_count || 1),
+        };
       })
     );
   };
@@ -5759,6 +5820,7 @@ function App() {
   }, [reasoningEffort]);
 
   const textareaRef = useRef(null);
+  const messagesViewportRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   // abortControllerRef removed — now in streamingMap per-session
@@ -5767,6 +5829,8 @@ function App() {
   const conversationsRef = useRef([]);
   const activityLogRef = useRef(null);
   const pendingSearchJumpRef = useRef(null);
+  const autoScrollMessagesRef = useRef(true);
+  const [showJumpToLive, setShowJumpToLive] = useState(false);
   const [highlightedMessageIndex, setHighlightedMessageIndex] = useState(null);
   const [searchJumpNonce, setSearchJumpNonce] = useState(0);
 
@@ -5796,16 +5860,43 @@ function App() {
   // Auto-scroll messages
   useEffect(() => {
     if (pendingSearchJumpRef.current) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!autoScrollMessagesRef.current) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' });
   }, [messages, isStreaming]);
 
   // Snap to bottom when returning to chat view from another view
   useEffect(() => {
     if (pendingSearchJumpRef.current) return;
     if (currentView === 'chat' && messagesEndRef.current) {
+      autoScrollMessagesRef.current = true;
+      setShowJumpToLive(false);
       messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
     }
   }, [currentView]);
+
+  const handleMessagesScroll = function() {
+    var el = messagesViewportRef.current;
+    if (!el) return;
+    var distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    var pinned = distance < 150;
+    autoScrollMessagesRef.current = pinned;
+    setShowJumpToLive(function(prev) {
+      var next = isStreaming && !pinned;
+      return prev === next ? prev : next;
+    });
+  };
+
+  const jumpToLiveOutput = function() {
+    autoScrollMessagesRef.current = true;
+    setShowJumpToLive(false);
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  useEffect(function() {
+    if (!isStreaming) setShowJumpToLive(false);
+  }, [isStreaming]);
 
   // Search results should land on the matched message, not the bottom.
   useEffect(() => {
@@ -6523,7 +6614,8 @@ function App() {
   // ── Conversation management ──
   const newConversation = () => {
     const sessionId = api.createSession();
-    const conv = { id: sessionId, title: 'New Chat', created: new Date().toLocaleString(), messages: [] };
+    var nowIso = new Date().toISOString();
+    const conv = { id: sessionId, title: 'New Chat', created: new Date().toLocaleString(), last_active_at: nowIso, unread_count: 0, messages: [] };
     setConversations(prev => [conv, ...prev]);
     setActiveConvId(sessionId);
     setMessages([]);
@@ -6538,6 +6630,9 @@ function App() {
     if (searchJump) {
       setHighlightedMessageIndex(null);
       setSearchJumpNonce(function(n) { return n + 1; });
+    } else {
+      autoScrollMessagesRef.current = true;
+      setShowJumpToLive(false);
     }
     // 1. Save current messages to the old conversation —
     //    BUT skip if it's currently streaming, because updateStreamMessages
@@ -6559,6 +6654,7 @@ function App() {
     const targetConv = conversationsRef.current.find(c => c.id === convId);
     setMessages((targetConv && targetConv.messages) || []);
     setActiveConvId(convId);
+    setConversations(prev => prev.map(c => c.id === convId ? Object.assign({}, c, { unread_count: 0 }) : c));
     setInput('');
     // Jump back to chat view if currently on Memory/Skills/etc
     setCurrentView('chat');
@@ -6697,7 +6793,8 @@ function App() {
 
     if (!sessionId) {
       sessionId = api.createSession();
-      const conv = { id: sessionId, title: text.slice(0, 50) || 'New Chat', created: new Date().toLocaleString(), messages: [] };
+      var createdIso = new Date().toISOString();
+      const conv = { id: sessionId, title: text.slice(0, 50) || 'New Chat', created: new Date().toLocaleString(), last_active_at: createdIso, unread_count: 0, messages: [] };
       setConversations(prev => [conv, ...prev]);
       setActiveConvId(sessionId);
       setMessages([]);  // Clear stale messages so user sees fresh session
@@ -6720,6 +6817,8 @@ function App() {
       toolCalls: [],
     };
     const newMessages = [...baseMessages, userMsg, thinkingMsg];
+    autoScrollMessagesRef.current = true;
+    setShowJumpToLive(false);
     setMessages(newMessages);
     setInput('');
     setPendingImages([]);
@@ -6731,6 +6830,8 @@ function App() {
         messages: newMessages,
         message_count: newMessages.length,
         user_prompt_count: newMessages.filter(function(m) { return m.role === 'user'; }).length,
+        last_active_at: new Date().toISOString(),
+        unread_count: 0,
         title: (c.title && c.title !== 'New Chat') ? c.title : (text.slice(0, 50) || c.title)
       } : c)
     );
@@ -6810,6 +6911,59 @@ function App() {
 
     var fullContent = '';
     var toolCalls = [];
+    var pendingStreamContent = null;
+    var streamRenderRaf = null;
+
+    var applyStreamContent = function(content) {
+      updateStreamMessages(sessionId, function(prev) {
+        const updated = [...prev];
+        var last = updated[updated.length - 1];
+        if (last?.role === 'user') {
+          updated.push({
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: content,
+            streaming: true,
+            thinking: false,
+            toolCalls: toolCalls.slice(),
+          });
+        } else {
+          updated[updated.length - 1] = {
+            ...last,
+            role: 'assistant',
+            thinking: false,
+            content: content,
+            streaming: true,
+            toolCalls: toolCalls.slice(),
+          };
+        }
+        return updated;
+      });
+    };
+
+    var flushStreamContent = function() {
+      if (streamRenderRaf) {
+        window.cancelAnimationFrame(streamRenderRaf);
+        streamRenderRaf = null;
+      }
+      if (pendingStreamContent != null) {
+        var nextContent = pendingStreamContent;
+        pendingStreamContent = null;
+        applyStreamContent(nextContent);
+      }
+    };
+
+    var scheduleStreamContent = function(content) {
+      pendingStreamContent = content;
+      if (streamRenderRaf) return;
+      streamRenderRaf = window.requestAnimationFrame(function() {
+        streamRenderRaf = null;
+        if (pendingStreamContent == null) return;
+        var nextContent = pendingStreamContent;
+        pendingStreamContent = null;
+        applyStreamContent(nextContent);
+      });
+    };
 
     try {
       var messageText = text;
@@ -6848,32 +7002,10 @@ function App() {
           if (!thinkingGotResponse) { thinkingGotResponse = true; addLocalLog('INFO  First response received'); }
           lastChunkTime = Date.now();
           fullContent = content;
-          updateStreamMessages(sessionId, function(prev) {
-            const updated = [...prev];
-            var last = updated[updated.length - 1];
-            if (last?.role === 'user') {
-              updated.push({
-                id: Date.now().toString(),
-                role: 'assistant',
-                content: fullContent,
-                streaming: true,
-                thinking: false,
-                toolCalls: toolCalls,
-              });
-            } else {
-              updated[updated.length - 1] = {
-                ...last,
-                role: 'assistant',
-                thinking: false,
-                content: fullContent,
-                streaming: true,
-                toolCalls: toolCalls,
-              };
-            }
-            return updated;
-          });
+          scheduleStreamContent(fullContent);
         },
         function(finalContent) {
+          flushStreamContent();
           fullContent = finalContent;
 
           // ── Artifact auto-detection ──
@@ -6988,6 +7120,7 @@ function App() {
         },
         function(toolEvent) {
           if (toolEvent.type === 'started') {
+            flushStreamContent();
             if (!thinkingGotResponse) { thinkingGotResponse = true; }
             lastChunkTime = Date.now();  // Reset stall timer — tools count as activity
             addLocalLog('INFO  [tool] ' + (toolEvent.label || toolEvent.toolName) + ' started');
@@ -7014,6 +7147,7 @@ function App() {
               done: false,
             }]; });
           } else if (toolEvent.type === 'completed') {
+            flushStreamContent();
             var resultPreview = '';
             if (toolEvent.result) {
               var rs = typeof toolEvent.result === 'string' ? toolEvent.result : JSON.stringify(toolEvent.result);
@@ -7027,6 +7161,14 @@ function App() {
               lastTc.result = toolEvent.result;
               lastTc.done = true;
             }
+            updateStreamMessages(sessionId, function(prev) {
+              var updated = [...prev];
+              var last = updated[updated.length - 1];
+              if (last && last.role === 'assistant') {
+                updated[updated.length - 1] = { ...last, toolCalls: toolCalls.slice() };
+              }
+              return updated;
+            });
             setActivityLog(function(prev) {
               const updated = [...prev];
               const lastEntry = updated[updated.length - 1];
@@ -7113,6 +7255,11 @@ function App() {
         addLocalLog('ERROR Stream error: ' + err.message);
       }
     } finally {
+      flushStreamContent();
+      if (streamRenderRaf) {
+        window.cancelAnimationFrame(streamRenderRaf);
+        streamRenderRaf = null;
+      }
       clearInterval(thinkingInterval);
       ThinkingBubble._latestThought = '';
       var totalTime = Math.round((Date.now() - thinkingStart) / 1000);
@@ -7190,6 +7337,8 @@ function App() {
               update.output_tokens = (c.output_tokens || 0) + (usage.completion_tokens || 0);
               console.log('[tokens] Updated conversation tokens:', update.input_tokens, 'in /', update.output_tokens, 'out');
             }
+            update.last_active_at = new Date().toISOString();
+            update.unread_count = 0;
             return Object.assign({}, c, update);
           });
         });
@@ -7202,6 +7351,8 @@ function App() {
               return Object.assign({}, c, {
                 input_tokens: (c.input_tokens || 0) + (usage.prompt_tokens || 0),
                 output_tokens: (c.output_tokens || 0) + (usage.completion_tokens || 0),
+                last_active_at: new Date().toISOString(),
+                unread_count: c.unread_count || 1,
               });
             });
           });
@@ -7565,30 +7716,40 @@ function App() {
           <input type="text" placeholder="Filter chats..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
         </div>
         <div className="conversation-list">
-          {filteredConvs.map(conv => (
-            <div key={conv.id} className={"conv-item " + (conv.id === activeConvId ? 'active' : '')} onClick={() => selectConversation(conv.id)}>
-              <div className="conv-item-icon">{streamingSessionIds.includes(conv.id) ? '⚡' : conv.source === 'telegram' ? '✈️' : '💬'}</div>
-              <div className="conv-item-text">
-                {editingConvId === conv.id ? (
-                  <input className="conv-rename-input" value={editingTitle} autoFocus
-                    onChange={function(e) { setEditingTitle(e.target.value); }}
-                    onKeyDown={function(e) { if (e.key === 'Enter') saveRenameConv(); if (e.key === 'Escape') { setEditingConvId(null); } }}
-                    onBlur={saveRenameConv}
-                    onClick={function(e) { e.stopPropagation(); }}
-                  />
-                ) : (
-                  <div className="conv-item-title" style={conv.source === 'telegram' ? {color:'#29b6f6'} : {}} onDoubleClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }}>{conv.title}</div>
-                )}
-                <div className="conv-item-date">
-                  {conv.message_count > 0 && <span style={{color:'var(--accent)',fontWeight:'600',marginRight:'4px'}} title={conv.message_count + ' messages, ' + (conv.tool_call_count || 0) + ' tool calls'}>{conv.user_prompt_count != null ? (conv.user_prompt_count + (conv.user_prompt_count === 1 ? ' prompt' : ' prompts')) : (conv.message_count + ' msgs')}</span>}
-                  {conv.has_compaction && <span style={{color:'var(--text-secondary)',fontSize:'9px',marginRight:'4px'}} title="This chat was compacted">{'🔄'}</span>}
-                  {conv.created}
+          {filteredConvs.map(function(conv) {
+            var convStreaming = streamingSessionIds.includes(conv.id);
+            var convUnread = !!(conv.unread_count && conv.id !== activeConvId);
+            var convRecent = conversationIsRecent(conv);
+            var convClass = "conv-item "
+              + (conv.id === activeConvId ? 'active ' : '')
+              + (convStreaming ? 'streaming ' : '')
+              + (convUnread ? 'unread ' : '')
+              + (convRecent ? 'recent ' : '');
+            return (
+              <div key={conv.id} className={convClass} onClick={() => selectConversation(conv.id)} title={convUnread ? 'Unread activity' : undefined}>
+                <div className="conv-item-icon">{convStreaming ? '⚡' : conv.source === 'telegram' ? '✈️' : '💬'}</div>
+                <div className="conv-item-text">
+                  {editingConvId === conv.id ? (
+                    <input className="conv-rename-input" value={editingTitle} autoFocus
+                      onChange={function(e) { setEditingTitle(e.target.value); }}
+                      onKeyDown={function(e) { if (e.key === 'Enter') saveRenameConv(); if (e.key === 'Escape') { setEditingConvId(null); } }}
+                      onBlur={saveRenameConv}
+                      onClick={function(e) { e.stopPropagation(); }}
+                    />
+                  ) : (
+                    <div className="conv-item-title" style={conv.source === 'telegram' ? {color:'#29b6f6'} : {}} onDoubleClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }}>{conv.title}</div>
+                  )}
+                  <div className="conv-item-date">
+                    {conv.message_count > 0 && <span style={{color:'var(--accent)',fontWeight:'600',marginRight:'4px'}} title={conv.message_count + ' messages, ' + (conv.tool_call_count || 0) + ' tool calls'}>{conv.user_prompt_count != null ? (conv.user_prompt_count + (conv.user_prompt_count === 1 ? ' prompt' : ' prompts')) : (conv.message_count + ' msgs')}</span>}
+                    {conv.has_compaction && <span style={{color:'var(--text-secondary)',fontSize:'9px',marginRight:'4px'}} title="This chat was compacted">{'🔄'}</span>}
+                    {formatConversationActivity(conv)}
+                  </div>
                 </div>
+                <button className="conv-item-rename" onClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }} title="Rename">{'✏'}</button>
+                <button className="conv-item-delete" onClick={e => { e.stopPropagation(); deleteConversation(conv.id); }}>{'×'}</button>
               </div>
-              <button className="conv-item-rename" onClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }} title="Rename">{'✏'}</button>
-              <button className="conv-item-delete" onClick={e => { e.stopPropagation(); deleteConversation(conv.id); }}>{'×'}</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="sidebar-footer">
           <select className="personality-select" value={personality} onChange={e => setPersonality(e.target.value)}>
@@ -7645,7 +7806,7 @@ function App() {
             </div>
 
             {/* Messages area */}
-            <div className="messages">
+            <div className="messages" ref={messagesViewportRef} onScroll={handleMessagesScroll}>
               {messages.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-state-icon">{'💬'}</div>
@@ -7695,6 +7856,11 @@ function App() {
                 </div>
               )}
             </div>
+            {showJumpToLive && (
+              <button className="jump-to-live-btn" onClick={jumpToLiveOutput} title="Jump to live output">
+                <Icon name="arrow-down" size={16}/>
+              </button>
+            )}
 
             {/* Input area */}
             <div className="input-area">
