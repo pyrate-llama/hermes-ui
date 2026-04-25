@@ -347,6 +347,55 @@ def _read_provider_config_status():
         "default_model": model_cfg.get("default", ""),
     }
 
+def _model_capabilities(model, provider=None, agent_ok=False):
+    name = str(model or "").lower()
+    provider_id = str(provider or "").lower()
+
+    vision = False
+    if name:
+        if "minimax" in name:
+            vision = False
+        elif "glm-4" in name and "v" not in name:
+            vision = False
+        elif any(s in name for s in (
+            "gpt-4o", "gpt-4-vision", "gpt-4.1", "claude-3", "claude-4",
+            "claude-opus", "claude-sonnet", "claude-haiku", "gemini-",
+            "llava", "pixtral", "-vision", "-vl-"
+        )):
+            vision = True
+        elif name.endswith("-vl") or ("qwen" in name and "vl" in name):
+            vision = True
+        elif provider_id in {"anthropic", "google", "gemini"} and "minimax" not in name:
+            vision = True
+
+    reasoning = bool(name and (
+        "gpt-5" in name or "o3" in name or "o4" in name or
+        "claude" in name or "gemini" in name or "deepseek-r1" in name or
+        "qwen3" in name or "grok" in name
+    ))
+
+    steer = False
+    if agent_ok:
+        try:
+            agent_cls = _get_ai_agent()
+            steer = bool(agent_cls and callable(getattr(agent_cls, "steer", None)))
+        except Exception:
+            steer = False
+
+    return {
+        "vision": vision,
+        "image_mode": "native" if vision else "gemini_fallback",
+        "steer": steer,
+        "reasoning": reasoning,
+        "tools": bool(agent_ok),
+        "oauth": provider_id in _OAUTH_PROVIDERS,
+        "live_models": provider_id in {
+            "anthropic", "openai", "openai-codex", "google", "gemini",
+            "openrouter", "ollama-cloud", "mistralai", "x-ai", "deepseek",
+            "minimax", "zai", "kimi-coding", "qwen-oauth"
+        },
+    }
+
 
 # ── Concurrency infrastructure ─────────────────────────────────────────────
 # Global lock for os.environ writes — prevents concurrent agent threads from
@@ -1437,6 +1486,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             "agent": agent_ok,
             "model": model,
             "provider": provider,
+            "capabilities": _model_capabilities(model, provider, agent_ok=agent_ok),
             "uptime": int(time.time() - _START_TIME),
         })
 
