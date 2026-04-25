@@ -12,6 +12,7 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 
 ### Chat
 ![Chat with inline image generation and live terminal panel](screenshots/chat.png)
+![Chat with split log panel and streaming response visibility](screenshots/chat-logs.png)
 
 ### Dashboard
 ![Dashboard with live stats, recent activity, and installed skills](screenshots/dashboard.png)
