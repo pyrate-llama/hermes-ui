@@ -107,6 +107,27 @@
     transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 1px 0 20px rgba(0,0,0,0.3);
   }
+  .app.layout-resizing .sidebar,
+  .app.layout-resizing .right-column {
+    transition: none !important;
+  }
+  .layout-resize-handle {
+    position: absolute; top: 0; bottom: 0; width: 10px;
+    cursor: col-resize; z-index: 20; touch-action: none;
+  }
+  .layout-resize-handle::after {
+    content: ''; position: absolute; top: 0; bottom: 0; width: 1px;
+    background: transparent; transition: background 0.15s, box-shadow 0.15s, opacity 0.15s;
+    opacity: 0;
+  }
+  .layout-resize-handle:hover::after,
+  .layout-resize-handle.active::after {
+    background: var(--accent);
+    box-shadow: 0 0 14px var(--accent-glow);
+    opacity: 0.75;
+  }
+  .sidebar-resize-handle { right: -5px; }
+  .sidebar-resize-handle::after { right: 4px; }
   .sidebar.collapsed { margin-left: -280px; }
   .sidebar-header {
     padding: 10px 14px;
@@ -151,13 +172,15 @@
   .conversation-list::-webkit-scrollbar { width: 4px; }
   .conversation-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
   .conv-item {
-    padding: 5px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 0px;
-    transition: background 0.1s; display: flex; align-items: center; gap: 8px;
+    position: relative;
+    padding: 5px 8px; border-radius: 6px; cursor: pointer; margin-bottom: 0px;
+    transition: background 0.1s; display: flex; align-items: center; gap: 6px;
   }
   .conv-item:hover { background: var(--bg-hover); }
   .conv-item.active { background: var(--bg-active); }
-  .conv-item-icon { font-size: 14px; opacity: 0.6; flex-shrink: 0; }
-  .conv-item-text { flex: 1; min-width: 0; }
+  .conv-item-icon { font-size: 14px; opacity: 0.6; flex: 0 0 22px; text-align: center; }
+  .conv-item-text { flex: 1 1 auto; min-width: 0; padding-right: 4px; transition: padding-right 0.1s; }
+  .conv-item:hover .conv-item-text { padding-right: 48px; }
   .conv-item-title { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .conv-item-date { font-size: 9px; color: var(--text-muted); margin-top: 0px; }
   .conv-rename-input {
@@ -166,9 +189,13 @@
     padding: 2px 6px; width: 100%; outline: none;
   }
   .conv-item-delete, .conv-item-rename {
-    opacity: 0; background: none; border: none; color: var(--text-muted);
-    cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; transition: all 0.1s;
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 22px; height: 22px; opacity: 0; background: var(--bg-hover); border: none; color: var(--text-muted);
+    cursor: pointer; font-size: 14px; padding: 0; border-radius: 4px; transition: all 0.1s;
+    display: flex; align-items: center; justify-content: center;
   }
+  .conv-item-rename { right: 30px; }
+  .conv-item-delete { right: 6px; }
   .conv-item:hover .conv-item-delete, .conv-item:hover .conv-item-rename { opacity: 1; }
   .conv-item-delete:hover { color: var(--danger); background: rgba(224,85,85,0.1); }
   .conv-item-rename:hover { color: var(--accent); background: rgba(124,111,224,0.1); }
@@ -520,6 +547,8 @@
     display: flex; flex-direction: column;
     transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
+  .right-column-resize-handle { left: -5px; }
+  .right-column-resize-handle::after { left: 4px; }
   .right-column.closed { margin-right: -320px; }
 .right-column.wide { width: 600px; min-width: 600px; }
 .right-column.wide.closed { margin-right: -600px; }
@@ -770,6 +799,63 @@
     background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
     border-radius: 4px; font-size: 10px; font-family: Monaco, Menlo, monospace;
     color: var(--text-secondary); box-shadow: 0 1px 0 rgba(0,0,0,0.25);
+  }
+  .composer-chip-wrap {
+    position: relative; display: inline-flex; align-items: center;
+  }
+  .composer-chip {
+    height: 26px; padding: 4px 10px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.035);
+    color: var(--text-secondary); font-size: 12px; font-weight: 650;
+    cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease;
+  }
+  .composer-chip:hover {
+    transform: translateY(-1px);
+    border-color: rgba(128,144,255,0.42);
+    background: rgba(128,144,255,0.09);
+    color: var(--text);
+  }
+  .composer-chip.active {
+    color: var(--accent);
+    border-color: rgba(128,144,255,0.44);
+    background: rgba(128,144,255,0.12);
+  }
+  .composer-chip-menu {
+    position: absolute; right: 0; bottom: calc(100% + 8px);
+    z-index: 20; min-width: 210px; padding: 8px;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    background: var(--glass-strong);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    box-shadow: 0 14px 36px rgba(0,0,0,0.38);
+  }
+  .composer-chip-menu-title {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 7px 2px 7px;
+    color: var(--text); font-size: 12px; font-weight: 750;
+  }
+  .composer-chip-menu-note {
+    padding: 0 7px 7px 7px;
+    color: var(--text-muted); font-size: 11px; line-height: 1.35;
+    border-bottom: 1px solid var(--glass-border);
+    margin-bottom: 4px;
+  }
+  .composer-chip-option {
+    width: 100%; border: 0; border-radius: 9px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 9px; background: transparent; color: var(--text-secondary);
+    cursor: pointer; font-size: 12px; text-align: left;
+  }
+  .composer-chip-option:hover,
+  .composer-chip-option.active {
+    background: rgba(128,144,255,0.12);
+    color: var(--text);
+  }
+  .composer-chip-option.active::after {
+    content: "✓"; color: var(--accent); font-weight: 800;
   }
 
   .modal-overlay {
@@ -1062,6 +1148,7 @@
     opacity: 1;
   }
   .message-action-btn {
+    display: inline-flex; align-items: center; gap: 5px;
     padding: 4px 8px; background: var(--bg-tertiary); border: 1px solid var(--border);
     color: var(--text-secondary); border-radius: 4px; cursor: pointer;
     font-size: 12px; transition: all 0.15s;
@@ -1838,6 +1925,7 @@
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 768px) {
+    .layout-resize-handle { display: none; }
     .sidebar {
       position: fixed; left: 0; top: 0; bottom: 0; z-index: 100;
       width: 280px; min-width: 280px;
@@ -1949,6 +2037,21 @@ const PERSONALITY_PROMPTS = {
   'academic': 'You are an academic assistant. Provide well-researched, cited information. Focus on educational value and intellectual rigor.',
 };
 
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function readStoredNumber(key, fallback, min, max) {
+  try {
+    var raw = localStorage.getItem(key);
+    if (raw == null) return fallback;
+    var parsed = parseInt(raw, 10);
+    return Number.isFinite(parsed) ? clampNumber(parsed, min, max) : fallback;
+  } catch(e) {
+    return fallback;
+  }
+}
+
 // ── Inline Icon set (Lucide-style strokes, currentColor) ─────────────────
 function Icon({ name, size, className, strokeWidth }) {
   var s = size || 16;
@@ -1969,6 +2072,7 @@ function Icon({ name, size, className, strokeWidth }) {
     case 'key-round': return (<svg {...common}><path d="M2 18a6 6 0 1 1 10.2-4.2L22 4v5h-4v4h-4l-2.2 2.2A6 6 0 0 1 2 18z"/><circle cx="7" cy="17" r="1"/></svg>);
     case 'keyboard': return (<svg {...common}><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>);
     case 'settings': return (<svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>);
+    case 'rotate-ccw': return (<svg {...common}><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>);
     case 'menu': return (<svg {...common}><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>);
     case 'x': return (<svg {...common}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>);
     case 'send': return (<svg {...common}><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>);
@@ -2130,6 +2234,32 @@ function ModelCapabilityPills({ model, provider, capabilities, compact }) {
   );
 }
 
+var REASONING_EFFORTS = [
+  { value: '', label: 'Auto', title: 'Use the Hermes default reasoning setting.' },
+  { value: 'none', label: 'Off', title: 'Disable model reasoning effort when supported.' },
+  { value: 'low', label: 'Low', title: 'Use lighter reasoning for faster replies.' },
+  { value: 'medium', label: 'Med', title: 'Use balanced reasoning.' },
+  { value: 'high', label: 'High', title: 'Use deeper reasoning for harder tasks.' },
+  { value: 'xhigh', label: 'XHigh', title: 'Use the deepest available reasoning.' },
+];
+
+function normalizeReasoningEffort(value) {
+  var v = String(value || '').trim().toLowerCase();
+  if (v === 'auto') return '';
+  for (var i = 0; i < REASONING_EFFORTS.length; i++) {
+    if (REASONING_EFFORTS[i].value === v) return v;
+  }
+  return '';
+}
+
+function reasoningEffortLabel(value) {
+  var v = normalizeReasoningEffort(value);
+  for (var i = 0; i < REASONING_EFFORTS.length; i++) {
+    if (REASONING_EFFORTS[i].value === v) return REASONING_EFFORTS[i].label;
+  }
+  return 'Auto';
+}
+
 /* ── Theme definitions ── */
 var THEMES = {
   midnight: { label: 'Midnight', className: 'midnight' },
@@ -2264,10 +2394,11 @@ function ThinkingBubble() {
 }
 ThinkingBubble._latestThought = '';
 
-function MessageBubble({ message, onImageClick, onEdit, index, highlighted }) {
+function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highlighted }) {
   const isUser = message.role === 'user';
   const contentRef = useRef(null);
   const [expandedTools, setExpandedTools] = useState({});
+  const canRetry = !!(onRetry && !message.streaming && !message.thinking && (message.role === 'user' || message.role === 'assistant'));
 
   var toggleToolExpand = function(idx) {
     setExpandedTools(function(prev) {
@@ -2368,11 +2499,20 @@ function MessageBubble({ message, onImageClick, onEdit, index, highlighted }) {
       )}
       {message.thinking && <ThinkingBubble />}
 
-      {isUser && onEdit && (
+      {((isUser && onEdit) || canRetry) && (
         <div className="message-actions">
-          <button className="message-action-btn" onClick={() => onEdit(message.id, message.content)}>
-            {'✏️ Edit'}
-          </button>
+          {isUser && onEdit && (
+            <button className="message-action-btn" onClick={() => onEdit(message.id, message.content)} title="Edit message">
+              <Icon name="file-pen" size={13}/>
+              <span>Edit</span>
+            </button>
+          )}
+          {canRetry && (
+            <button className="message-action-btn" onClick={() => onRetry(index)} title={isUser ? 'Retry this prompt' : 'Retry the previous prompt'}>
+              <Icon name="rotate-ccw" size={13}/>
+              <span>Retry</span>
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -5487,19 +5627,56 @@ function App() {
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth <= 768);
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.innerWidth > 768);
+  const [sidebarWidth, setSidebarWidth] = useState(() => readStoredNumber('hermes-sidebar-width', 280, 180, 440));
+  const [rightColumnWidth, setRightColumnWidth] = useState(() => readStoredNumber('hermes-right-column-width', 320, 180, 680));
+  const [resizingLayout, setResizingLayout] = useState(null);
   // Auto-collapse sidebar when window shrinks below 768px. Without this the
   // CSS flips the sidebar into a fixed overlay (+ 50% dark backdrop) while
   // `sidebarCollapsed` stays false, so the chat gets hidden behind the open
   // sidebar on resize. Keeps chat visible at every window size.
   useEffect(function() {
     var onResize = function() {
-      if (window.innerWidth <= 768) {
+      var desktop = window.innerWidth > 768;
+      setIsDesktopLayout(desktop);
+      if (!desktop) {
         setSidebarCollapsed(true);
       }
     };
+    onResize();
     window.addEventListener('resize', onResize);
     return function() { window.removeEventListener('resize', onResize); };
   }, []);
+  useEffect(function() {
+    try { localStorage.setItem('hermes-sidebar-width', String(sidebarWidth)); } catch(e) {}
+  }, [sidebarWidth]);
+  useEffect(function() {
+    try { localStorage.setItem('hermes-right-column-width', String(rightColumnWidth)); } catch(e) {}
+  }, [rightColumnWidth]);
+  useEffect(function() {
+    if (!resizingLayout) return;
+    var onMove = function(e) {
+      if (resizingLayout === 'sidebar') {
+        setSidebarWidth(clampNumber(e.clientX, 180, Math.min(440, window.innerWidth - 620)));
+      } else if (resizingLayout === 'right') {
+        var maxRight = Math.min(680, window.innerWidth - (sidebarCollapsed ? 0 : sidebarWidth) - 360);
+        setRightColumnWidth(clampNumber(window.innerWidth - e.clientX, 180, Math.max(180, maxRight)));
+      }
+    };
+    var onUp = function() { setResizingLayout(null); };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return function() {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [resizingLayout, sidebarCollapsed, sidebarWidth]);
   const [activityLog, setActivityLog] = useState([]);
   const [activityPanelOpen, setActivityPanelOpen] = useState(() => {
     try {
@@ -5556,6 +5733,11 @@ function App() {
     versionInfo.latest && versionNoticeDismissed !== versionInfo.latest;
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showReasoningMenu, setShowReasoningMenu] = useState(false);
+  const [reasoningEffort, setReasoningEffort] = useState(function() {
+    try { return normalizeReasoningEffort(localStorage.getItem('hermes-reasoning-effort') || ''); }
+    catch(e) { return ''; }
+  });
   const [currentTheme, setCurrentTheme] = useState(getStoredTheme);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showWelcome, setShowWelcome] = useState(function() {
@@ -5571,6 +5753,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('hermes-activity-panel', JSON.stringify(activityPanelOpen));
   }, [activityPanelOpen]);
+
+  useEffect(function() {
+    try { localStorage.setItem('hermes-reasoning-effort', normalizeReasoningEffort(reasoningEffort)); } catch(e) {}
+  }, [reasoningEffort]);
 
   const textareaRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -5759,7 +5945,7 @@ function App() {
       // 1. POST /api/chat/start → {stream_id}
       // 2. EventSource /api/chat/stream?stream_id=X → named SSE events
       // options: { baseSystemPrompt?: string, applyBehavioralGuidelines?: boolean,
-      //            onSteerEvent?: function }
+      //            reasoningEffort?: string, onSteerEvent?: function }
       var opts = options || {};
       // Build messages array for the API
       var apiMessages = [];
@@ -5794,6 +5980,7 @@ function App() {
           messages: apiMessages,
           base_system_prompt: opts.baseSystemPrompt || '',
           apply_behavioral_guidelines: !!opts.applyBehavioralGuidelines,
+          reasoning_effort: normalizeReasoningEffort(opts.reasoningEffort || ''),
         }),
         signal: signal,
       });
@@ -6487,9 +6674,13 @@ function App() {
   };
 
   // ── Send message ──
-  const sendMessage = async (text, _retryCount) => {
+  const sendMessage = async (text, _retryCount, sendOptions) => {
     _retryCount = _retryCount || 0;
-    if ((!text.trim() && !pendingImages.length && !pendingFiles.length)) return;
+    var opts = sendOptions || {};
+    var baseMessages = Array.isArray(opts.baseMessages) ? opts.baseMessages : messages;
+    var imageDrafts = Array.isArray(opts.images) ? opts.images : pendingImages;
+    var fileDrafts = Array.isArray(opts.files) ? opts.files : pendingFiles;
+    if ((!text.trim() && !imageDrafts.length && !fileDrafts.length)) return;
     // Block only if THIS conversation is already streaming
     var sessionId = activeConvId;
     if (sessionId && streamingMap.current[sessionId]) return;
@@ -6516,7 +6707,7 @@ function App() {
       id: Date.now().toString(),
       role: 'user',
       content: text,
-      images: pendingImages.map(img => ({ dataUrl: img.dataUrl, description: img.description })),
+      images: imageDrafts.map(img => ({ dataUrl: img.dataUrl, description: img.description })),
       toolCalls: [],
     };
 
@@ -6528,14 +6719,20 @@ function App() {
       streaming: true,
       toolCalls: [],
     };
-    const newMessages = [...messages, userMsg, thinkingMsg];
+    const newMessages = [...baseMessages, userMsg, thinkingMsg];
     setMessages(newMessages);
     setInput('');
     setPendingImages([]);
     setPendingFiles([]);
 
     setConversations(prev =>
-      prev.map(c => c.id === sessionId ? { ...c, messages: newMessages, message_count: (c.message_count || 0) + 1, title: (c.title && c.title !== 'New Chat') ? c.title : (text.slice(0, 50) || c.title) } : c)
+      prev.map(c => c.id === sessionId ? {
+        ...c,
+        messages: newMessages,
+        message_count: newMessages.length,
+        user_prompt_count: newMessages.filter(function(m) { return m.role === 'user'; }).length,
+        title: (c.title && c.title !== 'New Chat') ? c.title : (text.slice(0, 50) || c.title)
+      } : c)
     );
 
     const abortCtrl = new AbortController();
@@ -6617,8 +6814,8 @@ function App() {
     try {
       var messageText = text;
       // Inject file attachment content into message body (matching webui <attachment> pattern)
-      if (pendingFiles.length) {
-        var fileBlocks = pendingFiles.map(function(f) {
+      if (fileDrafts.length) {
+        var fileBlocks = fileDrafts.map(function(f) {
           return '\n\n<attachment name="' + (f.name || 'file') + '">\n' + f.content + '\n</attachment>';
         });
         messageText = messageText + fileBlocks.join('');
@@ -6629,10 +6826,10 @@ function App() {
       //   describedImages / failedImages — Gemini-describe fallback
       //                   (non-vision models: MiniMax, GLM, older text-only)
       var nativeImages = [];
-      if (pendingImages.length) {
-        nativeImages = pendingImages.filter(function(img) { return img.native && img.dataUrl; });
-        var describedImages = pendingImages.filter(function(img) { return !img.native && img.description; });
-        var failedImages = pendingImages.filter(function(img) { return !img.native && !img.description; });
+      if (imageDrafts.length) {
+        nativeImages = imageDrafts.filter(function(img) { return img.native && img.dataUrl; });
+        var describedImages = imageDrafts.filter(function(img) { return !img.native && img.description; });
+        var failedImages = imageDrafts.filter(function(img) { return !img.native && !img.description; });
         if (describedImages.length > 0) {
           var imageDesc = describedImages.map(function(img, i) {
             return '[Image ' + (i + 1) + ' description from Gemini Vision]:\n' + img.description;
@@ -6861,10 +7058,11 @@ function App() {
           }
         },
         abortCtrl.signal,
-        messagesRef.current,
+        newMessages,
         {
           baseSystemPrompt: (config && config.baseSystemPrompt) || '',
           applyBehavioralGuidelines: !!(config && config.applyBehavioralGuidelines === true),
+          reasoningEffort: reasoningEffort,
           // Native multimodal images for vision-capable models. Empty when
           // the active model routes through Gemini-describe (MiniMax, etc.).
           images: nativeImages.map(function(img) { return { dataUrl: img.dataUrl }; }),
@@ -6935,7 +7133,11 @@ function App() {
         });
         stopStreaming(sessionId);
         await new Promise(function(r) { setTimeout(r, 1500); });
-        return sendMessage(text, _retryCount + 1);
+        return sendMessage(text, _retryCount + 1, Object.assign({}, opts, {
+          baseMessages: baseMessages,
+          images: imageDrafts,
+          files: fileDrafts,
+        }));
       }
 
       stopStreaming(sessionId);
@@ -7008,6 +7210,44 @@ function App() {
       // If user switched away, conversations array is already up-to-date
       // from updateStreamMessages calls during streaming.
     }
+  };
+
+  const retryFromMessage = async (messageIndex) => {
+    if (!activeConvId || isStreaming) return;
+    var current = messagesRef.current || [];
+    if (!Number.isInteger(messageIndex) || messageIndex < 0 || messageIndex >= current.length) return;
+
+    var userIndex = messageIndex;
+    if (!current[userIndex] || current[userIndex].role !== 'user') {
+      userIndex = -1;
+      for (var i = messageIndex - 1; i >= 0; i--) {
+        if (current[i] && current[i].role === 'user') {
+          userIndex = i;
+          break;
+        }
+      }
+    }
+    if (userIndex < 0) return;
+
+    var userMsg = current[userIndex];
+    var retryText = typeof userMsg.content === 'string' ? userMsg.content : searchMessageText(userMsg.content);
+    if (!retryText.trim() && !(userMsg.images && userMsg.images.length)) return;
+
+    var retryImages = (userMsg.images || []).map(function(img) {
+      return {
+        id: 'retry-' + Date.now() + '-' + Math.random(),
+        dataUrl: img.dataUrl,
+        description: img.description || null,
+        native: !!(img.dataUrl && isVisionModel(currentModel)),
+        analyzing: false,
+      };
+    });
+    addLocalLog('INFO  Retrying from message ' + (userIndex + 1));
+    await sendMessage(retryText, 0, {
+      baseMessages: current,
+      images: retryImages,
+      files: [],
+    });
   };
 
   // ── Pause / Stop / Interject / Steer ──
@@ -7210,6 +7450,21 @@ function App() {
   }, [config.geminiKey]);
 
   // ── Render ──
+  var sidebarStyle = isDesktopLayout
+    ? {
+        width: sidebarWidth + 'px',
+        minWidth: sidebarWidth + 'px',
+        marginLeft: sidebarCollapsed ? ('-' + sidebarWidth + 'px') : undefined,
+      }
+    : undefined;
+  var rightColumnStyle = isDesktopLayout
+    ? {
+        width: rightColumnWidth + 'px',
+        minWidth: rightColumnWidth + 'px',
+        marginRight: showTerminal ? undefined : ('-' + rightColumnWidth + 'px'),
+      }
+    : undefined;
+
   return (
     <div className="app-wrapper">
     {/* Depth layers — rendered outside .app because .app > * forces position:relative */}
@@ -7217,7 +7472,7 @@ function App() {
     <div className="ambient-glow-3" aria-hidden="true"></div>
     <div className="app-vignette" aria-hidden="true"></div>
     <div className="app-noise" aria-hidden="true"></div>
-    <div className="app">
+    <div className={"app " + (resizingLayout ? 'layout-resizing' : '')}>
       {/* Sidebar backdrop overlay (mobile) */}
       {!sidebarCollapsed && (
         <div className="sidebar-backdrop" onClick={() => setSidebarCollapsed(true)} />
@@ -7231,7 +7486,17 @@ function App() {
         </button>
       )}
 
-      <div className={"sidebar " + (sidebarCollapsed ? 'collapsed' : '')}>
+      <div className={"sidebar " + (sidebarCollapsed ? 'collapsed' : '')} style={sidebarStyle}>
+        {isDesktopLayout && !sidebarCollapsed && (
+          <div
+            className={"layout-resize-handle sidebar-resize-handle " + (resizingLayout === 'sidebar' ? 'active' : '')}
+            onPointerDown={function(e) {
+              e.preventDefault();
+              setResizingLayout('sidebar');
+            }}
+            title="Resize sidebar"
+          />
+        )}
         <div className="sidebar-header">
           <h1>Hermes</h1>
           <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
@@ -7422,6 +7687,7 @@ function App() {
                         highlighted={highlightedMessageIndex === idx}
                         onImageClick={setLightboxSrc}
                         onEdit={startEditMessage}
+                        onRetry={retryFromMessage}
                       />
                     )
                   ))}
@@ -7552,7 +7818,47 @@ function App() {
                       <span>Paste / drop images & files</span>
                       {!config.geminiKey && <span style={{opacity:0.6}}>· add Gemini key for image analysis</span>}
                       {/* Export chat dropdown — inline in hint row, right-aligned */}
-                      <div style={{marginLeft:'auto', position:'relative'}}>
+                      <div style={{marginLeft:'auto', position:'relative', display:'inline-flex', alignItems:'center', gap:'8px'}}>
+                        <div className="composer-chip-wrap">
+                          <button
+                            className={"composer-chip " + (reasoningEffort ? 'active' : '')}
+                            onClick={function(){ setShowReasoningMenu(!showReasoningMenu); }}
+                            title="Reasoning effort for new messages"
+                          >
+                            <Icon name="brain" size={13}/>
+                            <span>{reasoningEffortLabel(reasoningEffort)}</span>
+                          </button>
+                          {showReasoningMenu && (
+                            <React.Fragment>
+                              <div onClick={function(){ setShowReasoningMenu(false); }} style={{position:'fixed', inset:0, zIndex:19}} />
+                              <div className="composer-chip-menu">
+                                <div className="composer-chip-menu-title">
+                                  <Icon name="brain" size={13}/>
+                                  <span>Reasoning effort</span>
+                                </div>
+                                <div className="composer-chip-menu-note">
+                                  Controls how much extra thinking supported models use for new replies.
+                                </div>
+                                {REASONING_EFFORTS.map(function(item) {
+                                  var active = normalizeReasoningEffort(reasoningEffort) === item.value;
+                                  return (
+                                    <button
+                                      key={item.value || 'auto'}
+                                      className={"composer-chip-option " + (active ? 'active' : '')}
+                                      title={item.title}
+                                      onClick={function(){
+                                        setReasoningEffort(item.value);
+                                        setShowReasoningMenu(false);
+                                      }}
+                                    >
+                                      <span>{item.label}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </React.Fragment>
+                          )}
+                        </div>
                         <button
                           className={"header-btn " + (showExportMenu ? 'active' : '')}
                           onClick={function(){ setShowExportMenu(!showExportMenu); }}
@@ -7620,8 +7926,18 @@ function App() {
       </div>
 
       {/* Right column: Live Terminal */}
-      <div className={"right-column" + (artifactPanelWide ? ' wide' : '') + (showTerminal ? '' : ' closed')}>
-        <TerminalPanel isOpen={showTerminal} onClose={function(){setShowTerminal(false); setArtifactPanelWide(false);}} onClear={function(){ setLocalLogs([]); }} localLogs={localLogs} artifacts={artifacts} onArtifactTab={function(isWide){ setArtifactPanelWide(isWide); if(isWide && !showTerminal) setShowTerminal(true); }} onAddArtifact={function(art){ setArtifacts(function(prev){ return prev.concat([art]); }); }} onRemoveArtifact={function(idx){ setArtifacts(function(prev){ return prev.filter(function(_,i){ return i !== idx; }); }); }} />
+      <div className={"right-column" + (artifactPanelWide ? ' wide' : '') + (showTerminal ? '' : ' closed')} style={rightColumnStyle}>
+        {isDesktopLayout && showTerminal && (
+          <div
+            className={"layout-resize-handle right-column-resize-handle " + (resizingLayout === 'right' ? 'active' : '')}
+            onPointerDown={function(e) {
+              e.preventDefault();
+              setResizingLayout('right');
+            }}
+            title="Resize terminal"
+          />
+        )}
+        <TerminalPanel isOpen={showTerminal} onClose={function(){setShowTerminal(false); setArtifactPanelWide(false);}} onClear={function(){ setLocalLogs([]); }} localLogs={localLogs} artifacts={artifacts} onArtifactTab={function(isWide){ setArtifactPanelWide(isWide); if(isWide && !showTerminal) setShowTerminal(true); if(isWide) setRightColumnWidth(function(w){ return Math.max(w, 560); }); }} onAddArtifact={function(art){ setArtifacts(function(prev){ return prev.concat([art]); }); }} onRemoveArtifact={function(idx){ setArtifacts(function(prev){ return prev.filter(function(_,i){ return i !== idx; }); }); }} />
       </div>
 
       {/* Modals */}

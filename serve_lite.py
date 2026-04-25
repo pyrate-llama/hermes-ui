@@ -411,6 +411,26 @@ def _set_thread_env(**kwargs):
 def _clear_thread_env():
     _thread_ctx.env = {}
 
+
+_REASONING_EFFORTS = {"none", "low", "medium", "high", "xhigh"}
+
+
+def _parse_reasoning_effort(value):
+    """Return a Hermes agent reasoning_config for a UI-selected effort."""
+    effort = str(value or "").strip().lower()
+    if not effort or effort == "auto":
+        return None, ""
+    if effort not in _REASONING_EFFORTS:
+        return None, ""
+    try:
+        from hermes_constants import parse_reasoning_effort
+        return parse_reasoning_effort(effort), effort
+    except Exception as exc:
+        print(f"[serve] WARNING: reasoning effort parse fallback ({exc!r})", flush=True)
+        if effort == "none":
+            return {"enabled": False}, effort
+        return {"enabled": True, "effort": effort}, effort
+
 # Per-session agent locks — prevents two requests on the SAME session
 # from running concurrently (different sessions can still run in parallel)
 _SESSION_LOCKS = {}
@@ -617,7 +637,7 @@ def _get_or_create_session(session_id):
     return new_session
 
 
-def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt=""):
+def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="", reasoning_effort=""):
     """Run AIAgent in a background thread, pushing SSE events to the queue."""
     q = STREAMS.get(stream_id)
     if q is None:
@@ -803,6 +823,17 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="")
         # /hermes-webui issue #855.
         if 'gateway_session_key' in _agent_params:
             _agent_kwargs['gateway_session_key'] = session_id
+
+        _reasoning_config, _reasoning_label = _parse_reasoning_effort(reasoning_effort)
+        if _reasoning_config is not None and 'reasoning_config' in _agent_params:
+            _agent_kwargs['reasoning_config'] = _reasoning_config
+            print(f"[serve] reasoning_effort={_reasoning_label}", flush=True)
+        elif _reasoning_label:
+            print(
+                f"[serve] reasoning_effort={_reasoning_label} ignored; "
+                "agent lacks reasoning_config",
+                flush=True,
+            )
 
         agent = AgentClass(**_agent_kwargs)
 
@@ -1252,6 +1283,15 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         session_id = body.get("session_id") or self.headers.get("X-Hermes-Session-Id") or f"web_{uuid.uuid4().hex[:12]}"
         # User-configurable base system prompt from Settings → General
         base_system_prompt = (body.get("base_system_prompt") or "").strip()
+        reasoning_effort = str(body.get("reasoning_effort") or "").strip().lower()
+        if reasoning_effort == "auto":
+            reasoning_effort = ""
+        if reasoning_effort and reasoning_effort not in _REASONING_EFFORTS:
+            print(
+                f"[serve] /api/chat/start invalid reasoning_effort={reasoning_effort!r} — ignoring",
+                flush=True,
+            )
+            reasoning_effort = ""
 
         # Optional user-local prompt addon.  If ~/.hermes/extra_system_prompt.md
         # exists, prepend its contents to the base_system_prompt.  This lets
@@ -1328,7 +1368,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
 
         thr = threading.Thread(
             target=_run_agent_streaming,
-            args=(session_id, messages, stream_id, base_system_prompt),
+            args=(session_id, messages, stream_id, base_system_prompt, reasoning_effort),
             daemon=True,
         )
         thr.start()
