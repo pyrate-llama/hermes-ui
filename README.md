@@ -6,7 +6,7 @@ A sleek, glassmorphic web interface for [Hermes Agent](https://github.com/pyrate
 
 Built as a single-file HTML application with React 18, Hermes UI provides a full-featured chat interface, real-time log streaming, file browsing, memory inspection, and more — all through a lightweight Python proxy server.
 
-![v2.5](https://img.shields.io/badge/version-2.5-ef4444?style=for-the-badge)
+![v3.0](https://img.shields.io/badge/version-3.0-ef4444?style=for-the-badge)
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
@@ -28,65 +28,54 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 ### File Browser
 ![Live file browser for the ~/.hermes directory with inline preview](screenshots/files.png)
 
-### Light Theme
-![Dawn light theme with pirate personality](screenshots/chat-light.png)
+### Terminal
+![Built-in terminal area with Hermes and Claude Code tabs](screenshots/terminal.png)
 
 ---
 
-## What's new in v2.5
+## What's new in v3.0
 
-~45 commits since v2.0 (April 2026).
+Hermes UI 3.0 is the release where the web client catches up with the bigger Hermes Agent 0.11 world instead of feeling like a thin wrapper around chat.
 
-**New features**
-- **Command palette** (`Ctrl/Cmd+K`) — fuzzy search across chats and skills
-- **Document upload in chat** — drop `.txt`, `.md`, `.pdf`, `.json`, `.csv`, `.py`, `.js`, `.ts` files directly into the composer
-- **Artifact panel** — auto-detects HTML, SVG, PDF, and CSV output and renders live previews in a widening right panel
-- **MCP Tools modal** — categorized view of all connected servers (Web, Browser, Terminal, Files, Code, etc.)
-- **Base System Prompt field** — write your own persona or instructions in Settings, applied to new chats
-- **`~/.hermes/extra_system_prompt.md` addon** (opt-in) — prepend a user-local prompt snippet without forking the repo
-- **Karpathy behavioral guidelines toggle** (OFF by default, editable at `behavioral_guidelines.md`)
-- **Compaction marker SSE event** — visible indicator when context compression fires mid-stream
-- **Simplified Chinese README** and an in-app language switcher
+**Hermes Agent 0.11 features now surfaced in the UI**
+- **Provider and API-key management in Settings** — save local provider keys without hand-editing config files
+- **Live model capability labels** — see at a glance whether the active model supports vision, steer, reasoning, tools, and live model discovery
+- **Reasoning effort control in the composer** — `Off`, `Low`, `Med`, `High`, `XHigh`, or `Auto`
+- **Steer during streaming** — send guidance into a running turn without pausing or canceling it
+- **Native image path for vision-capable models** — pasted images go straight through when the current model supports vision, with Gemini still available as the fallback path for MiniMax-style setups
+- **Provider and model status surfaced across the dashboard, composer, and status bar** so 0.11's expanded routing/provider surface is visible instead of hidden
 
-**Visual refresh**
-- New inline SVG icon set throughout
-- Segmented toolbar pill, ambient depth layers (vignette + noise + third glow blob)
-- Color-grouped sidebar icons, regrouped sidebar sections, tightened vertical density
-- Dashboard card polish with refreshed typography
-- Message bubble and user-avatar gradient refinements
-- Light-theme code block readability fix (hljs stylesheet swap)
-- Palette-icon theme dropdown replacing the three raw theme swatches
+**Big UX additions in this release**
+- **Search across all chat sessions** — title and content search from the global search entrypoint
+- **Redo / retry on older prompts without deleting newer turns** — retries append as a new branch at the bottom instead of wiping history underneath
+- **Resizable layout** — left and right columns can be dragged tighter or wider
+- **Token / context meter** — simple context pressure shown in the bottom status bar
+- **Sidebar attention indicators** — active, unread, and recent activity are much easier to spot
+- **Streaming polish** — better incremental markdown rendering, cleaner tool-output ordering, and stronger compression/session-rotation handling
 
-**Skills**
-- Delete button wired to a matching DELETE endpoint
-- Edit/save for skill contents
-- Details modal wired to a working endpoint
-- Newest-first sort via a new `/skills/dates` endpoint with relative timestamps
-
-**Stability & bug fixes**
-- Composer no longer shows "send" when a stream is actually running (state-desync unstick)
-- Auto-pause-send on `Enter` while streaming
-- Chat list stays visible across non-chat views
-- Scroll position preserved when switching between views
-- Session-id rotation after compression re-keys the UI correctly
-- Tool calls are no longer stripped from stored sessions
-- RTF drag-drop auto-converts to plain text
-- Theme dropdown no longer clipped by the header's containing block
-- `serve_lite.py` fails loudly on the wrong Python interpreter
-- `serve.py` is now a shim that forwards to `serve_lite.py` — existing systemd units keep working
+**Everything good from the earlier builds stays**
+- Document upload in chat
+- Artifact panel for HTML, SVG, PDF, and CSV previews
+- MCP Tools browser
+- Base System Prompt support and `extra_system_prompt.md`
+- Built-in shell / Hermes / Claude Code terminal area
+- File browser, memory tools, cron jobs, skills browser, themes, and mobile layout support
 
 ---
 
 ## Features
 
 **Chat Interface**
-- SSE streaming with real-time token display
+- SSE streaming with incremental markdown rendering
 - Tool call visualization with expandable results
 - Message editing and re-sending
-- Image paste/drop with Gemini vision analysis
+- Retry / redo from older prompts without deleting later messages
+- Session search across titles and message content
+- Image paste/drop with native vision passthrough for supported models, plus Gemini fallback when needed
 - Document upload in the composer (.txt, .md, .pdf, .json, .csv, .py, .js, .ts) — RTF auto-converts to plain text
-- Pause, interject, and stop controls mid-stream (auto-pause on `Enter` while streaming)
-- Command palette (`Ctrl/Cmd+K`) for fuzzy search across chats and skills
+- Pause, steer, and stop controls mid-stream
+- Reasoning effort selector in the composer
+- Command search (`Ctrl/Cmd+K`) for jumping into session search fast
 - Multiple personality modes (default, technical, creative, pirate, kawaii, and more)
 - Base System Prompt field in Settings — write your own persona or instructions
 - PDF and HTML chat export
@@ -94,7 +83,7 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 
 **Dashboard**
 - Live auto-refreshing stats (sessions, messages, tools, tokens)
-- System info panel (model, provider, uptime)
+- System info panel (model, provider, uptime, capabilities)
 - Hermes configuration overview
 
 **Artifact Panel**
@@ -109,7 +98,8 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 - Scroll position preserved when switching between tabs
 
 **Terminal**
-- Tabbed interface: Gateway, Errors, Web UI, All — real-time log streaming via SSE
+- Tabbed interface for Shell, Hermes, and Claude Code flows
+- Real-time log streaming views for Gateway, Errors, Web UI, and All
 - Live connection indicator with line count
 
 **File Browser**
@@ -125,6 +115,7 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 - Search and browse all installed Hermes skills
 - Sort by newest, oldest, or name — see what Hermes has been creating
 - Relative timestamps on each skill (e.g. "2h ago", "3d ago")
+- Edit and delete installed skills from the UI
 - View skill descriptions, tags, and trigger phrases
 
 **Jobs Monitor**
@@ -139,7 +130,9 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 **UI/UX**
 - Glassmorphism design with ambient animated glow
 - Collapsible sidebar and right panel
-- System status bar (connection, model, memory count, sessions)
+- Resizable left and right columns
+- System status bar with connection, model, capability pills, memory count, sessions, and context pressure
+- Sidebar activity indicators for streaming, unread, and recent chats
 - Inter + JetBrains Mono typography
 - Keyboard shortcuts
 - Theme switcher (Midnight, Twilight, Dawn)
@@ -181,7 +174,7 @@ That's it — no `npm install`, no build step, no dependencies beyond Python's s
 
 The proxy server connects to Hermes at `http://127.0.0.1:8642` by default. To change this, edit the `HERMES` variable at the top of `serve_lite.py`.
 
-For image analysis (paste/drop images in chat), add your Gemini API key in the Settings modal within the UI.
+Provider keys can be managed directly in **Settings**, including local API-key storage for supported providers. For image analysis fallback on non-vision setups, add your Gemini API key there as well.
 
 ### Using OpenRouter or Custom Inference Endpoints
 
