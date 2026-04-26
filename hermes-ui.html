@@ -1065,6 +1065,94 @@
     content: "✓"; color: var(--accent); font-weight: 800;
   }
 
+  .slash-command-menu {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: calc(100% + 10px);
+    z-index: 24;
+    max-height: min(360px, 52vh);
+    overflow: hidden;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    background: var(--glass-strong);
+    backdrop-filter: blur(22px) saturate(1.15);
+    -webkit-backdrop-filter: blur(22px) saturate(1.15);
+    box-shadow: 0 16px 42px rgba(0,0,0,0.42);
+  }
+  .slash-command-list {
+    max-height: 312px;
+    overflow-y: auto;
+    padding: 6px;
+  }
+  .slash-command-item {
+    width: 100%;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text-secondary);
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 9px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .slash-command-item:hover,
+  .slash-command-item.active {
+    color: var(--text-primary);
+    background: rgba(128,144,255,0.12);
+  }
+  .slash-command-item.disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+  }
+  .slash-command-icon {
+    width: 28px; height: 28px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--accent);
+    background: rgba(124,111,224,0.10);
+  }
+  .slash-command-main { min-width: 0; }
+  .slash-command-title {
+    display: flex; align-items: baseline; gap: 7px;
+    font-size: 12px; font-weight: 750;
+    color: inherit;
+  }
+  .slash-command-name {
+    color: var(--text-primary);
+    font-family: Monaco, Menlo, monospace;
+  }
+  .slash-command-usage {
+    font-size: 10px; color: var(--text-muted);
+    font-family: Monaco, Menlo, monospace;
+  }
+  .slash-command-summary {
+    margin-top: 2px;
+    font-size: 11px; line-height: 1.35;
+    color: var(--text-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .slash-command-chip {
+    font-size: 10px; color: var(--text-muted);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 999px; padding: 2px 7px;
+    white-space: nowrap;
+  }
+  .slash-command-empty {
+    padding: 12px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .slash-command-footer {
+    display: flex; justify-content: space-between; gap: 10px;
+    padding: 7px 10px;
+    border-top: 1px solid var(--glass-border);
+    color: var(--text-muted);
+    font-size: 10px;
+  }
+
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6);
     backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
@@ -6371,6 +6459,8 @@ function App() {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showReasoningMenu, setShowReasoningMenu] = useState(false);
+  const [slashCommandIndex, setSlashCommandIndex] = useState(0);
+  const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
   const [asideMode, setAsideMode] = useState(false);
   const [asideSending, setAsideSending] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState(function() {
@@ -6509,6 +6599,11 @@ function App() {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
     }
+  }, [input]);
+
+  useEffect(function() {
+    setSlashCommandIndex(0);
+    setSlashMenuDismissed(false);
   }, [input]);
 
   // Update session tokens when conversation changes
@@ -8296,6 +8391,128 @@ function App() {
   // placeholder toggle was removed in favour of the nesq-style modal.
   const openSearchModal = () => setShowSearchModal(true);
 
+  const pushLocalAssistantMessage = function(content) {
+    var sessionId = activeConvRef.current || activeConvId;
+    var msg = {
+      id: 'local-' + Date.now() + '-' + Math.random(),
+      role: 'assistant',
+      content: content,
+      timestamp: new Date().toISOString(),
+    };
+    if (!sessionId) {
+      sessionId = api.createSession();
+      setActiveConvId(sessionId);
+      var conv = {
+        id: sessionId,
+        title: 'Command help',
+        created: new Date().toLocaleString(),
+        last_active_at: new Date().toISOString(),
+        unread_count: 0,
+        messages: [msg],
+        message_count: 1,
+        user_prompt_count: 0,
+        tool_call_count: 0,
+      };
+      setConversations(function(prev) { return [conv].concat(prev); });
+      setMessages([msg]);
+      setCurrentView('chat');
+      return;
+    }
+    updateStreamMessages(sessionId, function(prev) { return (prev || []).concat([msg]); });
+    setCurrentView('chat');
+  };
+
+  const slashCommands = [
+    {
+      name: 'help', icon: 'circle-help', summary: 'Show available commands',
+      run: function() {
+        var lines = slashCommands.map(function(c) {
+          return '/' + c.name + (c.usage ? ' ' + c.usage : '') + ' - ' + c.summary;
+        });
+        pushLocalAssistantMessage('**Slash commands**\n\n' + lines.join('\n'));
+      },
+    },
+    { name: 'new', icon: 'plus', summary: 'Start a new chat', run: function() { newConversation(); setCurrentView('chat'); } },
+    { name: 'search', icon: 'search', summary: 'Search chats and messages', run: function() { setShowSearchModal(true); } },
+    { name: 'settings', icon: 'settings', summary: 'Open settings', run: function() { setShowSettings(true); } },
+    { name: 'retry', icon: 'rotate-ccw', summary: 'Retry the last user message', disabled: isStreaming || messages.length === 0, run: function() { retryFromMessage((messagesRef.current || []).length - 1); } },
+    { name: 'aside', icon: 'circle-help', usage: '[question]', summary: 'Ask a side question without changing the main thread', run: function(args) { if (args) sendAsideQuestion(args); else setAsideMode(true); } },
+    { name: 'steer', icon: 'send', usage: '<message>', summary: 'Nudge the active turn', disabled: !isStreaming, run: function(args) { if (args) steer(args); else setInput('/steer '); } },
+    { name: 'pause', icon: 'pause', summary: 'Pause the active turn', disabled: !isStreaming, run: pauseStreaming },
+    { name: 'stop', icon: 'square', summary: 'Stop the active turn', disabled: !isStreaming, run: stopStreamingAction },
+    { name: 'chat', icon: 'message-square', summary: 'Open chat', run: function() { setCurrentView('chat'); } },
+    { name: 'dashboard', icon: 'layout-dashboard', summary: 'Open dashboard', run: function() { setCurrentView('dashboard'); } },
+    { name: 'files', icon: 'folder', summary: 'Open files', run: function() { setCurrentView('files'); } },
+    { name: 'terminal', icon: 'terminal', summary: 'Open terminal', run: function() { setCurrentView('terminal'); } },
+    { name: 'jobs', icon: 'clock', summary: 'Open cron jobs', run: function() { setCurrentView('jobs'); } },
+    { name: 'memory', icon: 'brain', summary: 'Open memory', run: function() { setCurrentView('memory'); } },
+    { name: 'skills', icon: 'sparkles', summary: 'Open skills', run: function() { setCurrentView('skills'); } },
+    { name: 'delegation', icon: 'message-circle', summary: 'Open delegation chat', run: function() { setCurrentView('delegation'); } },
+    { name: 'export', icon: 'file-text', summary: 'Export this chat as Markdown', disabled: messages.length === 0, run: function() {
+      var title = activeConvId ? (conversations.find(function(c) { return c.id === activeConvId; }) || {}).title : 'Chat';
+      exportChatAsMarkdown(messages, title || 'Chat');
+    } },
+    { name: 'reasoning', icon: 'brain', usage: '<auto|low|medium|high|xhigh>', summary: 'Set reasoning effort for new messages', run: function(args) {
+      var value = normalizeReasoningEffort(args || '');
+      setReasoningEffort(value);
+    } },
+  ];
+
+  const parseSlashInput = function(value) {
+    if (!value || value[0] !== '/' || value.indexOf('\n') !== -1) return null;
+    var raw = value.slice(1);
+    var parts = raw.split(/\s+/);
+    var name = (parts[0] || '').toLowerCase();
+    var hasArgs = /\s/.test(raw);
+    var args = hasArgs ? raw.slice(parts[0].length).replace(/^\s+/, '') : '';
+    return { raw: raw, name: name, args: args, hasArgs: hasArgs };
+  };
+
+  const slashInput = parseSlashInput(input);
+  const slashCommandMatches = slashInput && !slashMenuDismissed
+    ? slashCommands.filter(function(cmd) {
+        var q = slashInput.name;
+        return !q || cmd.name.indexOf(q) === 0 || cmd.summary.toLowerCase().indexOf(q) !== -1;
+      }).slice(0, 9)
+    : [];
+  const showSlashCommandMenu = !!(slashInput && !slashMenuDismissed && slashCommandMatches.length);
+  const activeSlashCommand = slashCommandMatches[Math.min(slashCommandIndex, Math.max(0, slashCommandMatches.length - 1))] || null;
+
+  const executeSlashCommand = function(command, args) {
+    if (!command) return true;
+    if (command.disabled) {
+      addLocalLog('INFO  [command] /' + command.name + ' unavailable right now');
+      setSlashMenuDismissed(true);
+      return true;
+    }
+    var value = args || '';
+    setInput('');
+    setSlashMenuDismissed(true);
+    addLocalLog('INFO  [command] /' + command.name + (value ? ' ' + value.slice(0, 80) : ''));
+    Promise.resolve(command.run(value)).catch(function(e) {
+      addLocalLog('ERROR Slash command failed: ' + (e && e.message ? e.message : e));
+    });
+    return true;
+  };
+
+  const runSlashCommandFromComposer = function(preferHighlighted) {
+    var parsed = parseSlashInput(input);
+    if (!parsed) return false;
+    var exact = slashCommands.find(function(cmd) { return cmd.name === parsed.name; });
+    var command = (preferHighlighted && activeSlashCommand) || exact;
+    if (!command) return false;
+    if (preferHighlighted && activeSlashCommand && !parsed.hasArgs && activeSlashCommand.name !== parsed.name) {
+      if (activeSlashCommand.usage && activeSlashCommand.name !== 'aside') {
+        setInput('/' + activeSlashCommand.name + ' ');
+        setSlashMenuDismissed(false);
+        setTimeout(function() { if (textareaRef.current) textareaRef.current.focus(); }, 0);
+        return true;
+      }
+      return executeSlashCommand(activeSlashCommand, '');
+    }
+    return executeSlashCommand(command, parsed.args);
+  };
+
   const anyAnalyzing = pendingImages.some(img => img.analyzing);
 
   useEffect(() => {
@@ -8656,8 +8873,29 @@ function App() {
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => {
+                      if (showSlashCommandMenu && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+                        e.preventDefault();
+                        setSlashCommandIndex(function(i) {
+                          var count = slashCommandMatches.length || 1;
+                          return e.key === 'ArrowDown' ? (i + 1) % count : (i - 1 + count) % count;
+                        });
+                        return;
+                      }
+                      if (showSlashCommandMenu && e.key === 'Tab') {
+                        e.preventDefault();
+                        runSlashCommandFromComposer(true);
+                        return;
+                      }
+                      if (showSlashCommandMenu && e.key === 'Escape') {
+                        e.preventDefault();
+                        setSlashMenuDismissed(true);
+                        return;
+                      }
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
+                        if (input.trim().startsWith('/') && runSlashCommandFromComposer(showSlashCommandMenu)) {
+                          return;
+                        }
                         if (asideMode && input.trim()) {
                           sendAsideQuestion(input);
                         } else if (isStreaming && !isPaused && input.trim()) {
@@ -8676,6 +8914,53 @@ function App() {
                     rows={1}
                     disabled={connected === false || asideSending}
                   />
+                  {showSlashCommandMenu && (
+                    <div className="slash-command-menu">
+                      <div className="slash-command-list">
+                        {slashCommandMatches.map(function(cmd, i) {
+                          var active = i === Math.min(slashCommandIndex, slashCommandMatches.length - 1);
+                          return (
+                            <button
+                              key={cmd.name}
+                              type="button"
+                              className={"slash-command-item " + (active ? 'active ' : '') + (cmd.disabled ? 'disabled' : '')}
+                              onMouseEnter={function() { setSlashCommandIndex(i); }}
+                              onMouseDown={function(e) {
+                                e.preventDefault();
+                                if (cmd.disabled) return;
+                                var typedArgs = slashInput && slashInput.name === cmd.name ? slashInput.args : '';
+                                if (typedArgs) {
+                                  executeSlashCommand(cmd, typedArgs);
+                                  return;
+                                }
+                                if (cmd.usage && cmd.name !== 'aside') {
+                                  setInput('/' + cmd.name + ' ');
+                                  setSlashMenuDismissed(false);
+                                  setTimeout(function() { if (textareaRef.current) textareaRef.current.focus(); }, 0);
+                                  return;
+                                }
+                                executeSlashCommand(cmd, '');
+                              }}
+                            >
+                              <span className="slash-command-icon"><Icon name={cmd.icon} size={15}/></span>
+                              <span className="slash-command-main">
+                                <span className="slash-command-title">
+                                  <span className="slash-command-name">/{cmd.name}</span>
+                                  {cmd.usage && <span className="slash-command-usage">{cmd.usage}</span>}
+                                </span>
+                                <span className="slash-command-summary">{cmd.summary}</span>
+                              </span>
+                              <span className="slash-command-chip">{cmd.disabled ? 'Unavailable' : (cmd.usage ? 'Tab' : 'Enter')}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="slash-command-footer">
+                        <span>Slash commands</span>
+                        <span>↑↓ navigate · Tab pick · Enter run · Esc close</span>
+                      </div>
+                    </div>
+                  )}
                   <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { if (e.target.files.length) processImages(e.target.files); e.target.value = ''; }} />
                   <input ref={fileInputRef2} type="file" accept=".md,.txt,.json,.csv,.ts,.tsx,.js,.py,.pdf,.rtf" multiple style={{ display: 'none' }} onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value = ''; }} />
                   <div className="input-btn-group">
@@ -8689,7 +8974,7 @@ function App() {
                       <Icon name="image" size={16}/>
                     </button>
                     {asideMode ? (
-                      <button className="send-btn" onClick={() => sendAsideQuestion(input)} disabled={!input.trim() || asideSending} title="Send side question">
+                      <button className="send-btn" onClick={function(){ if (input.trim().startsWith('/') && runSlashCommandFromComposer(showSlashCommandMenu)) return; sendAsideQuestion(input); }} disabled={!input.trim() || asideSending} title="Send side question">
                         <Icon name="send" size={16}/>
                       </button>
                     ) : isStreaming ? (
@@ -8700,16 +8985,16 @@ function App() {
                         <button className="send-btn stop-btn" onClick={stopStreamingAction} title="Stop">
                           <svg width="16" height="16" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
                         </button>
-                        <button className="send-btn" onClick={function(){ steer(input); }} disabled={!input.trim()} title="Steer (nudge without pausing — uses hermes-agent /steer)">
+                        <button className="send-btn" onClick={function(){ if (input.trim().startsWith('/') && runSlashCommandFromComposer(showSlashCommandMenu)) return; steer(input); }} disabled={!input.trim()} title="Steer (nudge without pausing — uses hermes-agent /steer)">
                           <Icon name="send" size={16}/>
                         </button>
                       </React.Fragment>
                     ) : isPaused ? (
-                      <button className="send-btn" onClick={() => sendInterjection(input)} disabled={!input.trim()} title="Send interjection">
+                      <button className="send-btn" onClick={function(){ if (input.trim().startsWith('/') && runSlashCommandFromComposer(showSlashCommandMenu)) return; sendInterjection(input); }} disabled={!input.trim()} title="Send interjection">
                         <Icon name="send" size={16}/>
                       </button>
                     ) : (
-                      <button className="send-btn" onClick={() => sendMessage(input)} disabled={(!input.trim() && !pendingImages.length && !pendingFiles.length) || connected === false || anyAnalyzing} title="Send (⏎)">
+                      <button className="send-btn" onClick={function(){ if (input.trim().startsWith('/') && runSlashCommandFromComposer(showSlashCommandMenu)) return; sendMessage(input); }} disabled={(!input.trim() && !pendingImages.length && !pendingFiles.length) || connected === false || anyAnalyzing} title="Send (⏎)">
                         <Icon name="send" size={16}/>
                       </button>
                     )}
