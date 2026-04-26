@@ -685,6 +685,29 @@
   .message-content pre code {
     background: none; padding: 0; color: inherit;
   }
+  .message-content .mermaid-block {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin: 12px 0;
+    overflow-x: auto;
+    color: var(--text-primary);
+  }
+  .message-content .mermaid-block svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+  }
+  .message-content .mermaid-block.loading {
+    color: var(--text-muted);
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 12px;
+  }
+  .message-content .mermaid-block.mermaid-error pre {
+    margin-bottom: 0;
+  }
   .copy-btn {
     position: absolute; top: 8px; right: 8px; background: var(--bg-secondary);
     border: 1px solid var(--border); color: var(--text-secondary); padding: 4px 8px;
@@ -1971,6 +1994,7 @@
   }
   [data-theme="dawn"] .message-content code { color: #7050c0; }
   [data-theme="dawn"] .message-content pre { background: #eae7e3; }
+  [data-theme="dawn"] .message-content .mermaid-block { background: #eae7e3; }
   [data-theme="dawn"] .terminal-panel { background: #1a1818; }
   [data-theme="dawn"] .stat-card.sessions { --stat-color: #4070c0; }
   [data-theme="dawn"] .stat-card.messages { --stat-color: #2e8e4e; }
@@ -2505,9 +2529,147 @@ function renderMarkdown(content) {
     return '\n\n![image](' + API_BASE + '/api/image?path=' + encodeURIComponent(imgPath) + ')\n\n';
   });
 
+  text = text.replace(/```mermaid[^\n]*\n?([\s\S]*?)```/gi, function(match, code) {
+    return createMermaidBlock(code);
+  });
+
+  if (isLikelyMermaidDiagram(text)) {
+    text = createMermaidBlock(text);
+  }
+
   const parse = typeof marked === 'function' ? marked : marked.parse;
   const html = parse(text, { breaks: true, gfm: true });
   return { __html: html };
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function createMermaidBlock(code) {
+  return '\n\n<div class="mermaid-block">' + escapeHtml(String(code || '').trim()) + '</div>\n\n';
+}
+
+function isLikelyMermaidDiagram(text) {
+  var trimmed = String(text || '').trim();
+  if (!trimmed || trimmed.indexOf('```') !== -1 || trimmed.indexOf('<div class="mermaid-block"') !== -1) return false;
+  var firstLine = trimmed.split(/\r?\n/, 1)[0].trim();
+  return /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|journey|gantt|pie|quadrantChart|requirementDiagram|gitGraph|mindmap|timeline|sankey-beta|block-beta|packet-beta|architecture-beta|xychart-beta)\b/i.test(firstLine);
+}
+
+var mermaidScriptLoading = false;
+var mermaidScriptReady = false;
+var mermaidScriptFailed = false;
+var mermaidRenderCounter = 0;
+
+function getMermaidTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'dawn' ? 'default' : 'dark';
+}
+
+function initializeMermaid() {
+  if (typeof mermaid === 'undefined') return;
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: getMermaidTheme(),
+    themeVariables: {
+      fontFamily: 'inherit',
+      fontSize: '14px',
+      primaryColor: getMermaidTheme() === 'default' ? '#e8e4f4' : '#2d2a44',
+      primaryTextColor: getMermaidTheme() === 'default' ? '#252033' : '#f4f1ff',
+      primaryBorderColor: getMermaidTheme() === 'default' ? '#8c80d8' : '#7c6fe0',
+      lineColor: getMermaidTheme() === 'default' ? '#6050b0' : '#a89cff',
+      secondaryColor: getMermaidTheme() === 'default' ? '#f3f0ff' : '#202033',
+      tertiaryColor: getMermaidTheme() === 'default' ? '#ffffff' : '#151522'
+    }
+  });
+}
+
+function loadMermaidScript() {
+  if (mermaidScriptReady) return Promise.resolve();
+  if (mermaidScriptFailed) return Promise.reject(new Error('Mermaid failed to load'));
+
+  if (!window.__hermesMermaidPromise) {
+    mermaidScriptLoading = true;
+    window.__hermesMermaidPromise = new Promise(function(resolve, reject) {
+      var existing = document.querySelector('script[data-hermes-mermaid="true"]');
+      if (existing && typeof mermaid !== 'undefined') {
+        mermaidScriptReady = true;
+        mermaidScriptLoading = false;
+        initializeMermaid();
+        resolve();
+        return;
+      }
+
+      var script = existing || document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js';
+      script.crossOrigin = 'anonymous';
+      script.dataset.hermesMermaid = 'true';
+      script.onload = function() {
+        mermaidScriptReady = true;
+        mermaidScriptLoading = false;
+        initializeMermaid();
+        resolve();
+      };
+      script.onerror = function() {
+        mermaidScriptFailed = true;
+        mermaidScriptLoading = false;
+        reject(new Error('Mermaid failed to load'));
+      };
+      if (!existing) document.head.appendChild(script);
+    });
+  }
+
+  return window.__hermesMermaidPromise;
+}
+
+function renderMermaidBlocks(root) {
+  var container = root || document;
+  var blocks = Array.from(container.querySelectorAll('.mermaid-block:not([data-rendered])'));
+  if (!blocks.length) return;
+
+  blocks.forEach(function(block) {
+    if (!block.dataset.source) block.dataset.source = block.textContent || '';
+    block.classList.add('loading');
+  });
+
+  loadMermaidScript().then(function() {
+    blocks.forEach(function(block) {
+      if (block.dataset.rendered) return;
+      var code = block.dataset.source || block.textContent || '';
+      if (!block.dataset.mermaidId) {
+        mermaidRenderCounter += 1;
+        block.dataset.mermaidId = 'mermaid-' + Date.now().toString(36) + '-' + mermaidRenderCounter;
+      }
+      var id = block.dataset.mermaidId;
+      block.dataset.rendered = 'true';
+      Promise.resolve(mermaid.render(id, code)).then(function(result) {
+        block.classList.remove('loading');
+        block.classList.add('mermaid-rendered');
+        block.innerHTML = result.svg;
+      }).catch(function(error) {
+        block.classList.remove('loading');
+        block.classList.add('mermaid-error');
+        block.innerHTML = '<strong>Mermaid could not render this diagram.</strong><pre><code class="language-mermaid">' + escapeHtml(code) + '</code></pre>';
+        var codeEl = block.querySelector('code');
+        if (codeEl && typeof hljs !== 'undefined') hljs.highlightElement(codeEl);
+      });
+    });
+  }).catch(function() {
+    blocks.forEach(function(block) {
+      if (block.dataset.rendered) return;
+      var code = block.dataset.source || block.textContent || '';
+      block.dataset.rendered = 'true';
+      block.classList.remove('loading');
+      block.classList.add('mermaid-error');
+      block.innerHTML = '<strong>Mermaid is unavailable.</strong><pre><code class="language-mermaid">' + escapeHtml(code) + '</code></pre>';
+    });
+  });
 }
 
 function generateSessionTitle(messages) {
@@ -2791,6 +2953,7 @@ function applyTheme(themeName) {
       : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css';
     if (hljsLink.getAttribute('href') !== targetHref) hljsLink.setAttribute('href', targetHref);
   }
+  if (mermaidScriptReady && typeof mermaid !== 'undefined') initializeMermaid();
   try { localStorage.setItem('hermes-theme', themeName); } catch(e) {}
 }
 
@@ -3074,6 +3237,7 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
         pre.appendChild(btn);
       }
     });
+    renderMermaidBlocks(contentRef.current);
   }, [message.content]);
 
   return (
