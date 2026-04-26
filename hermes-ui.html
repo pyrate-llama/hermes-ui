@@ -550,6 +550,29 @@
     font-size: 12px; line-height: 1.45; color: var(--text-secondary);
     overflow-wrap: anywhere;
   }
+  .subagent-child-list {
+    display: flex; flex-direction: column; gap: 5px;
+    padding: 0 11px 10px 29px;
+  }
+  .subagent-child-row {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px;
+    align-items: start;
+    padding: 7px 9px;
+    border: 1px solid rgba(255,255,255,0.075);
+    border-radius: 6px;
+    background: rgba(0,0,0,0.12);
+  }
+  .subagent-child-index {
+    min-width: 18px; height: 18px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800;
+    color: var(--success); background: rgba(68,216,138,0.12);
+  }
+  .subagent-child-goal {
+    min-width: 0;
+    font-size: 12px; line-height: 1.4; color: var(--text-primary);
+    overflow-wrap: anywhere;
+  }
   .subagent-card .tool-call-toggle {
     margin-left: 4px;
   }
@@ -2735,16 +2758,45 @@ function getDelegationTitle(tool) {
   var role = String(args.role || args.agent_type || args.type || '').toLowerCase();
   if (raw.indexOf('explorer') !== -1 || role.indexOf('explorer') !== -1) return 'Explorer Subagent';
   if (raw.indexOf('worker') !== -1 || role.indexOf('worker') !== -1) return 'Worker Subagent';
+  var tasks = getDelegationTasks(tool);
+  if (tasks.length > 1) return tasks.length + ' Subagents';
   return 'Subagent';
+}
+
+function parseMaybeJson(value) {
+  if (typeof value !== 'string') return value;
+  var clean = value.trim();
+  if (!clean || (clean[0] !== '[' && clean[0] !== '{')) return value;
+  try { return JSON.parse(clean); } catch (e) { return value; }
+}
+
+function getDelegationTasks(tool) {
+  var args = (tool && tool.args) || {};
+  var rawTasks = parseMaybeJson(args.tasks);
+  if (!Array.isArray(rawTasks)) return [];
+  return rawTasks.map(function(task, idx) {
+    var item = parseMaybeJson(task);
+    if (item && typeof item === 'object' && !Array.isArray(item)) return item;
+    return { goal: String(item || ('Subtask ' + (idx + 1))) };
+  });
+}
+
+function getDelegationGoal(args) {
+  var keys = ['goal', 'task', 'prompt', 'question', 'message', 'description', 'query', 'target'];
+  for (var i = 0; i < keys.length; i++) {
+    var value = args && args[keys[i]];
+    if (value) return value;
+  }
+  return '';
 }
 
 function getDelegationDetail(tool) {
   var args = (tool && tool.args) || {};
-  var keys = ['task', 'prompt', 'question', 'message', 'description', 'query', 'target'];
-  for (var i = 0; i < keys.length; i++) {
-    var value = args[keys[i]];
-    if (value) return compactAgentStateDetail(value, 150);
-  }
+  var tasks = getDelegationTasks(tool);
+  if (tasks.length > 1) return 'Parallel batch';
+  if (tasks.length === 1) return compactAgentStateDetail(getDelegationGoal(tasks[0]), 150);
+  var value = getDelegationGoal(args);
+  if (value) return compactAgentStateDetail(value, 150);
   return compactAgentStateDetail((tool && (tool.label || tool.toolName)) || 'Delegated task', 150);
 }
 
@@ -2758,6 +2810,7 @@ function formatToolDuration(ms) {
 function SubagentToolCard({ tool, index, expanded, onToggle, formatResult }) {
   var hasResult = tool.done && tool.result != null;
   var duration = formatToolDuration(tool.duration);
+  var tasks = getDelegationTasks(tool);
   var status = tool.done ? 'Done' : 'Running';
   if (duration && tool.done) status += ' · ' + duration;
   return (
@@ -2774,7 +2827,20 @@ function SubagentToolCard({ tool, index, expanded, onToggle, formatResult }) {
           </button>
         )}
       </div>
-      <div className="subagent-detail">{getDelegationDetail(tool)}</div>
+      {tasks.length > 1 ? (
+        <div className="subagent-child-list">
+          {tasks.map(function(task, taskIndex) {
+            return (
+              <div key={taskIndex} className="subagent-child-row">
+                <span className="subagent-child-index">{taskIndex + 1}</span>
+                <span className="subagent-child-goal">{compactAgentStateDetail(getDelegationGoal(task), 160)}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="subagent-detail">{getDelegationDetail(tool)}</div>
+      )}
       {hasResult && (
         <div className={"tool-call-result " + (expanded ? 'expanded' : '')}>
           {expanded ? formatResult(tool.result) : ''}
