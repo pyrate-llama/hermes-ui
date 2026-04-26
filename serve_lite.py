@@ -765,11 +765,24 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
                     put("reasoning", {"text": str(reason_text)})
                 return
 
+            def _snap_tool_arg(value, depth=0):
+                if depth >= 3:
+                    s = str(value)
+                    return s[:120] + ("..." if len(s) > 120 else "")
+                if isinstance(value, dict):
+                    out = {}
+                    for k, v in list(value.items())[:8]:
+                        out[str(k)] = _snap_tool_arg(v, depth + 1)
+                    return out
+                if isinstance(value, list):
+                    return [_snap_tool_arg(v, depth + 1) for v in value[:6]]
+                s = str(value)
+                return s[:240] + ("..." if len(s) > 240 else "")
+
             args_snap = {}
             if isinstance(args, dict):
-                for k, v in list(args.items())[:4]:
-                    s = str(v)
-                    args_snap[k] = s[:120] + ("..." if len(s) > 120 else "")
+                for k, v in list(args.items())[:8]:
+                    args_snap[str(k)] = _snap_tool_arg(v)
 
             if event_type in (None, "tool.started"):
                 put("tool", {"name": name, "preview": preview, "args": args_snap})
