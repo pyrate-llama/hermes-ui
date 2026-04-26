@@ -3015,12 +3015,12 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
         <button className="modal-close-btn" onClick={onClose} title="Close (Esc)" aria-label="Close"><Icon name="x" size={18}/></button>
         <div className="modal-title">Settings</div>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',gap:'12px'}}>
-          <div style={{display:'flex',gap:'4px'}}>
-            {['general','providers','server','remote'].map(function(tab) {
+          <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
+            {['general','providers','server','restart','remote'].map(function(tab) {
               return (
                 <button key={tab} onClick={function(){ setSettingsTab(tab); }}
                   style={{background: settingsTab === tab ? 'var(--accent)' : 'var(--bg-tertiary)', color: settingsTab === tab ? 'white' : 'var(--text-secondary)', border:'1px solid ' + (settingsTab === tab ? 'var(--accent)' : 'var(--border)'), borderRadius:'8px', padding:'6px 14px', fontSize:'12px', cursor:'pointer', fontWeight: settingsTab === tab ? '600' : '400', textTransform:'capitalize'}}>
-                  {tab === 'general' ? 'General' : tab === 'providers' ? 'Providers' : tab === 'server' ? 'Server' : 'Remote Access'}
+                  {tab === 'general' ? 'General' : tab === 'providers' ? 'Providers' : tab === 'server' ? 'Server' : tab === 'restart' ? 'Restart' : 'Remote Access'}
                 </button>
               );
             })}
@@ -3155,29 +3155,13 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
           <React.Fragment>
             <div style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'10px',padding:'16px',marginBottom:'16px'}}>
               <div style={{fontSize:'14px',fontWeight:'600',color:'var(--text-primary)',marginBottom:'8px',display:'flex',alignItems:'center',gap:'8px'}}>
-                <span>{'🔧'}</span> Server Management
+                <span>{'🔧'}</span> Server Status
               </div>
               <div style={{fontSize:'12px',color:'var(--text-secondary)',lineHeight:'1.6'}}>
-                Choose a light restart for normal cases, or a full restart when the port or agent needs a clean recovery.
+                Check the local proxy and confirm which server this page is connected to.
               </div>
             </div>
 
-            <div style={{display:'flex',gap:'10px',marginBottom:'16px'}}>
-              <button onClick={handleRestart} style={{flex:1,background:'var(--bg-tertiary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
-                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'↻'} Quick Restart</div>
-                <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>Restart UI + Agent in place</div>
-              </button>
-              <button onClick={handleFullRestart} style={{flex:1,background:'var(--bg-tertiary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
-                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'⟳'} Full Restart</div>
-                <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>Stop stale port, restart, wait</div>
-              </button>
-            </div>
-            <div style={{display:'flex',gap:'10px',marginBottom:'16px'}}>
-              <button onClick={handlePullRestart} style={{flex:1,background:'var(--accent)',color:'white',border:'none',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
-                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'↑'} Update &amp; Full Restart</div>
-                <div style={{fontSize:'11px',color:'rgba(255,255,255,0.8)'}}>Pull both repos, then full restart</div>
-              </button>
-            </div>
             <div style={{display:'flex',gap:'10px',marginBottom:'16px'}}>
               <button onClick={handleServerHealthCheck} style={{width:'100%',background:'var(--bg-tertiary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'10px 12px',cursor:'pointer',textAlign:'center',fontSize:'12px',fontWeight:'600'}}>
                 Check Server
@@ -3205,6 +3189,40 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
                 <span className="config-value" style={{cursor:'pointer',color:'var(--accent)'}} onClick={function(){ window.location.reload(); }}>Click to reload UI</span>
               </div>
             </div>
+          </React.Fragment>
+        ) : settingsTab === 'restart' ? (
+          <React.Fragment>
+            <div style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'10px',padding:'16px',marginBottom:'16px'}}>
+              <div style={{fontSize:'14px',fontWeight:'600',color:'var(--text-primary)',marginBottom:'8px',display:'flex',alignItems:'center',gap:'8px'}}>
+                <span>{'↻'}</span> Restart Controls
+              </div>
+              <div style={{fontSize:'12px',color:'var(--text-secondary)',lineHeight:'1.6'}}>
+                Choose a light restart for normal cases, or a full restart when the port or agent needs a clean recovery.
+              </div>
+            </div>
+
+            <div style={{display:'flex',gap:'10px',marginBottom:'16px'}}>
+              <button onClick={handleRestart} style={{flex:1,background:'var(--bg-tertiary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
+                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'↻'} Quick Restart</div>
+                <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>Restart UI + Agent in place</div>
+              </button>
+              <button onClick={handleFullRestart} style={{flex:1,background:'var(--bg-tertiary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
+                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'⟳'} Full Restart</div>
+                <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>Stop stale port, restart, wait</div>
+              </button>
+            </div>
+            <div style={{display:'flex',gap:'10px',marginBottom:'16px'}}>
+              <button onClick={handlePullRestart} style={{flex:1,background:'var(--accent)',color:'white',border:'none',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
+                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'↑'} Update &amp; Full Restart</div>
+                <div style={{fontSize:'11px',color:'rgba(255,255,255,0.8)'}}>Pull both repos, then full restart</div>
+              </button>
+            </div>
+
+            {serverStatus && (
+              <div style={{background:'rgba(68,216,138,0.08)',border:'1px solid rgba(68,216,138,0.2)',borderRadius:'8px',padding:'12px',fontSize:'12px',color:'var(--success)',lineHeight:'1.5',marginBottom:'16px',fontFamily:'JetBrains Mono, monospace'}}>
+                {serverStatus}
+              </div>
+            )}
           </React.Fragment>
         ) : (
           <React.Fragment>
