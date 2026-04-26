@@ -502,6 +502,58 @@
   .tool-call-result::-webkit-scrollbar { width: 6px; }
   .tool-call-result::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
 
+  .subagent-card {
+    border: 1px solid rgba(124,111,224,0.24);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    background: rgba(124,111,224,0.055);
+    overflow: hidden;
+  }
+  .subagent-card.done {
+    border-color: rgba(68,216,138,0.24);
+    border-left-color: var(--success);
+    background: rgba(68,216,138,0.055);
+  }
+  .subagent-card.active {
+    border-color: rgba(124,111,224,0.28);
+    border-left-color: var(--accent);
+    animation: toolPulse 2s ease-in-out infinite;
+  }
+  .subagent-card-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 11px 5px;
+    min-width: 0;
+  }
+  .subagent-status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); flex-shrink: 0;
+    box-shadow: 0 0 0 3px rgba(124,111,224,0.12);
+  }
+  .subagent-card.done .subagent-status-dot {
+    background: var(--success);
+    box-shadow: 0 0 0 3px rgba(68,216,138,0.12);
+  }
+  .subagent-card.active .subagent-status-dot {
+    animation: dotBounce 1.2s ease-in-out infinite;
+  }
+  .subagent-title {
+    font-size: 12px; font-weight: 700; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .subagent-meta {
+    margin-left: auto; flex-shrink: 0;
+    font-size: 10px; font-weight: 700; letter-spacing: 0;
+    color: var(--text-muted); text-transform: uppercase;
+  }
+  .subagent-detail {
+    padding: 0 11px 10px 29px;
+    font-size: 12px; line-height: 1.45; color: var(--text-secondary);
+    overflow-wrap: anywhere;
+  }
+  .subagent-card .tool-call-toggle {
+    margin-left: 4px;
+  }
+
   .aside-message {
     max-width: 86%;
     align-self: center;
@@ -2667,6 +2719,71 @@ function ThinkingBubble() {
 }
 ThinkingBubble._latestThought = '';
 
+function isDelegationTool(tool) {
+  var raw = String((tool && (tool.toolName || tool.name || tool.label)) || '').toLowerCase();
+  return raw.indexOf('delegate_task') !== -1
+    || raw.indexOf('delegate') !== -1
+    || raw.indexOf('subagent') !== -1
+    || raw.indexOf('spawn_agent') !== -1
+    || raw.indexOf('worker') !== -1
+    || raw.indexOf('explorer') !== -1;
+}
+
+function getDelegationTitle(tool) {
+  var raw = String((tool && (tool.toolName || tool.name || tool.label)) || '').toLowerCase();
+  var args = (tool && tool.args) || {};
+  var role = String(args.role || args.agent_type || args.type || '').toLowerCase();
+  if (raw.indexOf('explorer') !== -1 || role.indexOf('explorer') !== -1) return 'Explorer Subagent';
+  if (raw.indexOf('worker') !== -1 || role.indexOf('worker') !== -1) return 'Worker Subagent';
+  return 'Subagent';
+}
+
+function getDelegationDetail(tool) {
+  var args = (tool && tool.args) || {};
+  var keys = ['task', 'prompt', 'question', 'message', 'description', 'query', 'target'];
+  for (var i = 0; i < keys.length; i++) {
+    var value = args[keys[i]];
+    if (value) return compactAgentStateDetail(value, 150);
+  }
+  return compactAgentStateDetail((tool && (tool.label || tool.toolName)) || 'Delegated task', 150);
+}
+
+function formatToolDuration(ms) {
+  var n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  if (n < 1000) return Math.round(n) + 'ms';
+  return (n / 1000).toFixed(n < 10000 ? 1 : 0) + 's';
+}
+
+function SubagentToolCard({ tool, index, expanded, onToggle, formatResult }) {
+  var hasResult = tool.done && tool.result != null;
+  var duration = formatToolDuration(tool.duration);
+  var status = tool.done ? 'Done' : 'Running';
+  if (duration && tool.done) status += ' · ' + duration;
+  return (
+    <div className={"subagent-card " + (tool.done ? 'done' : 'active')}>
+      <div className="subagent-card-header"
+        onClick={hasResult ? function() { onToggle(index); } : undefined}
+        style={hasResult ? {cursor: 'pointer'} : {}}>
+        <span className="subagent-status-dot"></span>
+        <span className="subagent-title">{getDelegationTitle(tool)}</span>
+        <span className="subagent-meta">{status}</span>
+        {hasResult && (
+          <button className="tool-call-toggle" onClick={function(e) { e.stopPropagation(); onToggle(index); }}>
+            {expanded ? 'hide' : 'result'}
+          </button>
+        )}
+      </div>
+      <div className="subagent-detail">{getDelegationDetail(tool)}</div>
+      {hasResult && (
+        <div className={"tool-call-result " + (expanded ? 'expanded' : '')}>
+          {expanded ? formatResult(tool.result) : ''}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AsideBubble({ message, index }) {
   var answerClass = 'aside-answer ' + (message.pending ? 'pending ' : '') + (message.error ? 'error' : '');
   return (
@@ -2747,6 +2864,18 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
           {message.toolCalls.map(function(tool, i) {
             var isExpanded = expandedTools[i] || false;
             var hasResult = tool.done && tool.result != null;
+            if (isDelegationTool(tool)) {
+              return (
+                <SubagentToolCard
+                  key={i}
+                  tool={tool}
+                  index={i}
+                  expanded={isExpanded}
+                  onToggle={toggleToolExpand}
+                  formatResult={formatResult}
+                />
+              );
+            }
             return (
               <div key={i} className="tool-call-wrapper">
                 <div className={"tool-call-row " + (tool.done ? 'done' : 'active') + (isExpanded ? '' : ' collapsed')}
@@ -6621,7 +6750,7 @@ function App() {
         source.addEventListener('tool_complete', function(e) {
           var d = JSON.parse(e.data);
           emitStatus({ kind: 'thinking', label: 'Thinking', detail: 'Tool finished' });
-          if (onToolEvent) onToolEvent({ type: 'completed', toolName: d.name, label: d.preview || d.name, duration: d.duration });
+          if (onToolEvent) onToolEvent({ type: 'completed', toolName: d.name, label: d.preview || d.name, args: d.args, duration: d.duration });
         });
 
         source.addEventListener('approval', function(e) {
@@ -7640,6 +7769,7 @@ function App() {
             toolCalls.push({
               toolName: toolEvent.toolName,
               label: toolEvent.label,
+              args: toolEvent.args || {},
               timestamp: new Date(),
               done: false,
             });
@@ -7672,6 +7802,8 @@ function App() {
             var lastTc = toolCalls[toolCalls.length - 1];
             if (lastTc) {
               lastTc.result = toolEvent.result;
+              if (toolEvent.args) lastTc.args = toolEvent.args;
+              if (toolEvent.duration != null) lastTc.duration = toolEvent.duration;
               lastTc.done = true;
             }
             updateStreamMessages(sessionId, function(prev) {
