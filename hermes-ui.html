@@ -1004,7 +1004,14 @@
   .input-hint {
     font-size: 11px; color: var(--text-muted);
     padding: 4px 4px 0 4px;
-    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    display: flex; flex-wrap: nowrap; gap: 8px; align-items: center;
+    min-height: 30px; overflow: hidden;
+  }
+  .input-hint > span { flex: 0 0 auto; white-space: nowrap; }
+  .input-hint-secondary { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .input-hint-actions {
+    margin-left: auto; position: relative; display: inline-flex; align-items: center; gap: 8px;
+    flex: 0 0 auto;
   }
   .input-hint kbd {
     display: inline-flex; align-items: center; justify-content: center;
@@ -1791,16 +1798,18 @@
 
   /* ── Status Bar ── */
   .status-bar {
-    display: flex; align-items: center; gap: 16px;
+    display: flex; align-items: center; gap: 12px;
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid var(--glass-border);
     padding: 6px 20px; font-size: 11px; color: var(--text-muted);
     font-family: 'JetBrains Mono', 'Monaco', monospace;
-    min-height: 28px; flex-shrink: 0; z-index: 2;
+    height: 32px; flex-shrink: 0; z-index: 2; box-sizing: border-box;
+    overflow: hidden; white-space: nowrap;
   }
   .status-bar-item {
     display: flex; align-items: center; gap: 5px;
     transition: color 0.2s;
+    flex: 0 0 auto;
   }
   .context-meter {
     gap: 7px;
@@ -1824,7 +1833,14 @@
   .context-meter.full .context-meter-fill { background: var(--danger); }
   .status-bar-caps {
     display: flex; align-items: center; gap: 4px;
-    max-width: 42vw; overflow: hidden;
+    max-width: 34vw; min-width: 0; overflow: hidden; flex: 0 1 auto;
+  }
+  .status-bar-caps .model-capabilities {
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  .status-bar-caps .model-capability {
+    flex: 0 0 auto;
   }
   .status-bar-item:hover { color: var(--text-secondary); }
   .status-dot-live {
@@ -2250,6 +2266,11 @@
     .right-column.closed { margin-right: -260px; }
     .right-column.wide { width: 500px; min-width: 500px; }
     .right-column.wide.closed { margin-right: -500px; }
+    .status-bar-caps .model-capability:nth-child(n+4),
+    .status-bar-version { display: none; }
+  }
+  @media (max-width: 1120px) {
+    .status-bar-caps .model-capability:nth-child(n+3) { display: none; }
   }
   @media (max-width: 1024px) {
     .sidebar { width: 240px; min-width: 240px; }
@@ -2259,6 +2280,15 @@
     .right-column.wide { width: 420px; min-width: 420px; }
     .right-column.wide.closed { margin-right: -420px; }
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .input-hint-secondary { display: none; }
+    .status-bar { gap: 8px; padding-inline: 12px; }
+    .status-bar-caps,
+    .status-bar-version { display: none; }
+  }
+  @media (max-width: 900px) {
+    .input-hint-newline { display: none; }
+    .context-meter { min-width: 128px; }
+    .context-meter-track { width: 42px; }
   }
   @media (max-width: 768px) {
     .layout-resize-handle { display: none; }
@@ -5918,7 +5948,7 @@ function StatusBar({ connected, conversations, messages, sessionTokens }) {
         </React.Fragment>
       )}
       <div style={{flex:1}}></div>
-      <div className="status-bar-item" style={{opacity:0.5}}>
+      <div className="status-bar-item status-bar-version" style={{opacity:0.5}}>
         <span>Hermes UI v3.0</span>
       </div>
     </div>
@@ -6399,6 +6429,8 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredNumber('hermes-sidebar-width', 280, 180, 440));
   const [rightColumnWidth, setRightColumnWidth] = useState(() => readStoredNumber('hermes-right-column-width', 320, 180, 680));
   const [resizingLayout, setResizingLayout] = useState(null);
+  const wasDesktopLayoutRef = useRef(window.innerWidth > 768);
+  const sidebarCollapsedBeforeMobileRef = useRef(sidebarCollapsed);
   // Auto-collapse sidebar when window shrinks below 768px. Without this the
   // CSS flips the sidebar into a fixed overlay (+ 50% dark backdrop) while
   // `sidebarCollapsed` stays false, so the chat gets hidden behind the open
@@ -6406,15 +6438,20 @@ function App() {
   useEffect(function() {
     var onResize = function() {
       var desktop = window.innerWidth > 768;
+      var wasDesktop = wasDesktopLayoutRef.current;
       setIsDesktopLayout(desktop);
-      if (!desktop) {
+      if (wasDesktop && !desktop) {
+        sidebarCollapsedBeforeMobileRef.current = sidebarCollapsed;
         setSidebarCollapsed(true);
+      } else if (!wasDesktop && desktop) {
+        setSidebarCollapsed(sidebarCollapsedBeforeMobileRef.current);
       }
+      wasDesktopLayoutRef.current = desktop;
     };
     onResize();
     window.addEventListener('resize', onResize);
     return function() { window.removeEventListener('resize', onResize); };
-  }, []);
+  }, [sidebarCollapsed]);
   useEffect(function() {
     try { localStorage.setItem('hermes-sidebar-width', String(sidebarWidth)); } catch(e) {}
   }, [sidebarWidth]);
@@ -9079,11 +9116,11 @@ function App() {
                   ) : (
                     <React.Fragment>
                       <span><kbd>⏎</kbd> send</span>
-                      <span><kbd>⇧</kbd><kbd>⏎</kbd> new line</span>
-                      <span>Paste / drop images & files</span>
+                      <span className="input-hint-newline"><kbd>⇧</kbd><kbd>⏎</kbd> new line</span>
+                      <span className="input-hint-secondary">Paste / drop images & files</span>
                       {!config.geminiKey && <span style={{opacity:0.6}}>· add Gemini key for image analysis</span>}
                       {/* Export chat dropdown — inline in hint row, right-aligned */}
-                      <div style={{marginLeft:'auto', position:'relative', display:'inline-flex', alignItems:'center', gap:'8px'}}>
+                      <div className="input-hint-actions">
                         <div className="composer-chip-wrap">
                           <button
                             className={"composer-chip " + (reasoningEffort ? 'active' : '')}
