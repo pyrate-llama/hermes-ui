@@ -2465,6 +2465,38 @@ function readStoredNumber(key, fallback, min, max) {
   }
 }
 
+function defaultConfig() {
+  return {
+    apiUrl: API_BASE,
+    geminiKey: '',
+    baseSystemPrompt: '',
+    applyBehavioralGuidelines: false,
+    imageHelperMode: 'auto',
+    imageHelperModel: 'gemini-2.5-flash',
+  };
+}
+
+function normalizeHermesConfig(value) {
+  return Object.assign(defaultConfig(), value || {});
+}
+
+function normalizeImageHelperMode(value) {
+  return ['auto', 'describe', 'direct'].indexOf(value) !== -1 ? value : 'auto';
+}
+
+function normalizeImageHelperModel(value) {
+  var model = String(value || '').trim();
+  return model || 'gemini-2.5-flash';
+}
+
+function imageHelperModeLabel(value) {
+  switch (normalizeImageHelperMode(value)) {
+    case 'describe': return 'Always describe';
+    case 'direct': return 'Direct only';
+    default: return 'Auto';
+  }
+}
+
 // ── Inline Icon set (Lucide-style strokes, currentColor) ─────────────────
 function Icon({ name, size, className, strokeWidth }) {
   var s = size || 16;
@@ -3334,6 +3366,8 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
 /* ── Settings Modal ── */
 function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
   const [geminiKey, setGeminiKey] = useState(config.geminiKey || '');
+  const [imageHelperMode, setImageHelperMode] = useState(normalizeImageHelperMode(config.imageHelperMode));
+  const [imageHelperModel, setImageHelperModel] = useState(normalizeImageHelperModel(config.imageHelperModel));
   const [baseSystemPrompt, setBaseSystemPrompt] = useState(config.baseSystemPrompt || '');
   const [applyBehavioralGuidelines, setApplyBehavioralGuidelines] = useState(!!(config && config.applyBehavioralGuidelines === true));
   const [settingsTab, setSettingsTab] = useState('general');
@@ -3344,7 +3378,14 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
   const [providerSaving, setProviderSaving] = useState('');
 
   const handleSave = () => {
-    onSave({ apiUrl: config.apiUrl, geminiKey, baseSystemPrompt, applyBehavioralGuidelines });
+    onSave(normalizeHermesConfig({
+      apiUrl: config.apiUrl,
+      geminiKey,
+      imageHelperMode: normalizeImageHelperMode(imageHelperMode),
+      imageHelperModel: normalizeImageHelperModel(imageHelperModel),
+      baseSystemPrompt,
+      applyBehavioralGuidelines,
+    }));
     onClose();
   };
 
@@ -3532,21 +3573,21 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: settingsTab === 'providers' ? '760px' : '560px', maxHeight:'85vh',overflow:'auto'}}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: (settingsTab === 'providers' || settingsTab === 'helpers') ? '760px' : '560px', maxHeight:'85vh',overflow:'auto'}}>
         <button className="modal-close-btn" onClick={onClose} title="Close (Esc)" aria-label="Close"><Icon name="x" size={18}/></button>
         <div className="modal-title">Settings</div>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',gap:'12px'}}>
           <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
-            {['general','providers','server','restart','remote'].map(function(tab) {
+            {['general','helpers','providers','server','restart','remote'].map(function(tab) {
               return (
                 <button key={tab} onClick={function(){ setSettingsTab(tab); }}
                   style={{background: settingsTab === tab ? 'var(--accent)' : 'var(--bg-tertiary)', color: settingsTab === tab ? 'white' : 'var(--text-secondary)', border:'1px solid ' + (settingsTab === tab ? 'var(--accent)' : 'var(--border)'), borderRadius:'8px', padding:'6px 14px', fontSize:'12px', cursor:'pointer', fontWeight: settingsTab === tab ? '600' : '400', textTransform:'capitalize'}}>
-                  {tab === 'general' ? 'General' : tab === 'providers' ? 'Providers' : tab === 'server' ? 'Server' : tab === 'restart' ? 'Restart' : 'Remote Access'}
+                  {tab === 'general' ? 'General' : tab === 'helpers' ? 'Helpers' : tab === 'providers' ? 'Providers' : tab === 'server' ? 'Server' : tab === 'restart' ? 'Restart' : 'Remote Access'}
                 </button>
               );
             })}
           </div>
-          {settingsTab === 'general' && (
+          {(settingsTab === 'general' || settingsTab === 'helpers') && (
             <button className="modal-btn primary" onClick={handleSave}
               style={{padding:'6px 14px',fontSize:'12px',fontWeight:'600',borderRadius:'8px'}}>
               Save
@@ -3556,10 +3597,6 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
 
         {settingsTab === 'general' ? (
           <React.Fragment>
-            <div className="modal-section">
-              <label className="modal-label">Gemini API Key (for image analysis)</label>
-              <input type="password" className="modal-input" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} placeholder="Paste your API key here" />
-            </div>
             <div className="modal-section">
               <label className="modal-label">Base System Prompt</label>
               <textarea className="modal-input" style={{ minHeight: '120px', resize: 'vertical' }} value={baseSystemPrompt} onChange={e => setBaseSystemPrompt(e.target.value)} placeholder="Optional system prompt to include with all messages" />
@@ -3592,6 +3629,76 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
               <div className="config-item">
                 <span>Session Mode</span>
                 <span className="config-value">API-based (v2)</span>
+              </div>
+            </div>
+          </React.Fragment>
+        ) : settingsTab === 'helpers' ? (
+          <React.Fragment>
+            <div style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'10px',padding:'16px',marginBottom:'16px'}}>
+              <div style={{fontSize:'14px',fontWeight:'600',color:'var(--text-primary)',marginBottom:'8px',display:'flex',alignItems:'center',gap:'8px'}}>
+                <Icon name="sparkles" size={16}/> Helper Models
+              </div>
+              <div style={{fontSize:'12px',color:'var(--text-secondary)',lineHeight:'1.6'}}>
+                Controls secondary model work around the main chat model. Right now this is focused on image handling.
+              </div>
+            </div>
+
+            <div className="modal-section">
+              <label className="modal-label">Image handling</label>
+              <div style={{display:'grid',gap:'8px'}}>
+                {[
+                  { value: 'auto', title: 'Auto', desc: 'Use native vision when the active model supports it; otherwise describe images with Gemini.' },
+                  { value: 'describe', title: 'Always describe', desc: 'Always use the helper model to turn images into text before sending.' },
+                  { value: 'direct', title: 'Direct only', desc: 'Never use Gemini; send image data straight to the active model.' },
+                ].map(function(item) {
+                  var active = normalizeImageHelperMode(imageHelperMode) === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={function(){ setImageHelperMode(item.value); }}
+                      style={{display:'flex',alignItems:'flex-start',gap:'10px',width:'100%',textAlign:'left',background:active ? 'rgba(69,136,224,0.12)' : 'var(--bg-secondary)',border:'1px solid ' + (active ? 'rgba(69,136,224,0.45)' : 'var(--border)'),borderRadius:'8px',padding:'10px 12px',cursor:'pointer',color:'var(--text-primary)'}}
+                    >
+                      <span style={{width:'14px',height:'14px',borderRadius:'50%',border:'1px solid ' + (active ? 'var(--accent)' : 'var(--border)'),background:active ? 'var(--accent)' : 'transparent',marginTop:'2px',flexShrink:0}}></span>
+                      <span>
+                        <span style={{display:'block',fontSize:'13px',fontWeight:'650',marginBottom:'2px'}}>{item.title}</span>
+                        <span style={{display:'block',fontSize:'11px',color:'var(--text-secondary)',lineHeight:'1.45'}}>{item.desc}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="modal-section">
+              <label className="modal-label">Gemini API Key</label>
+              <input type="password" className="modal-input" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} placeholder="Paste your API key here" />
+              <div style={{fontSize:'11px',color:'var(--text-secondary)',marginTop:'6px',lineHeight:'1.5'}}>
+                Used only when image handling needs a helper description. Existing keys are stored in this browser's local settings.
+              </div>
+            </div>
+
+            <div className="modal-section">
+              <label className="modal-label">Image helper model</label>
+              <input className="modal-input" value={imageHelperModel} onChange={e => setImageHelperModel(e.target.value)} placeholder="gemini-2.5-flash" />
+              <div style={{fontSize:'11px',color:'var(--text-secondary)',marginTop:'6px',lineHeight:'1.5'}}>
+                Example: <span style={{fontFamily:'JetBrains Mono, monospace'}}>gemini-2.5-flash</span>. Changes apply to newly attached images.
+              </div>
+            </div>
+
+            <div className="config-panel">
+              <div className="config-section-title">Current Helper Behavior</div>
+              <div className="config-item">
+                <span>Image mode</span>
+                <span className="config-value">{imageHelperModeLabel(imageHelperMode)}</span>
+              </div>
+              <div className="config-item">
+                <span>Helper model</span>
+                <span className="config-value">{normalizeImageHelperModel(imageHelperModel)}</span>
+              </div>
+              <div className="config-item">
+                <span>Gemini key</span>
+                <span className="config-value">{geminiKey ? 'Configured' : 'Not set'}</span>
               </div>
             </div>
           </React.Fragment>
@@ -6436,9 +6543,9 @@ function App() {
   const [config, setConfig] = useState(() => {
     try {
       const saved = localStorage.getItem('hermes-config');
-      return saved ? JSON.parse(saved) : { apiUrl: API_BASE, geminiKey: '', baseSystemPrompt: '', applyBehavioralGuidelines: false };
+      return normalizeHermesConfig(saved ? JSON.parse(saved) : null);
     } catch(e) {
-      return { apiUrl: API_BASE, geminiKey: '', baseSystemPrompt: '', applyBehavioralGuidelines: false };
+      return defaultConfig();
     }
   });
 
@@ -7407,7 +7514,9 @@ function App() {
   };
 
   const processImages = async (files) => {
-    var canSeeDirectly = isVisionModel(currentModel);
+    var imageHelperMode = normalizeImageHelperMode(config && config.imageHelperMode);
+    var imageHelperModel = normalizeImageHelperModel(config && config.imageHelperModel);
+    var canSeeDirectly = imageHelperMode === 'direct' || (imageHelperMode === 'auto' && isVisionModel(currentModel));
     // Native fast-path — skip Gemini entirely when the active model can
     // see the image itself. dataUrl gets forwarded as-is in sendMessage.
     if (canSeeDirectly) {
@@ -7419,7 +7528,7 @@ function App() {
           setPendingImages(prev => [...prev, {
             id: imgId, dataUrl: dataUrl, native: true,
             analyzing: false, description: null,
-            status: 'Ready — sent to model directly',
+            status: imageHelperMode === 'direct' ? 'Ready - direct image mode' : 'Ready - sent to model directly',
           }]);
         };
         reader.readAsDataURL(file);
@@ -7427,7 +7536,7 @@ function App() {
       return;
     }
     if (!config.geminiKey) {
-      alert('Add your Gemini API key in Settings to analyze images.\n\nSince MiniMax cannot see images directly, Gemini is used to describe images before sending to Hermes.');
+      alert('Add your Gemini API key in Settings > Helpers to analyze images.\n\nYour current image helper mode uses Gemini to describe images before sending them to Hermes.');
       return;
     }
     for (const file of files) {
@@ -7439,10 +7548,10 @@ function App() {
         var mimeType = 'image/jpeg';
         var mimeMatch = dataUrl.match(/^data:(image\/[a-zA-Z+]+);/);
         if (mimeMatch) mimeType = mimeMatch[1];
-        setPendingImages(prev => [...prev, { id: imgId, dataUrl: dataUrl, analyzing: true, status: 'Analyzing with Gemini...' }]);
+        setPendingImages(prev => [...prev, { id: imgId, dataUrl: dataUrl, analyzing: true, status: 'Analyzing with ' + imageHelperModel + '...' }]);
         try {
           const base64 = dataUrl.split(',')[1];
-          const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + config.geminiKey, {
+          const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(imageHelperModel) + ':generateContent?key=' + config.geminiKey, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -8804,7 +8913,7 @@ function App() {
     };
     document.addEventListener('paste', handlePaste);
     return () => document.removeEventListener('paste', handlePaste);
-  }, [config.geminiKey]);
+  }, [config.geminiKey, config.imageHelperMode, config.imageHelperModel, currentModel]);
 
   // ── Render ──
   var sidebarStyle = isDesktopLayout
@@ -9089,7 +9198,7 @@ function App() {
                       <div key={img.id} className="image-preview-item">
                         <img src={img.dataUrl} alt="Preview" onClick={function(e) { e.stopPropagation(); setLightboxSrc(img.dataUrl); }} />
                         <button className="image-preview-remove" onClick={() => removeImage(img.id)}>x</button>
-                        {img.analyzing && <div className="analyzing-badge">{'Analyzing with Gemini...'}</div>}
+                        {img.analyzing && <div className="analyzing-badge">{img.status || 'Analyzing...'}</div>}
                         {!img.analyzing && img.native && <div className="analyzing-badge" style={{background:'rgba(69,136,224,0.85)'}} title="Will be sent to the model directly (vision-capable)">{'Vision'}</div>}
                         {!img.analyzing && !img.native && img.description && <div className="analyzing-badge" style={{background:'rgba(85,192,136,0.85)'}}>{'Ready'}</div>}
                         {!img.analyzing && !img.native && !img.description && <div className="analyzing-badge" style={{background:'rgba(224,85,85,0.85)'}} title={img.status || 'Analysis failed'}>{'Failed'}</div>}
@@ -9282,7 +9391,7 @@ function App() {
                       <span><kbd>⏎</kbd> send</span>
                       <span className="input-hint-newline"><kbd>⇧</kbd><kbd>⏎</kbd> new line</span>
                       <span className="input-hint-secondary">Paste / drop images & files</span>
-                      {!config.geminiKey && <span style={{opacity:0.6}}>· add Gemini key for image analysis</span>}
+                      {!config.geminiKey && normalizeImageHelperMode(config.imageHelperMode) !== 'direct' && <span style={{opacity:0.6}}>· add Gemini key for helper images</span>}
                       {/* Export chat dropdown — inline in hint row, right-aligned */}
                       <div className="input-hint-actions">
                         <div className="composer-chip-wrap">
