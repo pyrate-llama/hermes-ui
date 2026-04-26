@@ -12,6 +12,7 @@ import http.server
 import json
 import os
 import signal
+import shlex
 import sys
 import queue
 import threading
@@ -42,6 +43,17 @@ def _check_interpreter_matches_venv():
     cur_ver = f"{sys.version_info.major}.{sys.version_info.minor}"
     if cur_ver != venv_ver:
         venv_py = os.path.join(agent_dir, "venv", "bin", "python3")
+        reexec_flag = "HERMES_UI_REEXECED_MATCHING_PYTHON"
+        if os.path.exists(venv_py) and not os.environ.get(reexec_flag):
+            print(
+                f"[serve] Python {cur_ver} does not match hermes-agent venv Python {venv_ver}. "
+                f"Re-launching with {venv_py}...",
+                file=sys.stderr,
+                flush=True,
+            )
+            env = os.environ.copy()
+            env[reexec_flag] = "1"
+            os.execve(venv_py, [venv_py] + sys.argv, env)
         bar = "=" * 72
         print(
             f"\n{bar}\n"
@@ -2207,6 +2219,10 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_skill_save()
         elif self.path == "/api/skills/delete":
             self._handle_skill_delete()
+        elif self.path.startswith("/server/pull-full-restart"):
+            self._server_pull_full_restart()
+        elif self.path.startswith("/server/full-restart"):
+            self._server_full_restart()
         elif self.path.startswith("/server/pull-restart"):
             self._server_pull_restart()
         elif self.path.startswith("/server/restart"):
@@ -2233,7 +2249,93 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Hermes-Session-Id")
         self.end_headers()
 
+    def _read_json_body_optional(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except Exception:
+            length = 0
+        if length <= 0:
+            return {}
+        try:
+            return json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+        except Exception:
+            return {}
+
+    def _run_update_pulls(self):
+        ui_dir = os.path.dirname(os.path.abspath(__file__))
+        agent_dir = os.path.expanduser("~/.hermes/hermes-agent")
+        outputs = []
+        for name, d, args in [
+            ("hermes-ui", ui_dir, ["pull", "--ff-only"]),
+            ("hermes-agent", agent_dir, ["pull", "--rebase", "--autostash"]),
+        ]:
+            try:
+                result = subprocess.run(
+                    ["git", "-C", d] + args,
+                    capture_output=True, text=True, timeout=60,
+                )
+                out = ((result.stdout or "") + (result.stderr or "")).strip() or "ok"
+                if result.returncode != 0:
+                    out = f"error (rc={result.returncode}): {out}"
+                outputs.append(f"{name}: {out}")
+            except Exception as e:
+                outputs.append(f"{name}: error: {e}")
+        return "\n\n".join(outputs)
+
+    def _launch_full_restart(self):
+        port = str(getattr(self.server, "server_port", PORT) or PORT)
+        ui_dir = os.path.dirname(os.path.abspath(__file__))
+        start_cmd = " ".join(shlex.quote(arg) for arg in ([sys.executable] + sys.argv))
+        gateway_py = os.path.expanduser("~/.hermes/hermes-agent/venv/bin/python")
+        if not os.path.exists(gateway_py):
+            gateway_py = sys.executable
+        script = f"""#!/bin/bash
+set +e
+sleep 0.5
+
+if [ -f ~/.hermes/.env ]; then
+  set -a
+  source ~/.hermes/.env
+  set +a
+fi
+
+pkill -TERM -f "python3 serve_lite.py" 2>/dev/null
+sleep 2
+lsof -ti:{shlex.quote(port)} | xargs kill -9 2>/dev/null
+sleep 1
+
+{shlex.quote(gateway_py)} -m hermes_cli.main gateway restart 2>&1 | tail -5
+for i in $(seq 1 60); do
+  if nc -z localhost 8642 2>/dev/null; then
+    break
+  fi
+  sleep 0.5
+done
+
+cd {shlex.quote(ui_dir)}
+nohup {start_cmd} > /tmp/hermes-ui.log 2>&1 &
+
+for i in $(seq 1 60); do
+  if nc -z localhost {shlex.quote(port)} 2>/dev/null; then
+    break
+  fi
+  sleep 0.5
+done
+"""
+        subprocess.Popen(
+            ["bash", "-lc", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+
     def _server_restart(self):
+        body = self._read_json_body_optional()
+        if body.get("confirm") != "restart":
+            return self._json({
+                "ok": False,
+                "error": "Restart requires confirmation from the Settings UI.",
+            }, 400)
         self._json({"ok": True, "message": "Restarting..."})
         def _do_restart():
             time.sleep(0.5)
@@ -2255,6 +2357,19 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             os.execv(sys.executable, [sys.executable] + sys.argv)
         threading.Thread(target=_do_restart, daemon=True).start()
 
+    def _server_full_restart(self):
+        body = self._read_json_body_optional()
+        if body.get("confirm") != "full-restart":
+            return self._json({
+                "ok": False,
+                "error": "Full restart requires confirmation from the Settings UI.",
+            }, 400)
+        self._json({"ok": True, "message": "Full restart starting..."})
+        def _do_restart():
+            _flush_all_sessions()
+            self._launch_full_restart()
+        threading.Thread(target=_do_restart, daemon=True).start()
+
     def _server_pull_restart(self):
         """Pull hermes-ui and hermes-agent, then restart both.
         Response includes the pull output so the UI can display it.
@@ -2264,25 +2379,13 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         --autostash since the user may have local cherry-picks on top of
         upstream main; that matches how the repo is actually maintained.
         """
-        ui_dir = os.path.dirname(os.path.abspath(__file__))
-        agent_dir = os.path.expanduser("~/.hermes/hermes-agent")
-        outputs = []
-        for name, d, args in [
-            ("hermes-ui", ui_dir, ["pull", "--ff-only"]),
-            ("hermes-agent", agent_dir, ["pull", "--rebase", "--autostash"]),
-        ]:
-            try:
-                result = subprocess.run(
-                    ["git", "-C", d] + args,
-                    capture_output=True, text=True, timeout=60,
-                )
-                out = ((result.stdout or "") + (result.stderr or "")).strip() or "ok"
-                if result.returncode != 0:
-                    out = f"error (rc={result.returncode}): {out}"
-                outputs.append(f"{name}: {out}")
-            except Exception as e:
-                outputs.append(f"{name}: error: {e}")
-        pull_output = "\n\n".join(outputs)
+        body = self._read_json_body_optional()
+        if body.get("confirm") != "update-restart":
+            return self._json({
+                "ok": False,
+                "error": "Update and restart requires confirmation from the Settings UI.",
+            }, 400)
+        pull_output = self._run_update_pulls()
         self._json({"ok": True, "pull": pull_output, "message": "Restarting..."})
         def _do_restart():
             time.sleep(0.5)
@@ -2300,6 +2403,20 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             except Exception as _e:
                 print(f"[serve] gateway restart failed: {_e!r}", flush=True)
             os.execv(sys.executable, [sys.executable] + sys.argv)
+        threading.Thread(target=_do_restart, daemon=True).start()
+
+    def _server_pull_full_restart(self):
+        body = self._read_json_body_optional()
+        if body.get("confirm") != "update-full-restart":
+            return self._json({
+                "ok": False,
+                "error": "Update and full restart requires confirmation from the Settings UI.",
+            }, 400)
+        pull_output = self._run_update_pulls()
+        self._json({"ok": True, "pull": pull_output, "message": "Full restart starting..."})
+        def _do_restart():
+            _flush_all_sessions()
+            self._launch_full_restart()
         threading.Thread(target=_do_restart, daemon=True).start()
 
     def log_message(self, fmt, *args):

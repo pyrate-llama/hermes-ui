@@ -253,6 +253,33 @@
     display: flex; align-items: center; gap: 6px;
     white-space: nowrap; flex-shrink: 0;
   }
+  .header-status.agent-active {
+    color: var(--text-secondary);
+    max-width: min(42vw, 420px);
+  }
+  .agent-state-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 9px var(--accent-glow);
+    flex-shrink: 0;
+  }
+  .agent-state-dot.thinking,
+  .agent-state-dot.searching,
+  .agent-state-dot.reconnecting {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  .agent-state-dot.tool { background: var(--warning); box-shadow: 0 0 9px rgba(232,176,74,0.35); }
+  .agent-state-dot.paused,
+  .agent-state-dot.waiting,
+  .agent-state-dot.steer { background: var(--warning); box-shadow: 0 0 9px rgba(232,176,74,0.35); }
+  .agent-state-dot.stuck,
+  .agent-state-dot.error { background: var(--danger); box-shadow: 0 0 9px rgba(224,85,85,0.35); }
+  .agent-state-dot.finished { background: var(--success); box-shadow: 0 0 9px rgba(68,216,138,0.35); }
+  .agent-state-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .model-capabilities {
     display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
     min-width: 0;
@@ -474,6 +501,41 @@
   .tool-call-wrapper .tool-call-row.collapsed { border-radius: 4px; }
   .tool-call-result::-webkit-scrollbar { width: 6px; }
   .tool-call-result::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
+
+  .aside-message {
+    max-width: 86%;
+    align-self: center;
+    margin: 0 auto 18px auto;
+    border: 1px solid rgba(232,176,74,0.22);
+    border-radius: 8px;
+    background: rgba(232,176,74,0.055);
+    backdrop-filter: blur(10px) saturate(1.1);
+    -webkit-backdrop-filter: blur(10px) saturate(1.1);
+    overflow: hidden;
+  }
+  .aside-message-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 11px;
+    border-bottom: 1px solid rgba(232,176,74,0.14);
+    color: var(--warning);
+    font-size: 11px; font-weight: 750;
+    letter-spacing: 0;
+  }
+  .aside-message-body {
+    padding: 10px 12px 12px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .aside-question {
+    color: var(--text-primary);
+    font-size: 13px; line-height: 1.45;
+  }
+  .aside-answer {
+    color: var(--text-secondary);
+    font-size: 13px; line-height: 1.55;
+    white-space: pre-wrap;
+  }
+  .aside-answer.pending { color: var(--text-muted); font-style: italic; }
+  .aside-answer.error { color: #e89090; }
 
   .message-images {
     display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap;
@@ -707,6 +769,40 @@
     align-items: center; justify-content: space-between; gap: 10px;
   }
   .paused-banner-text { font-size: 13px; color: var(--warning); font-weight: 500; }
+  .agent-state-banner {
+    min-height: 34px;
+    background: rgba(255,255,255,0.026);
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+  }
+  .agent-state-banner.waiting,
+  .agent-state-banner.paused,
+  .agent-state-banner.steer {
+    background: rgba(232,176,74,0.08);
+    border-color: rgba(232,176,74,0.24);
+  }
+  .agent-state-banner.stuck,
+  .agent-state-banner.error {
+    background: rgba(224,85,85,0.08);
+    border-color: rgba(224,85,85,0.24);
+  }
+  .agent-state-main {
+    color: var(--text-primary);
+    font-weight: 650;
+    white-space: nowrap;
+  }
+  .agent-state-detail {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .steer-flash {
     background: rgba(69,136,224,0.12); border: 1px solid var(--accent);
     border-radius: 6px; padding: 8px 12px; font-size: 12.5px;
@@ -771,6 +867,11 @@
     width: 32px; height: 32px;
   }
   .attach-btn:hover { background: var(--glass-hover); color: var(--text-primary); border-color: var(--glass-border); }
+  .attach-btn.active {
+    background: rgba(232,176,74,0.12);
+    color: var(--warning);
+    border-color: rgba(232,176,74,0.34);
+  }
   .attach-btn svg { width: 16px; height: 16px; }
 
   /* Prominent filled send button */
@@ -847,6 +948,11 @@
     color: var(--accent);
     border-color: rgba(128,144,255,0.44);
     background: rgba(128,144,255,0.12);
+  }
+  .composer-chip.aside-active {
+    color: var(--warning);
+    border-color: rgba(232,176,74,0.46);
+    background: rgba(232,176,74,0.12);
   }
   .composer-chip-menu {
     position: absolute; right: 0; bottom: calc(100% + 8px);
@@ -2118,6 +2224,7 @@ function Icon({ name, size, className, strokeWidth }) {
     case 'key-round': return (<svg {...common}><path d="M2 18a6 6 0 1 1 10.2-4.2L22 4v5h-4v4h-4l-2.2 2.2A6 6 0 0 1 2 18z"/><circle cx="7" cy="17" r="1"/></svg>);
     case 'keyboard': return (<svg {...common}><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>);
     case 'settings': return (<svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>);
+    case 'circle-help': return (<svg {...common}><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.7 1.4c-.9 1.2-2.8 1.4-2.8 3.1"/><path d="M12 17h.01"/></svg>);
     case 'rotate-ccw': return (<svg {...common}><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>);
     case 'menu': return (<svg {...common}><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>);
     case 'x': return (<svg {...common}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>);
@@ -2384,6 +2491,48 @@ function conversationIsRecent(conv) {
   return !!(ts && (Date.now() - ts) < 30 * 60000);
 }
 
+function compactAgentStateDetail(text, maxLen) {
+  var clean = String(text || '').replace(/\s+/g, ' ').trim();
+  var limit = maxLen || 84;
+  if (!clean) return '';
+  return clean.length > limit ? clean.slice(0, limit - 1) + '...' : clean;
+}
+
+function makeAgentState(kind, label, detail) {
+  return {
+    kind: kind || 'thinking',
+    label: label || 'Thinking',
+    detail: compactAgentStateDetail(detail || ''),
+    updatedAt: Date.now(),
+  };
+}
+
+function AgentStatePill({ state, compact, showDetail }) {
+  if (!state) return null;
+  var detail = showDetail === false ? '' : (state.detail || '');
+  var title = state.label + (detail ? ': ' + detail : '');
+  return (
+    <div className={(compact ? 'header-status agent-active ' : 'agent-state-banner ') + (state.kind || '')} title={title}>
+      <span className={'agent-state-dot ' + (state.kind || '')}></span>
+      {compact ? (
+        <span className="agent-state-label">{state.label}{detail ? ' · ' + detail : ''}</span>
+      ) : (
+        <React.Fragment>
+          <span className="agent-state-main">{state.label}</span>
+          {detail && <span className="agent-state-detail">{detail}</span>}
+        </React.Fragment>
+      )}
+    </div>
+  );
+}
+
+function shouldShowAgentBanner(state, isStreaming, isPaused) {
+  if (!state) return false;
+  if (isPaused) return false;
+  if (!isStreaming) return false;
+  return ['waiting', 'stuck', 'error', 'reconnecting', 'compressed', 'steer'].indexOf(state.kind) !== -1;
+}
+
 /* ── Theme definitions ── */
 var THEMES = {
   midnight: { label: 'Midnight', className: 'midnight' },
@@ -2517,6 +2666,24 @@ function ThinkingBubble() {
   );
 }
 ThinkingBubble._latestThought = '';
+
+function AsideBubble({ message, index }) {
+  var answerClass = 'aside-answer ' + (message.pending ? 'pending ' : '') + (message.error ? 'error' : '');
+  return (
+    <div className="aside-message" data-message-index={index}>
+      <div className="aside-message-header">
+        <Icon name="circle-help" size={13}/>
+        <span>Aside</span>
+      </div>
+      <div className="aside-message-body">
+        <div className="aside-question">{message.question || ''}</div>
+        <div className={answerClass}>
+          {message.pending ? 'Checking without changing the main thread...' : (message.answer || '')}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highlighted }) {
   const isUser = message.role === 'user';
@@ -2729,7 +2896,7 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
   // page and requiring the user to refresh again manually.
   const waitForServerUp = (onTick) => {
     var start = Date.now();
-    var maxMs = 30000; // 30s cap — matches nesq
+    var maxMs = 70000; // Full restart may wait for gateway and UI ports.
     return new Promise(function(resolve) {
       var tick = function() {
         var elapsed = Math.floor((Date.now() - start) / 1000);
@@ -2752,29 +2919,94 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
   };
 
   const handleRestart = async () => {
-    setServerStatus('Restarting server...');
-    try { await fetch(API_BASE + '/server/restart', { method: 'POST' }); } catch(e) {}
-    var ok = await waitForServerUp(function(sec) {
+    var okToRestart = window.confirm('Quick restart Hermes UI and Hermes Agent now? Active work will pause while the server comes back.');
+    if (!okToRestart) {
+      setServerStatus('Restart cancelled.');
+      return;
+    }
+    setServerStatus('Quick restart starting...');
+    try {
+      var r = await fetch(API_BASE + '/server/restart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'restart' })
+      });
+      var data = await r.json().catch(function(){ return {}; });
+      if (!r.ok || data.ok === false) throw new Error(data.error || 'Restart request failed');
+    } catch(e) {
+      setServerStatus('Restart failed: ' + (e && e.message ? e.message : 'unknown error'));
+      return;
+    }
+    var backUp = await waitForServerUp(function(sec) {
       setServerStatus('Waiting for server (' + sec + 's)...');
     });
-    setServerStatus(ok ? 'Server back up — reloading...' : 'Timed out — reloading anyway...');
+    setServerStatus(backUp ? 'Server back up - reloading...' : 'Timed out - reloading anyway...');
+    window.location.reload();
+  };
+
+  const handleFullRestart = async () => {
+    var okToRestart = window.confirm('Full restart now? This stops stale UI processes on the port, restarts Hermes Agent, starts Hermes UI again, then reloads this page.');
+    if (!okToRestart) {
+      setServerStatus('Full restart cancelled.');
+      return;
+    }
+    setServerStatus('Full restart starting...');
+    try {
+      var r = await fetch(API_BASE + '/server/full-restart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'full-restart' })
+      });
+      var data = await r.json().catch(function(){ return {}; });
+      if (!r.ok || data.ok === false) throw new Error(data.error || 'Full restart request failed');
+    } catch(e) {
+      setServerStatus('Full restart failed: ' + (e && e.message ? e.message : 'unknown error'));
+      return;
+    }
+    var backUp = await waitForServerUp(function(sec) {
+      setServerStatus('Full restart waiting for server (' + sec + 's)...');
+    });
+    setServerStatus(backUp ? 'Full restart complete - reloading...' : 'Timed out - reloading anyway...');
     window.location.reload();
   };
 
   const handlePullRestart = async () => {
-    setServerStatus('Pulling updates & restarting...');
+    var okToUpdate = window.confirm('Update from GitHub, then run a full restart? This pulls both repos and restarts the local services.');
+    if (!okToUpdate) {
+      setServerStatus('Update cancelled.');
+      return;
+    }
+    setServerStatus('Pulling updates & full restart starting...');
     var pullText = 'done';
     try {
-      var r = await fetch(API_BASE + '/server/pull-restart', { method: 'POST' });
-      var data = await r.json();
+      var r = await fetch(API_BASE + '/server/pull-full-restart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'update-full-restart' })
+      });
+      var data = await r.json().catch(function(){ return {}; });
+      if (!r.ok || data.ok === false) throw new Error(data.error || 'Update request failed');
       pullText = data.pull || 'done';
-    } catch(e) {}
-    setServerStatus('Pull: ' + pullText + ' — waiting for server...');
-    var ok = await waitForServerUp(function(sec) {
-      setServerStatus('Pull: ' + pullText + ' — waiting for server (' + sec + 's)...');
+    } catch(e) {
+      setServerStatus('Update failed: ' + (e && e.message ? e.message : 'unknown error'));
+      return;
+    }
+    setServerStatus('Pull: ' + pullText + ' - waiting for full restart...');
+    var backUp = await waitForServerUp(function(sec) {
+      setServerStatus('Pull: ' + pullText + ' - waiting for server (' + sec + 's)...');
     });
-    setServerStatus(ok ? 'Updated — reloading...' : 'Timed out — reloading anyway...');
+    setServerStatus(backUp ? 'Updated and fully restarted - reloading...' : 'Timed out - reloading anyway...');
     window.location.reload();
+  };
+
+  const handleServerHealthCheck = async () => {
+    setServerStatus('Checking server...');
+    try {
+      var r = await fetch(API_BASE + '/health', { cache: 'no-store' });
+      setServerStatus(r && r.ok ? 'Server is reachable on port ' + (window.location.port || '3333') + '.' : 'Server health check failed.');
+    } catch(e) {
+      setServerStatus('Server health check failed: ' + (e && e.message ? e.message : 'unknown error'));
+    }
   };
 
   return (
@@ -2926,18 +3158,29 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
                 <span>{'🔧'}</span> Server Management
               </div>
               <div style={{fontSize:'12px',color:'var(--text-secondary)',lineHeight:'1.6'}}>
-                Restart the proxy server or pull the latest updates from GitHub. The UI will automatically refresh after a restart.
+                Choose a light restart for normal cases, or a full restart when the port or agent needs a clean recovery.
               </div>
             </div>
 
             <div style={{display:'flex',gap:'10px',marginBottom:'16px'}}>
               <button onClick={handleRestart} style={{flex:1,background:'var(--bg-tertiary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
-                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'🔄'} Restart Server</div>
-                <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>Restart serve_lite.py without pulling updates</div>
+                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'↻'} Quick Restart</div>
+                <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>Restart UI + Agent in place</div>
               </button>
+              <button onClick={handleFullRestart} style={{flex:1,background:'var(--bg-tertiary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
+                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'⟳'} Full Restart</div>
+                <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>Stop stale port, restart, wait</div>
+              </button>
+            </div>
+            <div style={{display:'flex',gap:'10px',marginBottom:'16px'}}>
               <button onClick={handlePullRestart} style={{flex:1,background:'var(--accent)',color:'white',border:'none',borderRadius:'8px',padding:'14px 16px',cursor:'pointer',textAlign:'left'}}>
-                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'⬆'} Update &amp; Restart</div>
-                <div style={{fontSize:'11px',color:'rgba(255,255,255,0.8)'}}>Git pull + restart server + refresh UI</div>
+                <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'4px',display:'flex',alignItems:'center',gap:'6px'}}>{'↑'} Update &amp; Full Restart</div>
+                <div style={{fontSize:'11px',color:'rgba(255,255,255,0.8)'}}>Pull both repos, then full restart</div>
+              </button>
+            </div>
+            <div style={{display:'flex',gap:'10px',marginBottom:'16px'}}>
+              <button onClick={handleServerHealthCheck} style={{width:'100%',background:'var(--bg-tertiary)',color:'var(--text-primary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'10px 12px',cursor:'pointer',textAlign:'center',fontSize:'12px',fontWeight:'600'}}>
+                Check Server
               </button>
             </div>
 
@@ -5732,11 +5975,49 @@ function App() {
   const _lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
   const _lastMsgActive = !!(_lastMsg && _lastMsg.role === 'assistant' && (_lastMsg.streaming || _lastMsg.thinking));
   const isStreaming = streamingSessionIds.includes(activeConvId) || _lastMsgActive;
+  const [agentStateBySession, setAgentStateBySession] = useState({});
+  const agentStateTimersRef = useRef({});
+  const setAgentStateForSession = (sessionId, status, ttlMs) => {
+    if (!sessionId) return;
+    var next = makeAgentState(status && status.kind, status && status.label, status && status.detail);
+    if (agentStateTimersRef.current[sessionId]) {
+      clearTimeout(agentStateTimersRef.current[sessionId]);
+      delete agentStateTimersRef.current[sessionId];
+    }
+    setAgentStateBySession(function(prev) {
+      return Object.assign({}, prev, { [sessionId]: next });
+    });
+    if (ttlMs) {
+      agentStateTimersRef.current[sessionId] = setTimeout(function() {
+        setAgentStateBySession(function(prev) {
+          if (!prev[sessionId]) return prev;
+          var copy = Object.assign({}, prev);
+          delete copy[sessionId];
+          return copy;
+        });
+        delete agentStateTimersRef.current[sessionId];
+      }, ttlMs);
+    }
+  };
+  const clearAgentStateForSession = (sessionId, delayMs) => {
+    if (!sessionId) return;
+    if (agentStateTimersRef.current[sessionId]) clearTimeout(agentStateTimersRef.current[sessionId]);
+    agentStateTimersRef.current[sessionId] = setTimeout(function() {
+      setAgentStateBySession(function(prev) {
+        if (!prev[sessionId]) return prev;
+        var copy = Object.assign({}, prev);
+        delete copy[sessionId];
+        return copy;
+      });
+      delete agentStateTimersRef.current[sessionId];
+    }, delayMs || 0);
+  };
   // isPaused is now derived from pausedSessionIds (defined later with pause/stop functions)
 
   const startStreaming = (sessionId, abortCtrl) => {
     streamingMap.current[sessionId] = { abortController: abortCtrl, paused: false, streamId: null };
     setStreamingSessionIds(prev => prev.includes(sessionId) ? prev : [...prev, sessionId]);
+    setAgentStateForSession(sessionId, { kind: 'thinking', label: 'Thinking', detail: 'Starting turn' });
   };
   // Attach backend stream_id to the per-session streaming entry so Stop/Pause
   // can call /api/chat/cancel directly (mirrors nesq cancelStream() pattern).
@@ -5877,6 +6158,8 @@ function App() {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showReasoningMenu, setShowReasoningMenu] = useState(false);
+  const [asideMode, setAsideMode] = useState(false);
+  const [asideSending, setAsideSending] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState(function() {
     try { return normalizeReasoningEffort(localStorage.getItem('hermes-reasoning-effort') || ''); }
     catch(e) { return ''; }
@@ -6118,8 +6401,13 @@ function App() {
       // 1. POST /api/chat/start → {stream_id}
       // 2. EventSource /api/chat/stream?stream_id=X → named SSE events
       // options: { baseSystemPrompt?: string, applyBehavioralGuidelines?: boolean,
-      //            reasoningEffort?: string, onSteerEvent?: function }
+      //            reasoningEffort?: string, onSteerEvent?: function, onStatusEvent?: function }
       var opts = options || {};
+      var emitStatus = function(status) {
+        if (typeof opts.onStatusEvent === 'function') {
+          try { opts.onStatusEvent(status || {}); } catch(e) {}
+        }
+      };
       // Build messages array for the API
       var apiMessages = [];
       if (messageHistory && messageHistory.length > 0) {
@@ -6144,6 +6432,7 @@ function App() {
         }
       }
       // Step 1: POST to /api/chat/start to get stream_id
+      emitStatus({ kind: 'thinking', label: 'Starting', detail: 'Opening stream' });
       var _streamStart = Date.now();
       const startResp = await fetch(API_BASE + '/api/chat/start', {
         method: 'POST',
@@ -6169,6 +6458,7 @@ function App() {
       var _httpMs = Date.now() - _streamStart;
       console.log('[stream] chat/start returned stream_id in ' + _httpMs + 'ms');
       if (onThinking) onThinking('[timing] Stream started in ' + (_httpMs < 1000 ? _httpMs + 'ms' : Math.round(_httpMs/1000) + 's'));
+      emitStatus({ kind: 'thinking', label: 'Thinking', detail: 'Waiting for Hermes' });
 
       // Step 2: Open EventSource for named SSE events (matches hermes-webui)
       var fullContent = '';
@@ -6291,6 +6581,7 @@ function App() {
           var d = JSON.parse(e.data);
           if (d.text) {
             fullContent = processReasoningDelta(d.text);
+            emitStatus({ kind: 'writing', label: 'Writing', detail: 'Streaming reply' });
             onChunk(fullContent);
           }
         });
@@ -6298,6 +6589,7 @@ function App() {
         source.addEventListener('reasoning', function(e) {
           var d = JSON.parse(e.data);
           if (d.text && onThinking) {
+            emitStatus({ kind: 'thinking', label: 'Thinking', detail: d.text });
             onThinking('[reasoning] ' + d.text.replace(/\n/g, ' ').trim().slice(0, 300));
           }
         });
@@ -6310,6 +6602,7 @@ function App() {
 
         source.addEventListener('tool_complete', function(e) {
           var d = JSON.parse(e.data);
+          emitStatus({ kind: 'thinking', label: 'Thinking', detail: 'Tool finished' });
           if (onToolEvent) onToolEvent({ type: 'completed', toolName: d.name, label: d.preview || d.name, duration: d.duration });
         });
 
@@ -6317,6 +6610,7 @@ function App() {
           var d = JSON.parse(e.data);
           // Auto-approve for now (proper approval UI can be added later)
           console.log('[stream] Approval requested:', d);
+          emitStatus({ kind: 'waiting', label: 'Waiting for approval', detail: d.description || d.command || 'Tool approval needed' });
           if (onThinking) onThinking('[approval] ' + (d.description || d.command || 'Tool approval needed'));
           fetch(API_BASE + '/api/approval/respond', {
             method: 'POST',
@@ -6336,6 +6630,7 @@ function App() {
           try { d = JSON.parse(e.data); } catch(err) {}
           var msg = d.message || 'Context auto-compressed to continue the conversation';
           console.log('[stream] ' + msg);
+          emitStatus({ kind: 'compressed', label: 'Context compressed', detail: msg });
           if (onThinking) onThinking('[compressed] ' + msg);
           if (opts.onCompressed) {
             try { opts.onCompressed(msg, d.session_id || null); } catch(err) { console.warn('[compressed] onCompressed threw:', err); }
@@ -6346,6 +6641,7 @@ function App() {
           var d = {};
           try { d = JSON.parse(e.data); } catch(err) {}
           if (opts.onSteerEvent) {
+            emitStatus({ kind: 'steer', label: 'Steer applied', detail: (d.items && d.items[0] && d.items[0].preview) || '' });
             opts.onSteerEvent({
               type: 'applied',
               items: d.items || [],
@@ -6358,6 +6654,7 @@ function App() {
           var d = {};
           try { d = JSON.parse(e.data); } catch(err) {}
           if (opts.onSteerEvent) {
+            emitStatus({ kind: 'steer', label: 'Steer saved', detail: d.text || ((d.items && d.items[0] && d.items[0].preview) || '') });
             opts.onSteerEvent({
               type: 'late',
               text: d.text || '',
@@ -6370,6 +6667,7 @@ function App() {
         source.addEventListener('done', function(e) {
           source.close();
           var d = JSON.parse(e.data);
+          emitStatus({ kind: 'finished', label: 'Finished', detail: 'Reply complete' });
           if (d.usage) streamUsage = d.usage;
           // Use server's authoritative messages (matches webui: S.messages = d.session.messages)
           if (d.session && d.session.messages && d.session.messages.length) {
@@ -6393,6 +6691,7 @@ function App() {
           var d = JSON.parse(e.data);
           var errMsg = d.message || 'Agent error';
           console.error('[stream] apperror:', errMsg);
+          emitStatus({ kind: 'error', label: 'Agent error', detail: errMsg });
           // Show the error as content so user sees it
           fullContent = '**Error:** ' + errMsg;
           onChunk(fullContent);
@@ -6402,6 +6701,7 @@ function App() {
 
         source.addEventListener('cancel', function(e) {
           source.close();
+          emitStatus({ kind: 'paused', label: 'Paused', detail: 'Stopped the running turn' });
           // Pull the preserved _partial message off the session so Stop
           // doesn't lose what the model already generated (nesq #893/#882).
           var cancelSession = null;
@@ -6431,6 +6731,7 @@ function App() {
           // state forever).
           source.close();
           console.warn('[stream] EventSource error, checking stream status...');
+          emitStatus({ kind: 'reconnecting', label: 'Reconnecting', detail: 'Checking stream status' });
           fetch(API_BASE + '/api/chat/stream/status?stream_id=' + encodeURIComponent(streamId))
             .then(function(r) {
               if (!r.ok) {
@@ -6450,19 +6751,21 @@ function App() {
             .then(function(st) {
               if (st.active) {
                 console.log('[stream] Stream still active, reconnecting...');
+                emitStatus({ kind: 'reconnecting', label: 'Reconnecting', detail: 'Stream is still active' });
                 if (onThinking) onThinking('[info] Reconnecting...');
                 var source2 = new EventSource(API_BASE + '/api/chat/stream?stream_id=' + encodeURIComponent(streamId));
                 // Re-wire all the same listeners (simplified — just forward to resolve)
                 source2.addEventListener('done', function(e2) {
                   source2.close();
                   var d2 = JSON.parse(e2.data);
+                  emitStatus({ kind: 'finished', label: 'Finished', detail: 'Reply complete' });
                   if (d2.usage) streamUsage = d2.usage;
                   wrappedOnDone(fullContent);
                   resolve({ content: fullContent, usage: streamUsage, session: d2.session });
                 });
                 source2.addEventListener('token', function(e2) {
                   var d2 = JSON.parse(e2.data);
-                  if (d2.text) { fullContent = processReasoningDelta(d2.text); onChunk(fullContent); }
+                  if (d2.text) { fullContent = processReasoningDelta(d2.text); emitStatus({ kind: 'writing', label: 'Writing', detail: 'Streaming reply' }); onChunk(fullContent); }
                 });
                 source2.addEventListener('steer_applied', function(e2) {
                   var d2 = {};
@@ -6496,6 +6799,7 @@ function App() {
                       'Check that serve_lite.py is running on port 3333 and the Hermes agent is reachable on 8642.';
                     onChunk(fullContent);
                   }
+                  emitStatus({ kind: 'error', label: 'Reconnect failed', detail: 'Stream connection dropped' });
                   wrappedOnDone(fullContent);
                   resolve({ content: fullContent, usage: streamUsage });
                 });
@@ -6508,6 +6812,7 @@ function App() {
                     'The agent may have crashed or the connection dropped. Check the Hermes agent logs on port 8642.';
                   onChunk(fullContent);
                 }
+                emitStatus({ kind: 'error', label: 'Stream ended', detail: 'No completion event received' });
                 wrappedOnDone(fullContent);
                 resolve({ content: fullContent, usage: streamUsage });
               }
@@ -6520,6 +6825,7 @@ function App() {
               var errMsg = (err && err.message) || 'stream error';
               console.error('[stream] ' + errMsg);
               fullContent = '**Error:** ' + errMsg;
+              emitStatus({ kind: 'error', label: 'Stream error', detail: errMsg });
               onChunk(fullContent);
               wrappedOnDone(fullContent);
               resolve({ content: fullContent, usage: streamUsage });
@@ -6851,6 +7157,105 @@ function App() {
     generatePDF(visibleMessages, title);
   };
 
+  const buildAsideMessages = (question, sourceMessages) => {
+    var context = (sourceMessages || [])
+      .filter(function(m) { return m && (m.role === 'user' || m.role === 'assistant') && !m.streaming && !m.thinking; })
+      .slice(-8)
+      .map(function(m) {
+        var who = m.role === 'user' ? 'User' : 'Hermes';
+        var text = searchMessageText(m.content).replace(/\s+/g, ' ').trim();
+        if (text.length > 900) text = text.slice(0, 897) + '...';
+        return who + ': ' + text;
+      })
+      .filter(Boolean)
+      .join('\n');
+    return [
+      {
+        role: 'system',
+        content: 'You answer lightweight side questions inside Hermes UI. Use the provided chat excerpt only as context. Be concise, do not continue the main task, do not propose tool calls, and say when the excerpt is not enough.',
+      },
+      {
+        role: 'user',
+        content: (context ? ('Current chat excerpt:\n' + context + '\n\n') : '') + 'Side question:\n' + question,
+      },
+    ];
+  };
+
+  const sendAsideQuestion = async (text) => {
+    var question = (text || '').trim();
+    if (!question || asideSending) return;
+    var sessionId = activeConvId;
+    var baseMessages = messagesRef.current || [];
+    var isNewSession = false;
+    var createdIso = '';
+    if (!sessionId) {
+      sessionId = api.createSession();
+      createdIso = new Date().toISOString();
+      setActiveConvId(sessionId);
+      baseMessages = [];
+      isNewSession = true;
+    }
+
+    var asideId = 'aside-' + Date.now();
+    var asideMsg = {
+      id: asideId,
+      role: 'aside',
+      question: question,
+      answer: '',
+      pending: true,
+      error: false,
+      timestamp: new Date().toISOString(),
+    };
+    var appendAside = function(prev) { return (prev || []).concat([asideMsg]); };
+    if (isNewSession) {
+      var conv = { id: sessionId, title: question.slice(0, 50) || 'Side question', created: new Date().toLocaleString(), last_active_at: createdIso, unread_count: 0, messages: [asideMsg], message_count: 1, user_prompt_count: 0, tool_call_count: 0 };
+      setConversations(function(prev) { return [conv].concat(prev); });
+      setMessages([asideMsg]);
+    } else {
+      updateStreamMessages(sessionId, appendAside);
+    }
+    setInput('');
+    setAsideMode(false);
+    setAsideSending(true);
+    addLocalLog('INFO  Sending side question to delegation model');
+
+    try {
+      var resp = await fetch(API_BASE + '/api/delegation/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: buildAsideMessages(question, baseMessages) }),
+      });
+      var data = await resp.json().catch(function() { return {}; });
+      var answer = data.reply || '';
+      var error = data.error || (!resp.ok ? ('HTTP ' + resp.status) : '');
+      updateStreamMessages(sessionId, function(prev) {
+        return (prev || []).map(function(m) {
+          if (m.id !== asideId) return m;
+          return Object.assign({}, m, {
+            answer: error ? error : (answer || '(empty response)'),
+            pending: false,
+            error: !!error,
+          });
+        });
+      });
+      addLocalLog(error ? ('WARN  Side question failed: ' + error) : 'INFO  Side question answered');
+    } catch (e) {
+      updateStreamMessages(sessionId, function(prev) {
+        return (prev || []).map(function(m) {
+          if (m.id !== asideId) return m;
+          return Object.assign({}, m, {
+            answer: 'Request failed: ' + (e && e.message ? e.message : e),
+            pending: false,
+            error: true,
+          });
+        });
+      });
+      addLocalLog('ERROR Side question failed: ' + (e && e.message ? e.message : e));
+    } finally {
+      setAsideSending(false);
+    }
+  };
+
   // ── Send message ──
   const sendMessage = async (text, _retryCount, sendOptions) => {
     _retryCount = _retryCount || 0;
@@ -6943,6 +7348,11 @@ function App() {
         // After 45s quiet, check health every 60s — only abort if Hermes is DOWN
         if (stallSecs >= 45 && !healthCheckPending) {
           healthCheckPending = true;
+          setAgentStateForSession(sessionId, {
+            kind: stallSecs >= 90 ? 'stuck' : 'waiting',
+            label: stallSecs >= 90 ? 'Looks stuck' : 'Waiting',
+            detail: 'Quiet for ' + stallSecs + 's'
+          });
           if (!stallWarningShown && stallSecs >= 60) {
             stallWarningShown = true;
             addLocalLog('INFO  Stream quiet for ' + stallSecs + 's — Hermes may be running tools. Click Stop to cancel.');
@@ -6954,6 +7364,7 @@ function App() {
               healthCheckPending = false;
               if (!alive && getStreamAbort(sessionId)) {
                 addLocalLog('WARN  Hermes health check FAILED — aborting');
+                setAgentStateForSession(sessionId, { kind: 'error', label: 'Hermes unavailable', detail: 'Health check failed' }, 5000);
                 updateStreamMessages(sessionId, function(prev) {
                   var updated = [...prev];
                   var last = updated[updated.length - 1];
@@ -6967,6 +7378,7 @@ function App() {
               } else {
                 // Hermes is alive — DON'T abort, just keep waiting
                 addLocalLog('INFO  Health OK — Hermes alive, still waiting for stream data');
+                setAgentStateForSession(sessionId, { kind: 'waiting', label: 'Waiting', detail: 'Hermes is still running' });
               }
             });
         }
@@ -6978,6 +7390,7 @@ function App() {
       addLocalLog('INFO  ... thinking (' + elapsed + 's elapsed)');
       if (elapsed >= NO_RESPONSE_TIMEOUT_S && getStreamAbort(sessionId)) {
         addLocalLog('WARN  No response after ' + NO_RESPONSE_TIMEOUT_S + 's — aborting. Try stopping and resending.');
+        setAgentStateForSession(sessionId, { kind: 'stuck', label: 'Looks stuck', detail: 'No response after ' + NO_RESPONSE_TIMEOUT_S + 's' }, 6000);
         updateStreamMessages(sessionId, function(prev) {
           var updated = [...prev];
           var last = updated[updated.length - 1];
@@ -7329,6 +7742,9 @@ function App() {
               showSteerFlash('late', preview || 'Restored to composer');
             }
           },
+          onStatusEvent: function(status) {
+            setAgentStateForSession(sessionId, status);
+          },
         }
       );
     } catch (err) {
@@ -7370,6 +7786,7 @@ function App() {
       }
 
       stopStreaming(sessionId);
+      clearAgentStateForSession(sessionId, 3600);
 
       // ── Handle backend session-id rotation from context compression ──
       // Mirrors nesquena/hermes-webui messages.js: S.session = d.session.
@@ -7540,6 +7957,7 @@ function App() {
       }
       setInput('');
       addLocalLog('INFO  [steer] queued (' + text.length + ' chars)');
+      setAgentStateForSession(sid, { kind: 'steer', label: 'Steer queued', detail: text });
       showSteerFlash('queued', text);
     } catch (e) {
       console.error('Steer failed:', e);
@@ -7550,6 +7968,11 @@ function App() {
   const [pausedSessionIds, setPausedSessionIds] = useState([]);
   // Override isPaused to use dedicated state
   const isPaused = pausedSessionIds.includes(activeConvId);
+  const activeAgentState = agentStateBySession[activeConvId] || null;
+  const visibleAgentState = isPaused
+    ? makeAgentState('paused', 'Paused', 'Ready for an interjection')
+    : activeAgentState;
+  const showAgentBanner = shouldShowAgentBanner(visibleAgentState, isStreaming, isPaused);
 
   // Defensive helper: clears stuck .streaming / .thinking flags on the last assistant
   // message for a given session. Used by pause/stop so the UI always unsticks, even
@@ -7587,6 +8010,7 @@ function App() {
     }
     stopStreaming(sid);
     _clearStuckMessageFlags(sid);
+    setAgentStateForSession(sid, { kind: 'paused', label: 'Paused', detail: 'Ready for an interjection' });
     setPausedSessionIds(prev => prev.includes(sid) ? prev : [...prev, sid]);
   };
 
@@ -7607,6 +8031,7 @@ function App() {
     }
     stopStreaming(sid);
     _clearStuckMessageFlags(sid);
+    setAgentStateForSession(sid, { kind: 'paused', label: 'Stopped', detail: 'Turn cancelled' }, 3600);
     setPausedSessionIds(prev => prev.filter(id => id !== sid));
   };
 
@@ -7875,10 +8300,14 @@ function App() {
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">{activeConvId ? (conversations.find(c => c.id === activeConvId)?.title || 'Hermes') : 'Hermes'}</div>
-              <div className="header-status">
-                <div className={"status-dot " + (connected === false ? 'disconnected' : '')}></div>
-                {connected === null ? 'Checking...' : connected ? 'Connected' : 'Offline'}
-              </div>
+              {visibleAgentState ? (
+                <AgentStatePill state={visibleAgentState} compact={true} showDetail={false} />
+              ) : (
+                <div className="header-status">
+                  <div className={"status-dot " + (connected === false ? 'disconnected' : '')}></div>
+                  {connected === null ? 'Checking...' : connected ? 'Connected' : 'Offline'}
+                </div>
+              )}
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
                 <div className="toolbar-pill">
@@ -7905,6 +8334,8 @@ function App() {
                         <span className="compaction-label">{'🔄'} {msg.content}</span>
                         <div className="compaction-line" />
                       </div>
+                    ) : msg.role === 'aside' ? (
+                      <AsideBubble key={msg.id} message={msg} index={idx} />
                     ) : editingMessageId === msg.id ? (
                       <div key={msg.id} className="message user" data-message-index={idx}>
                         <div className="message-header">
@@ -7984,6 +8415,9 @@ function App() {
                     <span className="steer-flash-preview">{steerFlash.preview}</span>
                   </div>
                 )}
+                {showAgentBanner && (
+                  <AgentStatePill state={visibleAgentState} />
+                )}
                 {isPaused && (
                   <div className="paused-banner">
                     <span className="paused-banner-text">{'⏸ Paused — type an interjection or resume'}</span>
@@ -8008,7 +8442,9 @@ function App() {
                     onKeyDown={e => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        if (isStreaming && !isPaused && input.trim()) {
+                        if (asideMode && input.trim()) {
+                          sendAsideQuestion(input);
+                        } else if (isStreaming && !isPaused && input.trim()) {
                           // Steer: no-pause nudge. Hands the text to the
                           // live agent via /api/chat/steer — the agent
                           // appends it to the next tool result without
@@ -8020,20 +8456,27 @@ function App() {
                         }
                       }
                     }}
-                    placeholder={connected === false ? 'Hermes API not connected...' : isPaused ? 'Type your interjection...' : isStreaming ? 'Type + ⏎ to steer (no pause)...' : anyAnalyzing ? 'Waiting for image analysis...' : 'Message Hermes... (paste/drop images or files)'}
+                    placeholder={connected === false ? 'Hermes API not connected...' : asideMode ? 'Ask a side question...' : isPaused ? 'Type your interjection...' : isStreaming ? 'Type + ⏎ to steer (no pause)...' : anyAnalyzing ? 'Waiting for image analysis...' : 'Message Hermes... (paste/drop images or files)'}
                     rows={1}
-                    disabled={connected === false}
+                    disabled={connected === false || asideSending}
                   />
                   <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { if (e.target.files.length) processImages(e.target.files); e.target.value = ''; }} />
                   <input ref={fileInputRef2} type="file" accept=".md,.txt,.json,.csv,.ts,.tsx,.js,.py,.pdf,.rtf" multiple style={{ display: 'none' }} onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value = ''; }} />
                   <div className="input-btn-group">
+                    <button className={"attach-btn " + (asideMode ? 'active' : '')} onClick={function(){ setAsideMode(function(v) { return !v; }); }} title="Ask aside">
+                      <Icon name="circle-help" size={16}/>
+                    </button>
                     <button className="attach-btn" onClick={() => fileInputRef2.current?.click()} title="Attach file">
                       <Icon name="paperclip" size={16}/>
                     </button>
                     <button className="attach-btn" onClick={() => fileInputRef.current?.click()} title="Attach image">
                       <Icon name="image" size={16}/>
                     </button>
-                    {isStreaming ? (
+                    {asideMode ? (
+                      <button className="send-btn" onClick={() => sendAsideQuestion(input)} disabled={!input.trim() || asideSending} title="Send side question">
+                        <Icon name="send" size={16}/>
+                      </button>
+                    ) : isStreaming ? (
                       <React.Fragment>
                         <button className="send-btn pause-btn" onClick={pauseStreaming} title="Pause to interject">
                           <svg width="16" height="16" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
@@ -8057,7 +8500,9 @@ function App() {
                   </div>
                 </div>
                 <div className="input-hint">
-                  {isStreaming ? (
+                  {asideMode ? (
+                    <span><kbd>⏎</kbd> ask aside · does not change the main thread</span>
+                  ) : isStreaming ? (
                     <span><kbd>⏎</kbd> steer · Pause · Stop to cancel</span>
                   ) : isPaused ? (
                     <span><kbd>⏎</kbd> send interjection · Dismiss to keep partial</span>

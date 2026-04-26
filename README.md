@@ -2,7 +2,7 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-A sleek, glassmorphic web interface for [Hermes Agent](https://github.com/pyrate-llama/hermes-agent) — your self-hosted AI assistant.
+The command center for [Hermes Agent](https://github.com/pyrate-llama/hermes-agent) — chat, steer, browse files, manage skills, and monitor everything from a single glassmorphic HTML app.
 
 Built as a single-file HTML application with React 18, Hermes UI provides a full-featured chat interface, real-time log streaming, file browsing, memory inspection, and more — all through a lightweight Python proxy server.
 
@@ -158,14 +158,16 @@ Hermes UI 3.0 is the release where the web client catches up with the bigger Her
 git clone https://github.com/pyrate-llama/hermes-ui.git
 cd hermes-ui
 
-# Start the proxy server
-python3 serve_lite.py
+# Start the proxy server with the Hermes venv interpreter
+~/.hermes/hermes-agent/venv/bin/python3 serve_lite.py
 
 # Or specify a custom port
-python3 serve_lite.py --port 8080
+~/.hermes/hermes-agent/venv/bin/python3 serve_lite.py --port 8080
 ```
 
 > **Note:** `serve.py` still exists as a backwards-compatibility shim that prints a deprecation notice and execs `serve_lite.py`. Existing systemd units and launchers that reference `serve.py` will keep working, but new setups should invoke `serve_lite.py` directly.
+>
+> If you accidentally start `serve_lite.py` with the wrong Python, it will try to re-launch itself with the Hermes venv interpreter automatically.
 
 Open **http://localhost:3333/hermes-ui.html** in your browser.
 
