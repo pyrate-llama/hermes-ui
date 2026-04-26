@@ -211,6 +211,13 @@
   .conv-item-rename:hover { color: var(--accent); background: rgba(124,111,224,0.1); }
 
   .sidebar-footer { padding: 8px 10px; border-top: 1px solid var(--border); }
+  .personality-label {
+    display: flex; align-items: center; gap: 6px;
+    margin: 0 2px 6px;
+    color: var(--text-muted);
+    font-size: 10px; font-weight: 750; letter-spacing: 0;
+    text-transform: uppercase;
+  }
   .personality-select {
     width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border);
     border-radius: 8px; padding: 8px 12px; color: var(--text-primary);
@@ -218,6 +225,10 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238888a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 12px center;
     padding-right: 36px;
+  }
+  .personality-select.active {
+    border-color: rgba(124,111,224,0.45);
+    box-shadow: 0 0 0 3px rgba(124,111,224,0.10);
   }
 
   .main {
@@ -2361,6 +2372,29 @@ const PERSONALITY_PROMPTS = {
   'creative': 'You are a creative assistant. Help with brainstorming, writing, and imaginative tasks. Encourage bold ideas and creative thinking.',
   'academic': 'You are an academic assistant. Provide well-researched, cited information. Focus on educational value and intellectual rigor.',
 };
+
+function normalizePersonality(value) {
+  var key = String(value || 'default').trim().toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(PERSONALITY_LABELS, key)) return key;
+  var match = Object.keys(PERSONALITY_LABELS).find(function(k) {
+    return PERSONALITY_LABELS[k].toLowerCase() === key;
+  });
+  return match || 'default';
+}
+
+function personalityLabel(value) {
+  return PERSONALITY_LABELS[normalizePersonality(value)] || PERSONALITY_LABELS.default;
+}
+
+function buildProfileSystemPrompt(basePrompt, personality) {
+  var base = String(basePrompt || '').trim();
+  var profile = normalizePersonality(personality);
+  var profilePrompt = String(PERSONALITY_PROMPTS[profile] || '').trim();
+  if (!profilePrompt) return base;
+  var header = 'Active response profile: ' + personalityLabel(profile) + '.';
+  var profileBlock = header + '\n' + profilePrompt;
+  return base ? (base + '\n\n---\n\n' + profileBlock) : profileBlock;
+}
 
 function clampNumber(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -6348,7 +6382,6 @@ function App() {
   const getStreamAbort = (sessionId) => {
     return streamingMap.current[sessionId] && streamingMap.current[sessionId].abortController;
   };
-  const [personality, setPersonality] = useState('default');
   const [connected, setConnected] = useState(null);
   // Active model name (from /health). Used by the composer to decide whether
   // to send pasted/dropped images via the native multimodal path (vision-
@@ -6477,6 +6510,10 @@ function App() {
     try { return normalizeReasoningEffort(localStorage.getItem('hermes-reasoning-effort') || ''); }
     catch(e) { return ''; }
   });
+  const [personality, setPersonality] = useState(function() {
+    try { return normalizePersonality(localStorage.getItem('hermes-personality') || 'default'); }
+    catch(e) { return 'default'; }
+  });
   const [currentTheme, setCurrentTheme] = useState(getStoredTheme);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showWelcome, setShowWelcome] = useState(function() {
@@ -6496,6 +6533,10 @@ function App() {
   useEffect(function() {
     try { localStorage.setItem('hermes-reasoning-effort', normalizeReasoningEffort(reasoningEffort)); } catch(e) {}
   }, [reasoningEffort]);
+
+  useEffect(function() {
+    try { localStorage.setItem('hermes-personality', normalizePersonality(personality)); } catch(e) {}
+  }, [personality]);
 
   const textareaRef = useRef(null);
   const messagesViewportRef = useRef(null);
@@ -6760,6 +6801,7 @@ function App() {
           messages: apiMessages,
           base_system_prompt: opts.baseSystemPrompt || '',
           apply_behavioral_guidelines: !!opts.applyBehavioralGuidelines,
+          profile: normalizePersonality(opts.profile || 'default'),
           reasoning_effort: normalizeReasoningEffort(opts.reasoningEffort || ''),
         }),
         signal: signal,
@@ -8018,8 +8060,9 @@ function App() {
         abortCtrl.signal,
         newMessages,
         {
-          baseSystemPrompt: (config && config.baseSystemPrompt) || '',
+          baseSystemPrompt: buildProfileSystemPrompt((config && config.baseSystemPrompt) || '', personality),
           applyBehavioralGuidelines: !!(config && config.applyBehavioralGuidelines === true),
+          profile: personality,
           reasoningEffort: reasoningEffort,
           // Native multimodal images for vision-capable models. Empty when
           // the active model routes through Gemini-describe (MiniMax, etc.).
@@ -8401,6 +8444,12 @@ function App() {
   // placeholder toggle was removed in favour of the nesq-style modal.
   const openSearchModal = () => setShowSearchModal(true);
 
+  const setActiveProfile = function(value) {
+    var next = normalizePersonality(value);
+    setPersonality(next);
+    return next;
+  };
+
   const pushLocalAssistantMessage = function(content) {
     var sessionId = activeConvRef.current || activeConvId;
     var msg = {
@@ -8461,6 +8510,10 @@ function App() {
     { name: 'export', icon: 'file-text', summary: 'Export this chat as Markdown', disabled: messages.length === 0, run: function() {
       var title = activeConvId ? (conversations.find(function(c) { return c.id === activeConvId; }) || {}).title : 'Chat';
       exportChatAsMarkdown(messages, title || 'Chat');
+    } },
+    { name: 'profile', icon: 'brain', usage: '<default|claude|technical|creative|academic>', summary: 'Switch response profile for new messages', run: function(args) {
+      if (!args) { setInput('/profile '); return; }
+      setActiveProfile(args);
     } },
     { name: 'reasoning', icon: 'brain', usage: '<auto|low|medium|high|xhigh>', summary: 'Set reasoning effort for new messages', run: function(args) {
       var value = normalizeReasoningEffort(args || '');
@@ -8704,7 +8757,13 @@ function App() {
           })}
         </div>
         <div className="sidebar-footer">
-          <select className="personality-select" value={personality} onChange={e => setPersonality(e.target.value)}>
+          <div className="personality-label"><Icon name="brain" size={11}/><span>Profile</span></div>
+          <select
+            className={"personality-select " + (normalizePersonality(personality) !== 'default' ? 'active' : '')}
+            value={personality}
+            onChange={e => setActiveProfile(e.target.value)}
+            title="Response profile for new messages"
+          >
             {Object.entries(PERSONALITY_LABELS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
           </select>
         </div>
