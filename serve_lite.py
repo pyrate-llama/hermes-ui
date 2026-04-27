@@ -24,6 +24,8 @@ import uuid
 import traceback
 import urllib.parse
 
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
+
 # ── Python interpreter sanity check ─────────────────────────────────────────
 # serve_lite.py depends on hermes-agent's compiled C extensions (pydantic_core
 # and friends) which are built against a specific Python minor version. Running
@@ -671,8 +673,10 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             pass
 
     # Set thread-local env context for this agent thread
+    workspace_dir = str(PROJECT_ROOT)
+
     _set_thread_env(
-        TERMINAL_CWD=os.path.expanduser("~"),
+        TERMINAL_CWD=workspace_dir,
         HERMES_SESSION_KEY=session_id,
     )
 
@@ -681,7 +685,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         old_cwd = os.environ.get("TERMINAL_CWD")
         old_exec_ask = os.environ.get("HERMES_EXEC_ASK")
         old_session_key = os.environ.get("HERMES_SESSION_KEY")
-        os.environ["TERMINAL_CWD"] = os.path.expanduser("~")
+        os.environ["TERMINAL_CWD"] = workspace_dir
         os.environ.pop("HERMES_EXEC_ASK", None)
         os.environ["HERMES_SESSION_KEY"] = session_id
 
@@ -787,9 +791,14 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             if event_type in (None, "tool.started"):
                 put("tool", {"name": name, "preview": preview, "args": args_snap})
             elif event_type == "tool.completed":
+                result_snap = None
+                if "result" in kwargs:
+                    result_snap = _snap_tool_arg(kwargs.get("result"))
+                elif "output" in kwargs:
+                    result_snap = _snap_tool_arg(kwargs.get("output"))
                 put("tool_complete", {
                     "name": name, "preview": preview, "args": args_snap,
-                    "duration": kwargs.get("duration"),
+                    "duration": kwargs.get("duration"), "result": result_snap,
                 })
                 # Signal the periodic checkpoint thread that real progress has
                 # been made (Issue #765). The agent works on an internal copy
@@ -939,13 +948,16 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
                 break
 
         # Workspace context prefix (matches hermes-webui behaviour)
-        _workspace = os.path.expanduser("~")
+        _workspace = workspace_dir
         workspace_ctx = f"[Workspace: {_workspace}]\n"
         workspace_system_msg = (
             f"Active workspace: {_workspace}\n"
             "Every user message is prefixed with [Workspace: /path] indicating the "
             "active workspace. Use this as the default working directory for all "
-            "file operations."
+            "file operations. For code searches, stay inside this workspace and "
+            "prefer ripgrep-style targeted searches. Do not recursively search "
+            "the user's home directory or parent directories unless the user "
+            "explicitly asks for that broader scope."
         )
 
         # Build conversation history from SERVER-SIDE session only — always.
@@ -1721,7 +1733,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         try:
             result = subprocess.run(
                 cmd, shell=True, capture_output=True, text=True, timeout=120,
-                cwd=os.path.expanduser("~"),
+                cwd=str(PROJECT_ROOT),
             )
             self._json({
                 "stdout": result.stdout,
