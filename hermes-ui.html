@@ -680,10 +680,18 @@
   }
   .message-content pre {
     background: var(--bg-primary); border-radius: 8px; padding: 12px;
-    overflow-x: auto; margin: 12px 0; position: relative;
+    overflow-x: hidden; margin: 12px 0; position: relative; max-width: 100%;
+    white-space: pre-wrap; overflow-wrap: anywhere;
   }
   .message-content pre code {
     background: none; padding: 0; color: inherit;
+    white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+  }
+  .message-content pre code.hljs,
+  .message-content pre .hljs {
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .message-content .mermaid-block {
     background: var(--bg-primary);
@@ -7180,6 +7188,16 @@ function App() {
     localStorage.setItem('hermes-dismissed-todo-sessions', JSON.stringify(dismissedTodoSessions.slice(-80)));
   }, [dismissedTodoSessions]);
 
+  const resetTodosForConversation = function(conversationId, untilMessageId) {
+    var convKey = conversationId || 'active-chat';
+    var marker = convKey + ':reset:' + (untilMessageId || 'none');
+    setDismissedTodoSessions(function(prev) {
+      var next = prev.filter(function(key) { return key.indexOf(convKey + ':') !== 0; });
+      next.push(marker);
+      return next.slice(-80);
+    });
+  };
+
   useEffect(function() {
     try { localStorage.setItem('hermes-reasoning-effort', normalizeReasoningEffort(reasoningEffort)); } catch(e) {}
   }, [reasoningEffort]);
@@ -9262,14 +9280,36 @@ function App() {
 
   // ── Render ──
   var latestUserForTodos = null;
+  var latestTodoSourceForTodos = null;
   for (var todoMsgIndex = messages.length - 1; todoMsgIndex >= 0; todoMsgIndex--) {
-    if (messages[todoMsgIndex] && messages[todoMsgIndex].role === 'user') {
-      latestUserForTodos = messages[todoMsgIndex];
-      break;
+    var todoMsg = messages[todoMsgIndex];
+    if (todoMsg && todoMsg.role === 'user') {
+      if (!latestUserForTodos) latestUserForTodos = todoMsg;
+      if (!latestTodoSourceForTodos && extractTodoListFromText(todoMsg.content).length) {
+        latestTodoSourceForTodos = todoMsg;
+      }
+      if (latestUserForTodos && latestTodoSourceForTodos) {
+        break;
+      }
     }
   }
-  var todoSessionKey = (activeConvId || 'active-chat') + ':' + ((latestUserForTodos && latestUserForTodos.id) || 'no-user');
-  var todosDismissed = dismissedTodoSessions.indexOf(todoSessionKey) !== -1;
+  if (!latestTodoSourceForTodos) {
+    for (var toolTodoMsgIndex = messages.length - 1; toolTodoMsgIndex >= 0; toolTodoMsgIndex--) {
+      var possibleToolTodoMsg = messages[toolTodoMsgIndex];
+      if (possibleToolTodoMsg && possibleToolTodoMsg.role === 'user') {
+        latestTodoSourceForTodos = possibleToolTodoMsg;
+        break;
+      }
+    }
+  }
+  var todoSourceUserId = latestTodoSourceForTodos && latestTodoSourceForTodos.id ? String(latestTodoSourceForTodos.id) : 'no-user';
+  var todoSessionKey = (activeConvId || 'active-chat') + ':' + todoSourceUserId;
+  var todoResetKey = (activeConvId || 'active-chat') + ':reset:';
+  var latestTodoReset = null;
+  dismissedTodoSessions.forEach(function(key) {
+    if (key.indexOf(todoResetKey) === 0) latestTodoReset = key.slice(todoResetKey.length);
+  });
+  var todosDismissed = dismissedTodoSessions.indexOf(todoSessionKey) !== -1 || (latestTodoReset && latestTodoReset === todoSourceUserId);
   var showTodosPanel = currentView === 'chat' && sessionTodos.length > 0 && !todosDismissed;
   var rightColumnOpen = showTerminal || showTodosPanel;
   var todoOnlyPanel = showTodosPanel && !showTerminal;
@@ -9870,16 +9910,14 @@ function App() {
             title="Resize right panel"
           />
         )}
-        {showTodosPanel && (
-          <SessionTodosPanel
-            todos={sessionTodos}
-            onClose={function() {
-              setDismissedTodoSessions(function(prev) {
-                return prev.indexOf(todoSessionKey) === -1 ? prev.concat([todoSessionKey]) : prev;
-              });
-            }}
-            sidePanel={true}
-          />
+	        {showTodosPanel && (
+		          <SessionTodosPanel
+		            todos={sessionTodos}
+		            onClose={function() {
+		              resetTodosForConversation(activeConvId, todoSourceUserId);
+		            }}
+	            sidePanel={true}
+	          />
         )}
         <TerminalPanel isOpen={showTerminal} onClose={function(){setShowTerminal(false); setArtifactPanelWide(false);}} onClear={function(){ setLocalLogs([]); }} localLogs={localLogs} artifacts={artifacts} onArtifactTab={function(isWide){ setArtifactPanelWide(isWide); if(isWide && !showTerminal) setShowTerminal(true); if(isWide) setRightColumnWidth(function(w){ return Math.max(w, 560); }); }} onAddArtifact={function(art){ setArtifacts(function(prev){ return prev.concat([art]); }); }} onRemoveArtifact={function(idx){ setArtifacts(function(prev){ return prev.filter(function(_,i){ return i !== idx; }); }); }} />
       </div>
