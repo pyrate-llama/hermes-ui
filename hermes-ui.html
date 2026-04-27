@@ -3280,6 +3280,8 @@ function isTodoLikeToolName(value) {
 
 function extractTodoListFromText(value) {
   var text = String(value || '');
+  var hasExplicitTodoCue = /\b(todo|to-do|task list|checklist|plan|step|steps)\b/i.test(text);
+  if (!hasExplicitTodoCue) return [];
   var lines = text.split(/\r?\n/);
   var items = [];
   for (var i = 0; i < lines.length; i++) {
@@ -3291,19 +3293,14 @@ function extractTodoListFromText(value) {
     items.push({ id: String(items.length + 1), content: content, status: 'pending' });
   }
   if (items.length) return items;
-  var hasExplicitTodoCue = /\b(todo|to-do|task list|checklist|plan|step|steps)\b/i.test(text);
-  var hasCheckListCue = /^\s*(?:please\s+)?(?:check|look at|look into|inspect|verify)\b[^:]{0,80}:\s+/i.test(text);
-  if (!hasExplicitTodoCue && !hasCheckListCue) return [];
   var sentence = text
     .replace(/\s+/g, ' ')
     .replace(/^(?:please\s+)?(?:can you|could you|i need you to|i want you to)\s+/i, '')
-    .replace(/^(?:please\s+)?(?:check|look at|look into|inspect|verify)\b[^:]{0,80}:\s*/i, '')
     .replace(/^create and maintain a (?:live )?(?:plan|todo list|task list|checklist) for this task\.?\s*/i, '')
     .replace(/\bkeep the (?:plan|todo list|task list|checklist) updated as each step finishes\.?$/i, '')
     .trim();
   if (!sentence || sentence.length < 12) return [];
-  var separator = hasCheckListCue && sentence.indexOf(',') !== -1 ? /\s*,\s*(?:and\s+)?|\s+(?:and then|then|next)\s+/i : /\s+(?:and then|then|next)\s+/i;
-  var parts = sentence.split(separator).map(function(part) {
+  var parts = sentence.split(/\s+(?:and then|then|next)\s+/i).map(function(part) {
     return part.trim().replace(/[.,;?!]+$/, '');
   }).filter(function(part) {
     return part && !/^(and\s+)?(?:keep|update|maintain|complete)\b/i.test(part);
