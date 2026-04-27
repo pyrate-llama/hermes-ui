@@ -708,6 +708,11 @@
   .message-content .mermaid-block.mermaid-error pre {
     margin-bottom: 0;
   }
+  body > svg[id^="mermaid-"],
+  body > div[id^="mermaid-"],
+  body > .mermaidTooltip {
+    display: none !important;
+  }
   .copy-btn {
     position: absolute; top: 8px; right: 8px; background: var(--bg-secondary);
     border: 1px solid var(--border); color: var(--text-secondary); padding: 4px 8px;
@@ -812,6 +817,73 @@
   .activity-empty {
     display: flex; align-items: center; justify-content: center; height: 100%;
     color: var(--text-muted); font-size: 12px;
+  }
+
+  .session-todos-panel {
+    margin: 0;
+    position: relative;
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    background: rgba(18,18,28,0.58);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .session-todos-panel.side-panel {
+    border-width: 0 0 1px 0;
+    border-radius: 0;
+    background: rgba(12,12,20,0.72);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .session-todos-header {
+    width: 100%; border: none; background: transparent; color: var(--text-primary);
+    padding: 9px 34px 9px 12px; display: flex; align-items: center; gap: 8px;
+    text-align: left;
+  }
+  .session-todos-title {
+    font-size: 12px; font-weight: 750; letter-spacing: 0;
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .session-todos-progress {
+    margin-left: auto; color: var(--text-secondary); font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .session-todos-close {
+    position: absolute; top: 7px; right: 7px; width: 22px; height: 22px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-radius: 5px; background: transparent;
+    color: var(--text-muted); cursor: pointer;
+  }
+  .session-todos-close:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
+  .session-todos-list { display: flex; flex-direction: column; gap: 1px; padding: 0 12px 10px; }
+  .session-todos-panel.side-panel .session-todos-list {
+    max-height: min(42vh, 360px);
+    overflow: auto;
+  }
+  .session-todo-item {
+    display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 9px;
+    align-items: start; padding: 7px 0; min-height: 34px; border-top: 1px solid rgba(255,255,255,0.055);
+  }
+  .session-todo-status {
+    width: 16px; height: 16px; display: inline-flex; align-items: center;
+    justify-content: center; color: var(--text-muted); margin-top: 1px;
+  }
+  .session-todo-status.in_progress { color: var(--accent); }
+  .session-todo-status.completed { color: var(--success); }
+  .session-todo-status.cancelled { color: #d86a6a; }
+  .session-todo-text {
+    color: var(--text-primary); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere;
+  }
+  .session-todo-item.completed .session-todo-text {
+    color: var(--text-muted); text-decoration: line-through;
+  }
+  .session-todo-meta {
+    color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 10px; margin-top: 2px;
+  }
+  .session-todos-empty {
+    color: var(--text-muted); font-size: 12px; padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.055);
   }
 
   .input-area {
@@ -2517,6 +2589,7 @@ function Icon({ name, size, className, strokeWidth }) {
     case 'key-round': return (<svg {...common}><path d="M2 18a6 6 0 1 1 10.2-4.2L22 4v5h-4v4h-4l-2.2 2.2A6 6 0 0 1 2 18z"/><circle cx="7" cy="17" r="1"/></svg>);
     case 'keyboard': return (<svg {...common}><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>);
     case 'settings': return (<svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>);
+    case 'list-todo': return (<svg {...common}><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>);
     case 'circle-help': return (<svg {...common}><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.7 1.4c-.9 1.2-2.8 1.4-2.8 3.1"/><path d="M12 17h.01"/></svg>);
     case 'rotate-ccw': return (<svg {...common}><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>);
     case 'menu': return (<svg {...common}><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>);
@@ -2599,6 +2672,14 @@ var mermaidScriptReady = false;
 var mermaidScriptFailed = false;
 var mermaidRenderCounter = 0;
 
+function cleanupMermaidArtifacts() {
+  try {
+    document.querySelectorAll('body > svg[id^="mermaid-"], body > div[id^="mermaid-"], body > .mermaidTooltip').forEach(function(el) {
+      el.remove();
+    });
+  } catch(e) {}
+}
+
 function getMermaidTheme() {
   return document.documentElement.getAttribute('data-theme') === 'dawn' ? 'default' : 'dark';
 }
@@ -2680,11 +2761,15 @@ function renderMermaidBlocks(root) {
       }
       var id = block.dataset.mermaidId;
       block.dataset.rendered = 'true';
-      Promise.resolve(mermaid.render(id, code)).then(function(result) {
+      Promise.resolve(mermaid.parse(code)).then(function() {
+        return mermaid.render(id, code);
+      }).then(function(result) {
+        cleanupMermaidArtifacts();
         block.classList.remove('loading');
         block.classList.add('mermaid-rendered');
         block.innerHTML = result.svg;
       }).catch(function(error) {
+        cleanupMermaidArtifacts();
         block.classList.remove('loading');
         block.classList.add('mermaid-error');
         block.innerHTML = '<strong>Mermaid could not render this diagram.</strong><pre><code class="language-mermaid">' + escapeHtml(code) + '</code></pre>';
@@ -3157,6 +3242,248 @@ function getDelegationDetail(tool) {
   return compactAgentStateDetail((tool && (tool.label || tool.toolName)) || 'Delegated task', 150);
 }
 
+function extractTodoListFromValue(value) {
+  var parsed = parseMaybeJson(value);
+  if (Array.isArray(parsed)) return parsed;
+  if (!parsed || typeof parsed !== 'object') return [];
+  if (Array.isArray(parsed.todos)) return parsed.todos;
+  if (Array.isArray(parsed.plan)) return parsed.plan;
+  if (parsed.todo && Array.isArray(parsed.todo.todos)) return parsed.todo.todos;
+  if (parsed.todo && Array.isArray(parsed.todo.plan)) return parsed.todo.plan;
+  if (parsed.result && parsed.result !== value) return extractTodoListFromValue(parsed.result);
+  if (parsed.content && parsed.content !== value) return extractTodoListFromValue(parsed.content);
+  return [];
+}
+
+function normalizeTodoItem(item, index) {
+  if (typeof item === 'string') {
+    return { id: String(index + 1), content: item, status: 'pending' };
+  }
+  var status = String((item && (item.status || item.state)) || 'pending').toLowerCase();
+  if (status === 'done') status = 'completed';
+  if (status === 'doing') status = 'in_progress';
+  if (['pending', 'in_progress', 'completed', 'cancelled'].indexOf(status) === -1) status = 'pending';
+  return {
+    id: String((item && (item.id || item.key)) || (index + 1)),
+    content: String((item && (item.content || item.text || item.title || item.task || item.step)) || ('Todo ' + (index + 1))),
+    status: status,
+  };
+}
+
+function isTodoLikeToolName(value) {
+  var name = String(value || '').toLowerCase();
+  return name.indexOf('todo') !== -1
+    || name.indexOf('update_plan') !== -1
+    || name.indexOf('planning') !== -1
+    || name.indexOf('updating') !== -1;
+}
+
+function extractTodoListFromText(value) {
+  var text = String(value || '');
+  var lines = text.split(/\r?\n/);
+  var items = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    var m = line.match(/^(?:[-*•]|\d+[.)]|\[[ xX-]\])\s+(.+)$/);
+    if (!m) continue;
+    var content = m[1].trim().replace(/[.,;]+$/, '');
+    if (!content || /^(update|maintain|complete)\b/i.test(content)) continue;
+    items.push({ id: String(items.length + 1), content: content, status: 'pending' });
+  }
+  if (items.length) return items;
+  var hasExplicitTodoCue = /\b(todo|to-do|task list|checklist|plan|step|steps)\b/i.test(text);
+  var hasCheckListCue = /^\s*(?:please\s+)?(?:check|look at|look into|inspect|verify)\b[^:]{0,80}:\s+/i.test(text);
+  if (!hasExplicitTodoCue && !hasCheckListCue) return [];
+  var sentence = text
+    .replace(/\s+/g, ' ')
+    .replace(/^(?:please\s+)?(?:can you|could you|i need you to|i want you to)\s+/i, '')
+    .replace(/^(?:please\s+)?(?:check|look at|look into|inspect|verify)\b[^:]{0,80}:\s*/i, '')
+    .replace(/^create and maintain a (?:live )?(?:plan|todo list|task list|checklist) for this task\.?\s*/i, '')
+    .replace(/\bkeep the (?:plan|todo list|task list|checklist) updated as each step finishes\.?$/i, '')
+    .trim();
+  if (!sentence || sentence.length < 12) return [];
+  var separator = hasCheckListCue && sentence.indexOf(',') !== -1 ? /\s*,\s*(?:and\s+)?|\s+(?:and then|then|next)\s+/i : /\s+(?:and then|then|next)\s+/i;
+  var parts = sentence.split(separator).map(function(part) {
+    return part.trim().replace(/[.,;?!]+$/, '');
+  }).filter(function(part) {
+    return part && !/^(and\s+)?(?:keep|update|maintain|complete)\b/i.test(part);
+  });
+  if (parts.length >= 2 && parts.length <= 6) {
+    return parts.map(function(part, index) {
+      return { id: String(index + 1), content: part, status: 'pending' };
+    });
+  }
+  return items;
+}
+
+function getToolCallTodos(messages) {
+  var source = messages || [];
+  for (var i = source.length - 1; i >= 0; i--) {
+    var msg = source[i];
+    var calls = (msg && msg.toolCalls) || [];
+    if (msg && msg.role === 'assistant' && calls.length >= 2) {
+      var seen = {};
+      return calls.filter(function(tool) { return !isTodoTool(tool); }).map(function(tool, index) {
+        var content = String((tool && (tool.label || tool.toolName || tool.name)) || ('Tool ' + (index + 1))).trim();
+        var dedupeKey = content.toLowerCase();
+        if (!content || seen[dedupeKey]) return null;
+        seen[dedupeKey] = true;
+        return {
+          id: String(Object.keys(seen).length),
+          content: content,
+          status: tool && tool.done ? 'completed' : 'in_progress',
+        };
+      }).filter(Boolean).slice(0, 6);
+    }
+  }
+  return [];
+}
+
+function applyTextTodoProgress(todos, messages, completionText) {
+  var calls = [];
+  (messages || []).forEach(function(msg) {
+    ((msg && msg.toolCalls) || []).forEach(function(tool) { calls.push(tool); });
+  });
+  var doneLabels = calls.filter(function(tool) { return tool && tool.done; }).map(function(tool) {
+    return String(tool.label || tool.toolName || tool.name || '').toLowerCase();
+  }).join(' ');
+  var doneDetails = calls.filter(function(tool) { return tool && tool.done; }).map(function(tool) {
+    return [
+      tool.label,
+      tool.toolName,
+      tool.name,
+      tool.result,
+      tool.args && JSON.stringify(tool.args)
+    ].filter(Boolean).join(' ');
+  }).join(' ').toLowerCase();
+  var activeLabels = calls.filter(function(tool) { return tool && !tool.done; }).map(function(tool) {
+    return String(tool.label || tool.toolName || tool.name || '').toLowerCase();
+  }).join(' ');
+  var finalText = String(completionText || '').toLowerCase();
+  var mermaidFound = /mermaid/.test(finalText) && /(implemented|rendering|hermes-ui\.html|createmermaidblock|rendermermaidblocks|initializemermaid|loadmermaidscript)/.test(finalText);
+  if (!mermaidFound && /hermes-ui\.html|createmermaidblock|rendermermaidblocks|initializemermaid|loadmermaidscript/.test(doneDetails)) mermaidFound = true;
+  var matchingFileInspected = mermaidFound && /(specific .*code|related code|lines? \d+|createmermaidblock|rendermermaidblocks|initializemermaid|loadmermaidscript|mermaid-block)/.test(finalText + ' ' + doneDetails);
+  var containingFileReported = /hermes-ui\.html/.test(finalText) && /(contains|file|implemented|lives in|main file|single-file)/.test(finalText);
+  return todos.map(function(todo) {
+    var text = String(todo.content || '').toLowerCase();
+    var status = todo.status || 'pending';
+    if (/(list|inspect).*(root|project)|root.*(list|inspect)/i.test(text) && (/\bls\b|find|rg|root|project/.test(doneLabels) || /project root files|serve_lite\.py|hermes-ui\.html/.test(finalText))) {
+      status = 'completed';
+    } else if (/mermaid|render/i.test(text)) {
+      if (mermaidFound) status = 'completed';
+      else if (/mermaid/.test(activeLabels) || /mermaid/.test(doneLabels)) status = 'in_progress';
+    } else if (/(inspect|open|read|check).*(matching|file|result)|matching.*file/i.test(text) && matchingFileInspected) {
+      status = 'completed';
+    } else if (/(report|filename|file name|tell).*(file|contains)|what file contains/i.test(text) && containingFileReported) {
+      status = 'completed';
+    }
+    return Object.assign({}, todo, { status: status });
+  });
+}
+
+function applyTextTodoCompletion(todos, text) {
+  if (!todos.length) return todos;
+  var value = String(text || '');
+  if (!/\ball\s+\d*\s*tasks?\s+(?:are\s+)?complete|\ball done\b|\bmarked complete\b|\bcompleted successfully\b/i.test(value)) return todos;
+  return todos.map(function(todo) {
+    return Object.assign({}, todo, { status: 'completed' });
+  });
+}
+
+function getSessionTodos(messages) {
+  var source = messages || [];
+  for (var i = source.length - 1; i >= 0; i--) {
+    var msg = source[i];
+    if (msg && msg.role === 'tool') {
+      var toolTodos = extractTodoListFromValue(msg.content);
+      if (toolTodos.length) return toolTodos.map(normalizeTodoItem);
+    }
+    var calls = (msg && msg.toolCalls) || [];
+    for (var j = calls.length - 1; j >= 0; j--) {
+      var tool = calls[j];
+      var name = String((tool && (tool.toolName || tool.name || tool.label)) || '').toLowerCase();
+      if (!isTodoLikeToolName(name)) continue;
+      var todos = extractTodoListFromValue(tool.result);
+      if (!todos.length) todos = extractTodoListFromValue(tool.args);
+      if (todos.length) return todos.map(normalizeTodoItem);
+    }
+  }
+  var latestTextTodos = [];
+  var completionText = '';
+  for (var k = source.length - 1; k >= 0; k--) {
+    var textMsg = source[k];
+    if (!textMsg) continue;
+    if (!completionText && textMsg.role === 'assistant' && textMsg.content) {
+      completionText = textMsg.content;
+    }
+    if (textMsg.role === 'user' && textMsg.content) {
+      latestTextTodos = extractTodoListFromText(textMsg.content);
+      if (latestTextTodos.length) {
+        latestTextTodos = applyTextTodoProgress(latestTextTodos, source, completionText);
+        return applyTextTodoCompletion(latestTextTodos, completionText).map(normalizeTodoItem);
+      }
+    }
+  }
+  var toolCallTodos = getToolCallTodos(source);
+  if (toolCallTodos.length) return toolCallTodos.map(normalizeTodoItem);
+  return [];
+}
+
+function isTodoTool(tool) {
+  var name = String((tool && (tool.toolName || tool.name || tool.label)) || '').toLowerCase();
+  return isTodoLikeToolName(name);
+}
+
+function SessionTodosPanel({ todos, onClose, sidePanel }) {
+  if (!todos || !todos.length) return null;
+  var visibleTodos = todos.map(function(todo, index) {
+    var normalized = normalizeTodoItem(todo, index);
+    normalized.status = String(normalized.status || 'pending');
+    if (['pending', 'in_progress', 'completed', 'cancelled'].indexOf(normalized.status) === -1) {
+      normalized.status = 'pending';
+    }
+    normalized.content = String(normalized.content || '').trim() || ('Todo ' + (index + 1));
+    normalized.id = String(normalized.id || (index + 1));
+    return normalized;
+  });
+  var complete = visibleTodos.filter(function(t) { return t.status === 'completed'; }).length;
+  var active = visibleTodos.filter(function(t) { return t.status === 'in_progress'; }).length;
+  var iconForStatus = function(status) {
+    if (status === 'completed') return <Icon name="check" size={14}/>;
+    if (status === 'cancelled') return <Icon name="x" size={14}/>;
+    if (status === 'in_progress') return <Icon name="activity" size={14}/>;
+    return <span style={{width:'9px',height:'9px',border:'1px solid currentColor',borderRadius:'2px'}}></span>;
+  };
+  return (
+    <div className={"session-todos-panel " + (sidePanel ? 'side-panel ' : '')}>
+      <div className="session-todos-header">
+        <span className="session-todos-title"><Icon name="list-todo" size={14}/> Current Todos</span>
+        <span className="session-todos-progress">
+          {complete}/{visibleTodos.length} done{active ? ' · ' + active + ' active' : ''}
+        </span>
+      </div>
+      {onClose && (
+        <button className="session-todos-close" onClick={onClose} title="Close current todos">
+          <Icon name="x" size={13}/>
+        </button>
+      )}
+      <div className="session-todos-list">
+        {visibleTodos.length ? visibleTodos.map(function(todo, index) {
+          return (
+            <div key={(todo.id || index) + '-' + index} className={"session-todo-item " + todo.status}>
+              <span className={"session-todo-status " + todo.status}>{iconForStatus(todo.status)}</span>
+              <span>
+                <span className="session-todo-text">{todo.content}</span>
+                <span className="session-todo-meta">{todo.id} · {todo.status.replace('_', ' ')}</span>
+              </span>
+            </div>
+          );
+        }) : <div className="session-todos-empty">Waiting for todo details...</div>}
+      </div>
+    </div>
+  );
+}
+
 function formatToolDuration(ms) {
   var n = Number(ms);
   if (!Number.isFinite(n) || n <= 0) return '';
@@ -3251,6 +3578,9 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
       return s;
     } catch (e) { return String(result); }
   };
+  var visibleToolCalls = (message.toolCalls || []).filter(function(tool) {
+    return !isTodoTool(tool);
+  });
 
   useEffect(() => {
     if (!contentRef.current) return;
@@ -3283,9 +3613,9 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
         {message.timestamp && <span style={{fontSize:'11px',color:'var(--text-muted)',marginLeft:'auto',fontVariantNumeric:'tabular-nums'}}>{new Date(message.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>}
       </div>
 
-      {message.toolCalls && message.toolCalls.length > 0 && (
+      {visibleToolCalls.length > 0 && (
         <div className="tool-calls-list">
-          {message.toolCalls.map(function(tool, i) {
+          {visibleToolCalls.map(function(tool, i) {
             var isExpanded = expandedTools[i] || false;
             var hasResult = tool.done && tool.result != null;
             if (isDelegationTool(tool)) {
@@ -3480,6 +3810,12 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
     });
   };
 
+  const hardReloadUi = () => {
+    var url = new URL(window.location.href);
+    url.searchParams.set('restart', String(Date.now()));
+    window.location.replace(url.toString());
+  };
+
   const handleRestart = async () => {
     var okToRestart = window.confirm('Quick restart Hermes UI and Hermes Agent now? Active work will pause while the server comes back.');
     if (!okToRestart) {
@@ -3528,8 +3864,8 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
     var backUp = await waitForServerUp(function(sec) {
       setServerStatus('Full restart waiting for server (' + sec + 's)...');
     });
-    setServerStatus(backUp ? 'Full restart complete - reloading...' : 'Timed out - reloading anyway...');
-    window.location.reload();
+    setServerStatus(backUp ? 'Full restart complete - hard refreshing...' : 'Timed out - hard refreshing anyway...');
+    hardReloadUi();
   };
 
   const handlePullRestart = async () => {
@@ -3557,8 +3893,8 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount }) {
     var backUp = await waitForServerUp(function(sec) {
       setServerStatus('Pull: ' + pullText + ' - waiting for server (' + sec + 's)...');
     });
-    setServerStatus(backUp ? 'Updated and fully restarted - reloading...' : 'Timed out - reloading anyway...');
-    window.location.reload();
+    setServerStatus(backUp ? 'Updated and fully restarted - hard refreshing...' : 'Timed out - hard refreshing anyway...');
+    hardReloadUi();
   };
 
   const handleServerHealthCheck = async () => {
@@ -6760,6 +7096,12 @@ function App() {
       return saved ? JSON.parse(saved) : false;
     } catch(e) { return false; }
   });
+  const [dismissedTodoSessions, setDismissedTodoSessions] = useState(() => {
+    try {
+      const saved = localStorage.getItem('hermes-dismissed-todo-sessions');
+      return saved ? JSON.parse(saved) : [];
+    } catch(e) { return []; }
+  });
   const [sessionTokens, setSessionTokens] = useState({ input: 0, output: 0 });
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingContent, setEditingContent] = useState('');
@@ -6837,6 +7179,9 @@ function App() {
   useEffect(() => {
     localStorage.setItem('hermes-activity-panel', JSON.stringify(activityPanelOpen));
   }, [activityPanelOpen]);
+  useEffect(() => {
+    localStorage.setItem('hermes-dismissed-todo-sessions', JSON.stringify(dismissedTodoSessions.slice(-80)));
+  }, [dismissedTodoSessions]);
 
   useEffect(function() {
     try { localStorage.setItem('hermes-reasoning-effort', normalizeReasoningEffort(reasoningEffort)); } catch(e) {}
@@ -7271,7 +7616,7 @@ function App() {
         source.addEventListener('tool_complete', function(e) {
           var d = JSON.parse(e.data);
           emitStatus({ kind: 'thinking', label: 'Thinking', detail: 'Tool finished' });
-          if (onToolEvent) onToolEvent({ type: 'completed', toolName: d.name, label: d.preview || d.name, args: d.args, duration: d.duration });
+          if (onToolEvent) onToolEvent({ type: 'completed', toolName: d.name, label: d.preview || d.name, args: d.args, result: d.result, duration: d.duration });
         });
 
         source.addEventListener('approval', function(e) {
@@ -8647,6 +8992,9 @@ function App() {
     ? makeAgentState('paused', 'Paused', 'Ready for an interjection')
     : activeAgentState;
   const showAgentBanner = shouldShowAgentBanner(visibleAgentState, isStreaming, isPaused);
+  const sessionTodos = useMemo(function() {
+    return getSessionTodos(messages);
+  }, [messages]);
 
   // Defensive helper: clears stuck .streaming / .thinking flags on the last assistant
   // message for a given session. Used by pause/stop so the UI always unsticks, even
@@ -8916,6 +9264,19 @@ function App() {
   }, [config.geminiKey, config.imageHelperMode, config.imageHelperModel, currentModel]);
 
   // ── Render ──
+  var latestUserForTodos = null;
+  for (var todoMsgIndex = messages.length - 1; todoMsgIndex >= 0; todoMsgIndex--) {
+    if (messages[todoMsgIndex] && messages[todoMsgIndex].role === 'user') {
+      latestUserForTodos = messages[todoMsgIndex];
+      break;
+    }
+  }
+  var todoSessionKey = (activeConvId || 'active-chat') + ':' + ((latestUserForTodos && latestUserForTodos.id) || 'no-user');
+  var todosDismissed = dismissedTodoSessions.indexOf(todoSessionKey) !== -1;
+  var showTodosPanel = currentView === 'chat' && sessionTodos.length > 0 && !todosDismissed;
+  var rightColumnOpen = showTerminal || showTodosPanel;
+  var todoOnlyPanel = showTodosPanel && !showTerminal;
+  var rightColumnRenderWidth = todoOnlyPanel ? 340 : rightColumnWidth;
   var sidebarStyle = isDesktopLayout
     ? {
         width: sidebarWidth + 'px',
@@ -8925,9 +9286,9 @@ function App() {
     : undefined;
   var rightColumnStyle = isDesktopLayout
     ? {
-        width: rightColumnWidth + 'px',
-        minWidth: rightColumnWidth + 'px',
-        marginRight: showTerminal ? undefined : ('-' + rightColumnWidth + 'px'),
+        width: rightColumnRenderWidth + 'px',
+        minWidth: rightColumnRenderWidth + 'px',
+        marginRight: rightColumnOpen ? undefined : ('-' + rightColumnRenderWidth + 'px'),
       }
     : undefined;
 
@@ -9500,16 +9861,27 @@ function App() {
         )}
       </div>
 
-      {/* Right column: Live Terminal */}
-      <div className={"right-column" + (artifactPanelWide ? ' wide' : '') + (showTerminal ? '' : ' closed')} style={rightColumnStyle}>
-        {isDesktopLayout && showTerminal && (
+      {/* Right column: Session activity */}
+      <div className={"right-column" + (artifactPanelWide ? ' wide' : '') + (rightColumnOpen ? '' : ' closed')} style={rightColumnStyle}>
+        {isDesktopLayout && rightColumnOpen && showTerminal && (
           <div
             className={"layout-resize-handle right-column-resize-handle " + (resizingLayout === 'right' ? 'active' : '')}
             onPointerDown={function(e) {
               e.preventDefault();
               setResizingLayout('right');
             }}
-            title="Resize terminal"
+            title="Resize right panel"
+          />
+        )}
+        {showTodosPanel && (
+          <SessionTodosPanel
+            todos={sessionTodos}
+            onClose={function() {
+              setDismissedTodoSessions(function(prev) {
+                return prev.indexOf(todoSessionKey) === -1 ? prev.concat([todoSessionKey]) : prev;
+              });
+            }}
+            sidePanel={true}
           />
         )}
         <TerminalPanel isOpen={showTerminal} onClose={function(){setShowTerminal(false); setArtifactPanelWide(false);}} onClear={function(){ setLocalLogs([]); }} localLogs={localLogs} artifacts={artifacts} onArtifactTab={function(isWide){ setArtifactPanelWide(isWide); if(isWide && !showTerminal) setShowTerminal(true); if(isWide) setRightColumnWidth(function(w){ return Math.max(w, 560); }); }} onAddArtifact={function(art){ setArtifacts(function(prev){ return prev.concat([art]); }); }} onRemoveArtifact={function(idx){ setArtifacts(function(prev){ return prev.filter(function(_,i){ return i !== idx; }); }); }} />
