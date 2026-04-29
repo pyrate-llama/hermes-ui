@@ -3321,29 +3321,6 @@ function extractTodoListFromText(value) {
   return items;
 }
 
-function getToolCallTodos(messages) {
-  var source = messages || [];
-  for (var i = source.length - 1; i >= 0; i--) {
-    var msg = source[i];
-    var calls = (msg && msg.toolCalls) || [];
-    if (msg && msg.role === 'assistant' && calls.length >= 2) {
-      var seen = {};
-      return calls.filter(function(tool) { return !isTodoTool(tool); }).map(function(tool, index) {
-        var content = String((tool && (tool.label || tool.toolName || tool.name)) || ('Tool ' + (index + 1))).trim();
-        var dedupeKey = content.toLowerCase();
-        if (!content || seen[dedupeKey]) return null;
-        seen[dedupeKey] = true;
-        return {
-          id: String(Object.keys(seen).length),
-          content: content,
-          status: tool && tool.done ? 'completed' : 'in_progress',
-        };
-      }).filter(Boolean).slice(0, 6);
-    }
-  }
-  return [];
-}
-
 function applyTextTodoProgress(todos, messages, completionText) {
   var calls = [];
   (messages || []).forEach(function(msg) {
@@ -3397,8 +3374,19 @@ function applyTextTodoCompletion(todos, text) {
 
 function getSessionTodos(messages) {
   var source = messages || [];
-  for (var i = source.length - 1; i >= 0; i--) {
-    var msg = source[i];
+  var latestUserIndex = -1;
+  for (var userIndex = source.length - 1; userIndex >= 0; userIndex--) {
+    if (source[userIndex] && source[userIndex].role === 'user') {
+      latestUserIndex = userIndex;
+      break;
+    }
+  }
+  if (latestUserIndex === -1) return [];
+  var scoped = source.slice(latestUserIndex);
+  var latestUserMessage = source[latestUserIndex];
+  var latestTextTodos = extractTodoListFromText((latestUserMessage && latestUserMessage.content) || '');
+  for (var i = scoped.length - 1; i >= 0; i--) {
+    var msg = scoped[i];
     if (msg && msg.role === 'tool') {
       var toolTodos = extractTodoListFromValue(msg.content);
       if (toolTodos.length) return toolTodos.map(normalizeTodoItem);
@@ -3413,24 +3401,18 @@ function getSessionTodos(messages) {
       if (todos.length) return todos.map(normalizeTodoItem);
     }
   }
-  var latestTextTodos = [];
-  var completionText = '';
-  for (var k = source.length - 1; k >= 0; k--) {
-    var textMsg = source[k];
-    if (!textMsg) continue;
-    if (!completionText && textMsg.role === 'assistant' && textMsg.content) {
-      completionText = textMsg.content;
-    }
-    if (textMsg.role === 'user' && textMsg.content) {
-      latestTextTodos = extractTodoListFromText(textMsg.content);
-      if (latestTextTodos.length) {
-        latestTextTodos = applyTextTodoProgress(latestTextTodos, source, completionText);
-        return applyTextTodoCompletion(latestTextTodos, completionText).map(normalizeTodoItem);
+  if (latestTextTodos.length) {
+    var completionText = '';
+    for (var k = scoped.length - 1; k >= 0; k--) {
+      var textMsg = scoped[k];
+      if (textMsg && textMsg.role === 'assistant' && textMsg.content) {
+        completionText = textMsg.content;
+        break;
       }
     }
+    latestTextTodos = applyTextTodoProgress(latestTextTodos, scoped, completionText);
+    return applyTextTodoCompletion(latestTextTodos, completionText).map(normalizeTodoItem);
   }
-  var toolCallTodos = getToolCallTodos(source);
-  if (toolCallTodos.length) return toolCallTodos.map(normalizeTodoItem);
   return [];
 }
 
