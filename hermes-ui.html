@@ -2842,10 +2842,11 @@ function estimateMessageTokens(messages) {
 }
 
 function getContextPressure(messages, sessionTokens) {
-  var input = Number(sessionTokens && sessionTokens.input) || 0;
-  var output = Number(sessionTokens && sessionTokens.output) || 0;
-  var exactTotal = input + output;
-  var estimatedTotal = exactTotal || estimateMessageTokens(messages);
+  // Always estimate from current messages — session input_tokens/output_tokens
+  // are cumulative across all API calls in the session's lifetime and don't
+  // reflect the actual current context size, especially with prompt caching.
+  var estimatedTotal = estimateMessageTokens(messages);
+  var exactTotal = (Number(sessionTokens && sessionTokens.input) || 0) + (Number(sessionTokens && sessionTokens.output) || 0);
   var workingBudget = 128000;
   var percent = Math.min(100, Math.round((estimatedTotal / workingBudget) * 100));
   var level = 'low';
@@ -2853,10 +2854,9 @@ function getContextPressure(messages, sessionTokens) {
   if (percent >= 90) { level = 'full'; label = 'Full'; }
   else if (percent >= 62) { level = 'high'; label = 'High'; }
   else if (percent >= 25) { level = 'medium'; label = 'Med'; }
-  var source = exactTotal ? 'usage data' : 'text estimate';
-  var title = 'Context ' + label + ': ' + compactTokenCount(estimatedTotal) + ' tokens, about ' + percent + '% of a 128k working budget (' + source + ')';
-  if (exactTotal) {
-    title += ' - ' + compactTokenCount(input) + ' in / ' + compactTokenCount(output) + ' out';
+  var title = 'Context ' + label + ': ' + compactTokenCount(estimatedTotal) + ' tokens, about ' + percent + '% of 128k working budget';
+  if (exactTotal > 0) {
+    title += ' (cumulative session: ' + compactTokenCount(exactTotal) + ')';
   }
   return { total: estimatedTotal, percent: percent, level: level, label: label, title: title };
 }
