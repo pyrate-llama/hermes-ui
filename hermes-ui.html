@@ -230,6 +230,141 @@
     border-color: rgba(124,111,224,0.45);
     box-shadow: 0 0 0 3px rgba(124,111,224,0.10);
   }
+  .space-switcher { margin: 8px 0 10px; display: flex; flex-direction: column; gap: 6px; }
+  .space-label {
+    display: flex; align-items: center; gap: 6px; margin: 0 2px;
+    color: var(--text-muted); font-size: 10px; font-weight: 750;
+    letter-spacing: 0; text-transform: uppercase;
+  }
+  .space-select {
+    width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 34px 8px 12px; color: var(--text-primary);
+    font-size: 12px; cursor: pointer; outline: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238888a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+  }
+  .space-path {
+    font-size: 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .space-chip {
+    display: inline-flex; align-items: center; gap: 7px; max-width: 260px;
+    border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px;
+    background: rgba(255,255,255,0.035); color: var(--text-secondary);
+    font-size: 12px; min-width: 0; cursor: pointer;
+  }
+  .space-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spaces-view { padding: 20px; height: 100%; overflow: auto; }
+  .spaces-grid {
+    display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+    gap: 16px; max-width: 1080px;
+  }
+  .spaces-list, .spaces-detail {
+    border: 1px solid var(--border); border-radius: 8px;
+    background: rgba(255,255,255,0.025); min-height: 260px;
+  }
+  .spaces-list-header, .spaces-detail-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+  }
+  .spaces-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 750; color: var(--text-primary);
+  }
+  .spaces-list-body { display: flex; flex-direction: column; padding: 6px; }
+  .space-row {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: transparent; border: 1px solid transparent; border-radius: 6px;
+    padding: 9px 10px; color: var(--text-primary); cursor: pointer; text-align: left;
+  }
+  .space-row:hover { background: var(--bg-hover); }
+  .space-row.active { background: var(--bg-active); border-color: rgba(124,111,224,0.22); }
+  .space-row-main { min-width: 0; flex: 1; }
+  .space-row-name { font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .space-row-path {
+    font-size: 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;
+  }
+  .spaces-detail-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .spaces-field label {
+    display: block; color: var(--text-muted); font-size: 10px;
+    font-weight: 750; text-transform: uppercase; margin-bottom: 6px;
+  }
+  .spaces-field input {
+    width: 100%; background: var(--bg-primary); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 6px; padding: 9px 10px;
+    font-size: 12px; outline: none;
+  }
+  .spaces-path-row { display: flex; gap: 8px; align-items: center; }
+  .spaces-path-row input { flex: 1; min-width: 0; }
+  .spaces-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+  .spaces-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .spaces-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary);
+    border-radius: 6px; padding: 7px 10px; font-size: 12px; cursor: pointer;
+  }
+  .spaces-btn:disabled { opacity: 0.65; cursor: default; }
+  .spaces-btn:hover { background: var(--bg-hover); }
+  .spaces-btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+  .spaces-btn.danger { color: var(--danger); border-color: rgba(224,85,85,0.35); }
+  .spaces-error { color: var(--danger); font-size: 12px; min-height: 16px; }
+  .space-picker-modal {
+    max-width: 760px;
+    height: min(760px, calc(100vh - 72px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .space-picker-modal .modal-title,
+  .space-picker-toolbar,
+  .space-picker-pathbar,
+  .space-picker-modal .modal-buttons {
+    flex-shrink: 0;
+  }
+  .space-picker-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .space-picker-root {
+    border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-secondary);
+    border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .space-picker-root.active {
+    background: var(--accent-dim); border-color: rgba(124,111,224,0.34); color: var(--text-primary);
+  }
+  .space-picker-pathbar {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+    background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px;
+  }
+  .space-picker-current {
+    flex: 1; min-width: 0; font-size: 12px; color: var(--text-primary);
+    font-family: Monaco, Menlo, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .space-picker-list {
+    border: 1px solid var(--border); border-radius: 12px; background: var(--bg-secondary);
+    flex: 1; min-height: 0; overflow-y: auto; padding: 8px;
+  }
+  .space-picker-row {
+    width: 100%; border: 1px solid transparent; background: transparent; color: var(--text-primary);
+    border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;
+    cursor: pointer; text-align: left;
+  }
+  .space-picker-row:hover { background: var(--bg-hover); border-color: var(--border); }
+  .space-picker-row-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .space-picker-row-name { font-size: 13px; font-weight: 650; }
+  .space-picker-row-path {
+    font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .space-picker-empty {
+    display: flex; align-items: center; justify-content: center; min-height: 100%;
+    color: var(--text-muted); font-size: 13px;
+  }
+  .space-picker-modal .modal-buttons { margin-top: 14px; }
+  @media (max-height: 700px) {
+    .space-picker-modal {
+      height: calc(100vh - 32px);
+      padding: 18px;
+    }
+  }
+  @media (max-width: 900px) { .spaces-grid { grid-template-columns: 1fr; } }
 
   .main {
     flex: 1; display: flex; flex-direction: column;
@@ -2560,6 +2695,49 @@ function normalizeHermesConfig(value) {
   return Object.assign(defaultConfig(), value || {});
 }
 
+function workspaceNameFromPath(path) {
+  var clean = String(path || '').replace(/[\/\\]+$/, '');
+  if (!clean) return 'Workspace';
+  return clean.split(/[\/\\]+/).filter(Boolean).pop() || clean;
+}
+
+function normalizeWorkspacePathKey(path) {
+  var value = String(path || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  return /^[A-Za-z]:\//.test(value) ? value.toLowerCase() : value;
+}
+
+function workspacePathStartsWith(path, root) {
+  var value = normalizeWorkspacePathKey(path);
+  var base = normalizeWorkspacePathKey(root);
+  return !!base && (value === base || value.indexOf(base + '/') === 0);
+}
+
+function normalizeWorkspaceList(items, fallbackPath) {
+  var seen = {};
+  var list = (Array.isArray(items) ? items : []).map(function(item) {
+    if (!item || !item.path) return null;
+    var path = String(item.path || '').trim();
+    var key = normalizeWorkspacePathKey(path);
+    if (!path || seen[key]) return null;
+    seen[key] = true;
+    return { name: String(item.name || workspaceNameFromPath(path)), path: path };
+  }).filter(Boolean);
+  if (!list.length && fallbackPath) list.push({ name: workspaceNameFromPath(fallbackPath), path: fallbackPath });
+  return list;
+}
+
+function shortWorkspacePath(path) {
+  var value = String(path || '');
+  var normalized = value.replace(/\\/g, '/');
+  var macHome = normalized.match(/^(\/Users\/[^/]+)(\/.*)?$/);
+  if (macHome) return '~' + (macHome[2] || '');
+  var linuxHome = normalized.match(/^(\/home\/[^/]+)(\/.*)?$/);
+  if (linuxHome) return '~' + (linuxHome[2] || '');
+  var windowsHome = value.match(/^([A-Za-z]:[\\/]Users[\\/][^\\/]+)([\\\/].*)?$/);
+  if (windowsHome) return '~' + (windowsHome[2] || '').replace(/\\/g, '/');
+  return value;
+}
+
 function normalizeImageHelperMode(value) {
   return ['auto', 'describe', 'direct'].indexOf(value) !== -1 ? value : 'auto';
 }
@@ -4777,7 +4955,236 @@ function DashboardView() {
 }
 
 /* ── Files View ── */
-function FilesView() {
+function SpacesView({ workspaces, activeWorkspace, onSwitch, onRefresh }) {
+  var [selectedPath, setSelectedPath] = useState(activeWorkspace && activeWorkspace.path || '');
+  var [name, setName] = useState('');
+  var [path, setPath] = useState('');
+  var [busy, setBusy] = useState(false);
+  var [error, setError] = useState('');
+  var [pickerOpen, setPickerOpen] = useState(false);
+  var [pickerBusy, setPickerBusy] = useState(false);
+  var [pickerPath, setPickerPath] = useState('');
+  var [pickerParent, setPickerParent] = useState('');
+  var [pickerRoots, setPickerRoots] = useState([]);
+  var [pickerItems, setPickerItems] = useState([]);
+  var [pickerError, setPickerError] = useState('');
+  var selected = (workspaces || []).find(function(w) { return w.path === selectedPath; }) || activeWorkspace || (workspaces || [])[0] || null;
+
+  useEffect(function() {
+    var next = selected || {};
+    setSelectedPath(next.path || '');
+    setName(next.name || '');
+    setPath(next.path || '');
+  }, [activeWorkspace && activeWorkspace.path]);
+
+  function applyWorkspaceResponse(data) {
+    if (data && data.workspaces && onRefresh) onRefresh(data.workspaces, data.last);
+  }
+
+  async function loadPicker(nextPath) {
+    var targetPath = String(nextPath || path || (activeWorkspace && activeWorkspace.path) || '').trim();
+    setPickerBusy(true);
+    setPickerError('');
+    try {
+      var resp = await fetch(API_BASE + '/api/workspaces/browse?path=' + encodeURIComponent(targetPath));
+      var data = await resp.json().catch(function() { return {}; });
+      if ((!resp.ok || data.ok === false) && targetPath) {
+        resp = await fetch(API_BASE + '/api/workspaces/browse?path=');
+        data = await resp.json().catch(function() { return {}; });
+      }
+      if (!resp.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + resp.status));
+      setPickerPath(data.path || '');
+      setPickerParent(data.parent || '');
+      setPickerRoots(Array.isArray(data.roots) ? data.roots : []);
+      setPickerItems(Array.isArray(data.items) ? data.items : []);
+    } catch(e) {
+      setPickerError(e.message || String(e));
+      setPickerItems([]);
+    } finally {
+      setPickerBusy(false);
+    }
+  }
+
+  function openPicker() {
+    setPickerOpen(true);
+    loadPicker(path || (activeWorkspace && activeWorkspace.path) || '');
+  }
+
+  function closePicker() {
+    setPickerOpen(false);
+    setPickerError('');
+  }
+
+  function choosePickerPath(nextPath) {
+    setPath(nextPath || '');
+    if (!name.trim()) setName(workspaceNameFromPath(nextPath || ''));
+    closePicker();
+  }
+
+  async function saveSpace() {
+    var cleanPath = String(path || '').trim();
+    if (!cleanPath) { setError('Path is required'); return; }
+    setBusy(true);
+    setError('');
+    try {
+      var endpoint = selected && selected.path === cleanPath ? '/api/workspaces/rename' : '/api/workspaces/add';
+      var resp = await fetch(API_BASE + endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, path: cleanPath }),
+      });
+      var data = await resp.json().catch(function() { return {}; });
+      if (!resp.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + resp.status));
+      applyWorkspaceResponse(data);
+      if (onSwitch) onSwitch(cleanPath);
+      setSelectedPath(cleanPath);
+    } catch(e) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeSpace() {
+    if (!selected || !selected.path) return;
+    if ((workspaces || []).length <= 1) { setError('Keep at least one space'); return; }
+    if (!window.confirm('Remove this space from Hermes UI? Files are not deleted.')) return;
+    setBusy(true);
+    setError('');
+    try {
+      var resp = await fetch(API_BASE + '/api/workspaces/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selected.path }),
+      });
+      var data = await resp.json().catch(function() { return {}; });
+      if (!resp.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + resp.status));
+      applyWorkspaceResponse(data);
+      var next = normalizeWorkspaceList(data.workspaces, data.last)[0];
+      if (next && onSwitch) onSwitch(data.last || next.path);
+    } catch(e) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startNew() {
+    setSelectedPath('');
+    setName('');
+    setPath('');
+    setError('');
+  }
+
+  function selectSpace(space) {
+    setSelectedPath(space.path);
+    setName(space.name || workspaceNameFromPath(space.path));
+    setPath(space.path);
+    setError('');
+    if (onSwitch) onSwitch(space.path);
+  }
+
+  return (
+    <div className="spaces-view">
+      <div className="spaces-grid">
+        <div className="spaces-list">
+          <div className="spaces-list-header">
+            <div className="spaces-title"><Icon name="folder" size={15}/> Spaces</div>
+            <button className="spaces-btn" onClick={startNew} title="Add space"><Icon name="plus" size={14}/> Add</button>
+          </div>
+          <div className="spaces-list-body">
+            {(workspaces || []).map(function(space) {
+              var active = activeWorkspace && activeWorkspace.path === space.path;
+              return (
+                <button key={space.path} className={"space-row " + (active ? 'active' : '')} onClick={function(){ selectSpace(space); }}>
+                  <Icon name="folder" size={15}/>
+                  <span className="space-row-main">
+                    <span className="space-row-name">{space.name || workspaceNameFromPath(space.path)}</span>
+                    <span className="space-row-path">{shortWorkspacePath(space.path)}</span>
+                  </span>
+                  {active && <Icon name="check" size={14}/>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="spaces-detail">
+          <div className="spaces-detail-header">
+            <div className="spaces-title">{selectedPath ? 'Space Details' : 'New Space'}</div>
+            {activeWorkspace && <button className="spaces-btn" onClick={function(){ onSwitch && onSwitch(activeWorkspace.path); }} title="Use active space"><Icon name="check" size={14}/> Active</button>}
+          </div>
+          <div className="spaces-detail-body">
+            <div className="spaces-field">
+              <label>Name</label>
+              <input value={name} onChange={function(e){ setName(e.target.value); }} placeholder="Project name" />
+            </div>
+            <div className="spaces-field">
+              <label>Path</label>
+              <div className="spaces-path-row">
+                <input value={path} onChange={function(e){ setPath(e.target.value); }} placeholder="/absolute/path/to/project" />
+                <button className="spaces-btn" type="button" onClick={openPicker} disabled={busy}><Icon name="folder" size={14}/> Browse</button>
+              </div>
+            </div>
+            <div className="spaces-actions">
+              <button className="spaces-btn primary" onClick={saveSpace} disabled={busy}>{busy ? 'Saving...' : 'Save Space'}</button>
+              {selectedPath && <button className="spaces-btn danger" onClick={removeSpace} disabled={busy}><Icon name="trash" size={14}/> Remove</button>}
+            </div>
+            <div className="spaces-error">{error}</div>
+          </div>
+        </div>
+      </div>
+      {pickerOpen && (
+        <div className="modal-overlay" onClick={closePicker}>
+          <div className="modal-content space-picker-modal" onClick={function(e){ e.stopPropagation(); }}>
+            <button className="modal-close-btn" onClick={closePicker} title="Close" aria-label="Close"><Icon name="x" size={18}/></button>
+            <div className="modal-title">Choose Space Folder</div>
+            <div className="space-picker-toolbar">
+              {pickerRoots.map(function(root) {
+                var active = workspacePathStartsWith(pickerPath, root.path);
+                return (
+                  <button key={root.path} className={"space-picker-root " + (active ? 'active' : '')} onClick={function(){ loadPicker(root.path); }}>
+                    {root.name}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="space-picker-pathbar">
+              <button className="spaces-btn" onClick={function(){ if (pickerParent) loadPicker(pickerParent); }} disabled={!pickerParent || pickerBusy}>Up</button>
+              <div className="space-picker-current" title={pickerPath}>{pickerPath || 'Loading...'}</div>
+            </div>
+            <div className="space-picker-list">
+              {pickerBusy ? (
+                <div className="space-picker-empty">Loading folders...</div>
+              ) : pickerError ? (
+                <div className="space-picker-empty">{pickerError}</div>
+              ) : pickerItems.length ? (
+                pickerItems.map(function(item) {
+                  return (
+                    <button key={item.path} className="space-picker-row" onClick={function(){ loadPicker(item.path); }}>
+                      <Icon name="folder" size={16}/>
+                      <span className="space-picker-row-main">
+                        <span className="space-picker-row-name">{item.name}</span>
+                        <span className="space-picker-row-path">{item.path}</span>
+                      </span>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="space-picker-empty">No folders here yet.</div>
+              )}
+            </div>
+            <div className="modal-buttons">
+              <button className="modal-btn secondary" onClick={closePicker}>Cancel</button>
+              <button className="modal-btn primary" onClick={function(){ choosePickerPath(pickerPath); }} disabled={!pickerPath || pickerBusy}>Use This Folder</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilesView({ activeWorkspace }) {
   // Store all directory children in a flat map: path -> items[]
   var [dirCache, setDirCache] = useState({});
   var [expandedDirs, setExpandedDirs] = useState({});
@@ -4796,13 +5203,18 @@ function FilesView() {
 
   // Fetch root directory on mount
   useEffect(function() {
-    fetchDir('');
-  }, []);
+    setDirCache({});
+    setExpandedDirs({});
+    setSelectedFilePath(null);
+    setFileContent('');
+    setFileMetadata(null);
+    fetchDir('', true);
+  }, [activeWorkspace && activeWorkspace.path]);
 
-  function fetchDir(path) {
-    if (dirCache[path]) return; // already cached
+  function fetchDir(path, force) {
+    if (!force && dirCache[path]) return; // already cached
     setLoadingDirs(function(prev) { var n = Object.assign({}, prev); n[path] = true; return n; });
-    fetch(API_BASE + '/browse?path=' + encodeURIComponent(path))
+    fetch(API_BASE + '/browse?path=' + encodeURIComponent(path) + '&workspace=' + encodeURIComponent(activeWorkspace && activeWorkspace.path || ''))
       .then(function(r) { return r.ok ? r.json() : { items: [] }; })
       .then(function(data) {
         var raw = data.items || [];
@@ -4837,7 +5249,7 @@ function FilesView() {
     setLoadingFile(true);
     setIsEditing(false);
     setSaveStatus(null);
-    fetch(API_BASE + '/readfile?path=' + encodeURIComponent(path))
+    fetch(API_BASE + '/readfile?path=' + encodeURIComponent(path) + '&workspace=' + encodeURIComponent(activeWorkspace && activeWorkspace.path || ''))
       .then(function(r) { return r.ok ? r.json() : { content: '(Could not load file)', name: path.split('/').pop(), path: path, size: 0, type: 'text' }; })
       .then(function(data) {
         setFileContent(data.content || '');
@@ -4871,7 +5283,7 @@ function FilesView() {
     fetch(API_BASE + '/writefile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: fileMetadata.path, content: editContent })
+      body: JSON.stringify({ path: fileMetadata.path, content: editContent, workspace: activeWorkspace && activeWorkspace.path || '' })
     })
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -4942,11 +5354,11 @@ function FilesView() {
             <input type="text" placeholder="Search files..." value={searchTerm}
               onChange={function(e) { setSearchTerm(e.target.value); }}
               style={{flex:1,background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'8px 12px',color:'var(--text-primary)',fontSize:'13px',outline:'none'}} />
-            <button onClick={function() { setDirCache({}); setRootItems([]); fetchDir(''); }}
+            <button onClick={function() { setDirCache({}); setRootItems([]); fetchDir('', true); }}
               style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',color:'var(--text-secondary)',cursor:'pointer',fontSize:'14px'}} title="Refresh">{'↻'}</button>
           </div>
           <div style={{fontSize:'11px',color:'var(--text-muted)',marginBottom:'10px',fontWeight:'600',textTransform:'uppercase',letterSpacing:'0.5px'}}>
-            ~/.hermes/
+            {activeWorkspace && activeWorkspace.path ? shortWorkspacePath(activeWorkspace.path) : 'Server default'}
           </div>
           <div className="file-tree">
             {rootItems.length === 0 && !loadingDirs[''] ? (
@@ -4966,7 +5378,7 @@ function FilesView() {
               <span style={{fontSize:'16px'}}>{fileType === 'image' ? '🖼' : '📄'}</span>
               <div style={{flex:1}}>
                 <div style={{fontSize:'13px',fontWeight:'600',color:'var(--text-primary)'}}>{fileMetadata ? fileMetadata.name : ''}</div>
-                <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>{'~/.hermes/' + (fileMetadata ? fileMetadata.path : '')}{fileMetadata && fileMetadata.size ? ' · ' + formatSize(fileMetadata.size) : ''}</div>
+                <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>{(activeWorkspace && activeWorkspace.path ? shortWorkspacePath(activeWorkspace.path) : 'Server default') + '/' + (fileMetadata ? fileMetadata.path : '')}{fileMetadata && fileMetadata.size ? ' · ' + formatSize(fileMetadata.size) : ''}</div>
               </div>
               {fileType === 'text' && !isEditing && (
                 <button onClick={startEdit}
@@ -5932,7 +6344,7 @@ function TerminalView() {
       if (isCd && exitCode === 0 && output.trim()) {
         var newPath = output.trim().split('\n').pop();
         shellCwdFull.current = newPath;
-        setShellCwd(newPath.replace(/^\/Users\/[^/]+/, '~'));
+        setShellCwd(shortWorkspacePath(newPath));
         output = ''; // Don't show pwd output for cd
       }
 
@@ -6873,6 +7285,15 @@ function App() {
   });
 
   const [conversations, _setConversations] = useState([]);
+  const [workspaces, setWorkspaces] = useState(function() {
+    try { return normalizeWorkspaceList(JSON.parse(localStorage.getItem('hermes-workspaces') || '[]'), ''); }
+    catch(e) { return []; }
+  });
+  const [activeWorkspacePath, setActiveWorkspacePath] = useState(function() {
+    try { return localStorage.getItem('hermes-active-workspace') || ''; }
+    catch(e) { return ''; }
+  });
+  const activeWorkspace = workspaces.find(function(w) { return w.path === activeWorkspacePath; }) || workspaces[0] || { name: 'Default', path: activeWorkspacePath || '' };
   const setConversations = (val) => {
     if (typeof val === 'function') {
       _setConversations(prev => { const next = val(prev); conversationsRef.current = next; return next; });
@@ -6933,6 +7354,62 @@ function App() {
   };
 
   const [input, setInput] = useState('');
+
+  const applyWorkspaceList = function(items, lastPath) {
+    var list = normalizeWorkspaceList(items, lastPath || activeWorkspacePath);
+    var nextPath = lastPath || activeWorkspacePath || (list[0] && list[0].path) || '';
+    if (list.length && !list.some(function(w) { return w.path === nextPath; })) {
+      nextPath = list[0].path;
+    }
+    setWorkspaces(list);
+    setActiveWorkspacePath(nextPath);
+    try {
+      localStorage.setItem('hermes-workspaces', JSON.stringify(list));
+      if (nextPath) localStorage.setItem('hermes-active-workspace', nextPath);
+      else localStorage.removeItem('hermes-active-workspace');
+    } catch(e) {}
+  };
+
+  const refreshWorkspaces = function(items, lastPath) {
+    applyWorkspaceList(items, lastPath);
+  };
+
+  const switchWorkspace = function(path, options) {
+    var cleanPath = String(path || '').trim();
+    var opts = options || {};
+    setActiveWorkspacePath(cleanPath);
+    try {
+      if (cleanPath) localStorage.setItem('hermes-active-workspace', cleanPath);
+      else localStorage.removeItem('hermes-active-workspace');
+    } catch(e) {}
+    if (!opts.skipConversationUpdate && activeConvRef.current) {
+      var sessionId = activeConvRef.current;
+      setConversations(function(prev) {
+        return prev.map(function(c) { return c.id === sessionId ? Object.assign({}, c, { workspace: cleanPath }) : c; });
+      });
+    }
+    if (cleanPath) {
+      try {
+        fetch(API_BASE + '/api/workspaces/switch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: cleanPath }),
+        }).then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(data) { if (data && data.workspaces) applyWorkspaceList(data.workspaces, data.last || cleanPath); })
+          .catch(function() {});
+      } catch(e) {}
+    }
+  };
+
+  useEffect(function() {
+    fetch(API_BASE + '/api/workspaces')
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+      .then(function(data) { applyWorkspaceList(data.workspaces, data.last); })
+      .catch(function() {
+        if (!workspaces.length) applyWorkspaceList([], activeWorkspacePath);
+      });
+  }, []);
+
   // Per-conversation streaming state: Map<sessionId, { abortController, paused }>
   const streamingMap = useRef({});
   const [streamingSessionIds, setStreamingSessionIds] = useState([]);
@@ -7453,6 +7930,7 @@ function App() {
           apply_behavioral_guidelines: !!opts.applyBehavioralGuidelines,
           profile: normalizePersonality(opts.profile || 'default'),
           reasoning_effort: normalizeReasoningEffort(opts.reasoningEffort || ''),
+          workspace: opts.workspace || '',
         }),
         signal: signal,
       });
@@ -8015,7 +8493,7 @@ function App() {
   const newConversation = () => {
     const sessionId = api.createSession();
     var nowIso = new Date().toISOString();
-    const conv = { id: sessionId, title: 'New Chat', created: new Date().toLocaleString(), last_active_at: nowIso, unread_count: 0, messages: [] };
+    const conv = { id: sessionId, title: 'New Chat', created: new Date().toLocaleString(), last_active_at: nowIso, unread_count: 0, workspace: activeWorkspace.path || '', messages: [] };
     setConversations(prev => [conv, ...prev]);
     setActiveConvId(sessionId);
     setMessages([]);
@@ -8054,6 +8532,7 @@ function App() {
     const targetConv = conversationsRef.current.find(c => c.id === convId);
     setMessages((targetConv && targetConv.messages) || []);
     setActiveConvId(convId);
+    if (targetConv && targetConv.workspace) switchWorkspace(targetConv.workspace, { skipConversationUpdate: true });
     setConversations(prev => prev.map(c => c.id === convId ? Object.assign({}, c, { unread_count: 0 }) : c));
     setInput('');
     // Jump back to chat view if currently on Memory/Skills/etc
@@ -8136,6 +8615,7 @@ function App() {
             _setActiveConvId(savedId);
             activeConvRef.current = savedId;
             setMessages(conv.messages || []);
+            if (conv.workspace) switchWorkspace(conv.workspace, { skipConversationUpdate: true });
           }
         }
       }
@@ -8220,7 +8700,7 @@ function App() {
     };
     var appendAside = function(prev) { return (prev || []).concat([asideMsg]); };
     if (isNewSession) {
-      var conv = { id: sessionId, title: question.slice(0, 50) || 'Side question', created: new Date().toLocaleString(), last_active_at: createdIso, unread_count: 0, messages: [asideMsg], message_count: 1, user_prompt_count: 0, tool_call_count: 0 };
+      var conv = { id: sessionId, title: question.slice(0, 50) || 'Side question', created: new Date().toLocaleString(), last_active_at: createdIso, unread_count: 0, workspace: activeWorkspace.path || '', messages: [asideMsg], message_count: 1, user_prompt_count: 0, tool_call_count: 0 };
       setConversations(function(prev) { return [conv].concat(prev); });
       setMessages([asideMsg]);
     } else {
@@ -8293,7 +8773,7 @@ function App() {
     if (!sessionId) {
       sessionId = api.createSession();
       var createdIso = new Date().toISOString();
-      const conv = { id: sessionId, title: text.slice(0, 50) || 'New Chat', created: new Date().toLocaleString(), last_active_at: createdIso, unread_count: 0, messages: [] };
+      const conv = { id: sessionId, title: text.slice(0, 50) || 'New Chat', created: new Date().toLocaleString(), last_active_at: createdIso, unread_count: 0, workspace: activeWorkspace.path || '', messages: [] };
       setConversations(prev => [conv, ...prev]);
       setActiveConvId(sessionId);
       setMessages([]);  // Clear stale messages so user sees fresh session
@@ -8329,6 +8809,7 @@ function App() {
         messages: newMessages,
         message_count: newMessages.length,
         user_prompt_count: newMessages.filter(function(m) { return m.role === 'user'; }).length,
+        workspace: activeWorkspace.path || '',
         last_active_at: new Date().toISOString(),
         unread_count: 0,
         title: (c.title && c.title !== 'New Chat') ? c.title : (text.slice(0, 50) || c.title)
@@ -8716,6 +9197,7 @@ function App() {
           applyBehavioralGuidelines: !!(config && config.applyBehavioralGuidelines === true),
           profile: personality,
           reasoningEffort: reasoningEffort,
+          workspace: activeWorkspace.path || '',
           // Native multimodal images for vision-capable models. Empty when
           // the active model routes through Gemini-describe (MiniMax, etc.).
           images: nativeImages.map(function(img) { return { dataUrl: img.dataUrl }; }),
@@ -9122,6 +9604,7 @@ function App() {
         created: new Date().toLocaleString(),
         last_active_at: new Date().toISOString(),
         unread_count: 0,
+        workspace: activeWorkspace.path || '',
         messages: [msg],
         message_count: 1,
         user_prompt_count: 0,
@@ -9157,6 +9640,21 @@ function App() {
     { name: 'chat', icon: 'message-square', summary: 'Open chat', run: function() { setCurrentView('chat'); } },
     { name: 'dashboard', icon: 'layout-dashboard', summary: 'Open dashboard', run: function() { setCurrentView('dashboard'); } },
     { name: 'files', icon: 'folder', summary: 'Open files', run: function() { setCurrentView('files'); } },
+    { name: 'spaces', icon: 'folder', summary: 'Open Spaces', run: function() { setCurrentView('spaces'); } },
+    { name: 'workspace', icon: 'folder', usage: '[name or path]', summary: 'Switch active space', run: function(args) {
+      var query = String(args || '').trim().toLowerCase();
+      if (!query) { setCurrentView('spaces'); return; }
+      var match = (workspaces || []).find(function(w) {
+        return String(w.name || '').toLowerCase() === query || String(w.path || '').toLowerCase() === query;
+      }) || (workspaces || []).find(function(w) {
+        return String(w.name || '').toLowerCase().indexOf(query) !== -1 || String(w.path || '').toLowerCase().indexOf(query) !== -1;
+      });
+      if (match) {
+        switchWorkspace(match.path);
+      } else {
+        setCurrentView('spaces');
+      }
+    } },
     { name: 'terminal', icon: 'terminal', summary: 'Open terminal', run: function() { setCurrentView('terminal'); } },
     { name: 'jobs', icon: 'clock', summary: 'Open cron jobs', run: function() { setCurrentView('jobs'); } },
     { name: 'memory', icon: 'brain', summary: 'Open memory', run: function() { setCurrentView('memory'); } },
@@ -9375,6 +9873,10 @@ function App() {
             <span className="nav-item-icon" style={{color:'#c9a754'}}><Icon name="folder" size={15}/></span>
             <span className="nav-item-label">Files</span>
           </div>
+          <div className={"nav-item " + (currentView === 'spaces' ? 'active' : '')} onClick={function() { setCurrentView('spaces'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
+            <span className="nav-item-icon" style={{color:'#8aa8d4'}}><Icon name="folder" size={15}/></span>
+            <span className="nav-item-label">Spaces</span>
+          </div>
           <div className={"nav-item " + (currentView === 'terminal' ? 'active' : '')} onClick={function() { setCurrentView('terminal'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon" style={{color:'#69a68a'}}><Icon name="terminal" size={15}/></span>
             <span className="nav-item-label">Terminal</span>
@@ -9447,6 +9949,20 @@ function App() {
           })}
         </div>
         <div className="sidebar-footer">
+          <div className="space-switcher">
+            <div className="space-label"><Icon name="folder" size={11}/><span>Space</span></div>
+            <select
+              className="space-select"
+              value={activeWorkspace.path || ''}
+              onChange={function(e) { switchWorkspace(e.target.value); }}
+              title="Active workspace for new chats and files"
+            >
+              {(workspaces.length ? workspaces : [activeWorkspace]).map(function(space) {
+                return <option key={space.path || 'default'} value={space.path || ''}>{space.name || workspaceNameFromPath(space.path) || 'Default'}</option>;
+              })}
+            </select>
+            <div className="space-path">{activeWorkspace.path ? shortWorkspacePath(activeWorkspace.path) : 'Server default'}</div>
+          </div>
           <div className="personality-label"><Icon name="brain" size={11}/><span>Profile</span></div>
           <select
             className={"personality-select " + (normalizePersonality(personality) !== 'default' ? 'active' : '')}
@@ -9492,6 +10008,10 @@ function App() {
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">{activeConvId ? (conversations.find(c => c.id === activeConvId)?.title || 'Hermes') : 'Hermes'}</div>
+              <button className="space-chip hide-mobile" onClick={function(){ setCurrentView('spaces'); }} title="Active space">
+                <Icon name="folder" size={13}/>
+                <span>{activeWorkspace.name || workspaceNameFromPath(activeWorkspace.path) || 'Default'}</span>
+              </button>
               {visibleAgentState ? (
                 <AgentStatePill state={visibleAgentState} compact={true} showDetail={false} />
               ) : (
@@ -9859,7 +10379,7 @@ function App() {
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">
-                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
+                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
               </div>
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
@@ -9870,7 +10390,8 @@ function App() {
               </div>
             </div>
             {currentView === 'dashboard' && <DashboardView />}
-            {currentView === 'files' && <FilesView />}
+            {currentView === 'files' && <FilesView activeWorkspace={activeWorkspace} />}
+            {currentView === 'spaces' && <SpacesView workspaces={workspaces} activeWorkspace={activeWorkspace} onSwitch={switchWorkspace} onRefresh={refreshWorkspaces} />}
             {currentView === 'terminal' && <TerminalView />}
             {currentView === 'jobs' && <JobsView />}
             {currentView === 'memory' && <MemoryView />}

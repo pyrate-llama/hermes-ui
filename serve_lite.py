@@ -82,6 +82,136 @@ HERMES_HOME = os.path.expanduser("~/.hermes")
 AGENT_DIR = os.path.join(HERMES_HOME, "hermes-agent")
 DIR = os.path.dirname(os.path.abspath(__file__))
 PORT = 3333
+WORKSPACES_FILE = pathlib.Path(HERMES_HOME) / "ui-workspaces.json"
+LAST_WORKSPACE_FILE = pathlib.Path(HERMES_HOME) / "ui-last-workspace.txt"
+
+def _workspace_label(path):
+    p = pathlib.Path(path)
+    name = p.name or str(p)
+    return "Home" if str(p.resolve()) == str(PROJECT_ROOT.resolve()) else name
+
+def _workspace_picker_roots():
+    home = pathlib.Path.home().resolve()
+    defaults = [
+        {"name": "Home", "path": str(home)},
+        {"name": "Desktop", "path": str((home / "Desktop").resolve())},
+        {"name": "Documents", "path": str((home / "Documents").resolve())},
+        {"name": "Downloads", "path": str((home / "Downloads").resolve())},
+        {"name": "Hermes UI", "path": str(PROJECT_ROOT.resolve())},
+    ]
+    for env_name in ("OneDrive", "OneDriveCommercial", "OneDriveConsumer"):
+        one_drive = os.environ.get(env_name)
+        if one_drive:
+            base = pathlib.Path(one_drive)
+            defaults.extend([
+                {"name": "OneDrive", "path": str(base.resolve())},
+                {"name": "OneDrive Desktop", "path": str((base / "Desktop").resolve())},
+                {"name": "OneDrive Documents", "path": str((base / "Documents").resolve())},
+            ])
+    if os.name == "nt":
+        for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            drive = pathlib.Path(f"{letter}:\\")
+            if drive.exists():
+                defaults.append({"name": f"{letter}:", "path": str(drive.resolve())})
+    else:
+        defaults.append({"name": "Computer", "path": str(pathlib.Path("/").resolve())})
+    roots = []
+    seen = set()
+    for item in defaults:
+        path = pathlib.Path(item["path"])
+        if not path.exists() or not path.is_dir():
+            continue
+        resolved = str(path.resolve())
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        roots.append({"name": item["name"], "path": resolved})
+    return roots
+
+def _path_is_within_any(path, roots):
+    for root in roots:
+        try:
+            if os.path.commonpath([root, path]) == root:
+                return True
+        except ValueError:
+            continue
+    return False
+
+def _resolve_workspace_picker_path(path=None):
+    roots = _workspace_picker_roots()
+    fallback = roots[0]["path"] if roots else str(pathlib.Path.home().resolve())
+    raw = str(path or "").strip()
+    resolved = pathlib.Path(os.path.expanduser(raw or fallback)).resolve()
+    resolved_str = str(resolved)
+    allowed = [root["path"] for root in roots] or [fallback]
+    if not _path_is_within_any(resolved_str, allowed):
+        raise ValueError(f"Folder picker access denied: {resolved_str}")
+    if not resolved.is_dir():
+        raise ValueError(f"Folder does not exist: {raw or resolved_str}")
+    return resolved_str
+
+def _resolve_workspace(path=None):
+    raw = str(path or "").strip()
+    if not raw:
+        raw = _get_last_workspace()
+    p = pathlib.Path(os.path.expanduser(raw)).resolve()
+    if not p.is_dir():
+        raise ValueError(f"Workspace does not exist: {raw}")
+    return str(p)
+
+def _default_workspaces():
+    root = str(PROJECT_ROOT.resolve())
+    return [{"name": "Hermes UI", "path": root}]
+
+def _load_workspaces():
+    items = []
+    if WORKSPACES_FILE.exists():
+        try:
+            raw = json.loads(WORKSPACES_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, list):
+                items = raw
+        except Exception:
+            items = []
+    cleaned = []
+    seen = set()
+    for item in items + _default_workspaces():
+        if not isinstance(item, dict):
+            continue
+        path = item.get("path")
+        if not path:
+            continue
+        try:
+            resolved = _resolve_workspace(path)
+        except Exception:
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        cleaned.append({
+            "name": str(item.get("name") or _workspace_label(resolved)),
+            "path": resolved,
+        })
+    return cleaned or _default_workspaces()
+
+def _save_workspaces(workspaces):
+    WORKSPACES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    WORKSPACES_FILE.write_text(json.dumps(workspaces, indent=2), encoding="utf-8")
+
+def _get_last_workspace():
+    if LAST_WORKSPACE_FILE.exists():
+        try:
+            saved = LAST_WORKSPACE_FILE.read_text(encoding="utf-8").strip()
+            if saved and pathlib.Path(os.path.expanduser(saved)).is_dir():
+                return str(pathlib.Path(os.path.expanduser(saved)).resolve())
+        except Exception:
+            pass
+    return str(PROJECT_ROOT.resolve())
+
+def _set_last_workspace(path):
+    resolved = _resolve_workspace(path)
+    LAST_WORKSPACE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LAST_WORKSPACE_FILE.write_text(resolved, encoding="utf-8")
+    return resolved
 
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
@@ -651,7 +781,7 @@ def _get_or_create_session(session_id):
     return new_session
 
 
-def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="", reasoning_effort=""):
+def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="", reasoning_effort="", workspace=None):
     """Run AIAgent in a background thread, pushing SSE events to the queue."""
     q = STREAMS.get(stream_id)
     if q is None:
@@ -673,7 +803,11 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             pass
 
     # Set thread-local env context for this agent thread
-    workspace_dir = str(PROJECT_ROOT)
+    try:
+        workspace_dir = _resolve_workspace(workspace)
+    except Exception as e:
+        print(f"[serve] WARNING: invalid workspace {workspace!r}: {e}; using project root", flush=True)
+        workspace_dir = str(PROJECT_ROOT.resolve())
 
     _set_thread_env(
         TERMINAL_CWD=workspace_dir,
@@ -1318,6 +1452,14 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
         messages = body.get("messages", [])
         session_id = body.get("session_id") or self.headers.get("X-Hermes-Session-Id") or f"web_{uuid.uuid4().hex[:12]}"
+        try:
+            workspace = _resolve_workspace(body.get("workspace"))
+            _set_last_workspace(workspace)
+            session = _get_or_create_session(session_id)
+            session["workspace"] = workspace
+            _save_session(session_id, session)
+        except Exception as e:
+            return self._json({"error": str(e)}, 400)
         # User-configurable base system prompt from Settings → General
         base_system_prompt = (body.get("base_system_prompt") or "").strip()
         reasoning_effort = str(body.get("reasoning_effort") or "").strip().lower()
@@ -1405,7 +1547,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
 
         thr = threading.Thread(
             target=_run_agent_streaming,
-            args=(session_id, messages, stream_id, base_system_prompt, reasoning_effort),
+            args=(session_id, messages, stream_id, base_system_prompt, reasoning_effort, workspace),
             daemon=True,
         )
         thr.start()
@@ -1642,6 +1784,84 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self._json({"error": str(e)}, 500)
 
+    # ── Spaces / workspaces ──
+    def _workspaces_load(self):
+        workspaces = _load_workspaces()
+        last = _get_last_workspace()
+        if not any(w.get("path") == last for w in workspaces):
+            last = workspaces[0]["path"]
+        self._json({"workspaces": workspaces, "last": last})
+
+    def _workspace_add(self):
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            path = _resolve_workspace(body.get("path"))
+            name = str(body.get("name") or _workspace_label(path)).strip() or _workspace_label(path)
+            workspaces = _load_workspaces()
+            if not any(w.get("path") == path for w in workspaces):
+                workspaces.append({"name": name, "path": path})
+            else:
+                workspaces = [dict(w, name=name) if w.get("path") == path else w for w in workspaces]
+            _save_workspaces(workspaces)
+            _set_last_workspace(path)
+            self._json({"ok": True, "workspaces": workspaces, "last": path})
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 400)
+
+    def _workspace_remove(self):
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            path = _resolve_workspace(body.get("path"))
+            workspaces = [w for w in _load_workspaces() if w.get("path") != path]
+            if not workspaces:
+                workspaces = _default_workspaces()
+            _save_workspaces(workspaces)
+            last = _get_last_workspace()
+            if last == path:
+                last = _set_last_workspace(workspaces[0]["path"])
+            self._json({"ok": True, "workspaces": workspaces, "last": last})
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 400)
+
+    def _workspace_rename(self):
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            path = _resolve_workspace(body.get("path"))
+            name = str(body.get("name") or _workspace_label(path)).strip() or _workspace_label(path)
+            workspaces = [dict(w, name=name) if w.get("path") == path else w for w in _load_workspaces()]
+            _save_workspaces(workspaces)
+            self._json({"ok": True, "workspaces": workspaces, "last": _get_last_workspace()})
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 400)
+
+    def _workspace_switch(self):
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            path = _set_last_workspace(body.get("path"))
+            self._json({"ok": True, "last": path, "workspaces": _load_workspaces()})
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 400)
+
+    def _workspace_browse(self):
+        qs = urllib.parse.urlparse(self.path).query
+        params = urllib.parse.parse_qs(qs)
+        try:
+            current = _resolve_workspace_picker_path(params.get("path", [""])[0])
+            roots = _workspace_picker_roots()
+            root_paths = [root["path"] for root in roots]
+            parent = None
+            candidate = str(pathlib.Path(current).parent.resolve())
+            if candidate != current and _path_is_within_any(candidate, root_paths):
+                parent = candidate
+            items = []
+            for name in sorted(os.listdir(current), key=lambda value: value.lower()):
+                full = os.path.join(current, name)
+                if os.path.isdir(full):
+                    items.append({"name": name, "path": str(pathlib.Path(full).resolve())})
+            self._json({"ok": True, "path": current, "parent": parent, "roots": roots, "items": items})
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 400)
+
     # ── Local file access ──
     def _read_local_file(self):
         qs = urllib.parse.urlparse(self.path).query
@@ -1750,9 +1970,12 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         qs = urllib.parse.urlparse(self.path).query
         params = urllib.parse.parse_qs(qs)
         browse_path = params.get("path", [""])[0]
-        base = HERMES_HOME
+        try:
+            base = _resolve_workspace(params.get("workspace", [""])[0])
+        except Exception as e:
+            return self._json({"entries": [], "error": str(e)}, 400)
         full = os.path.normpath(os.path.join(base, browse_path)) if browse_path else base
-        if not full.startswith(base):
+        if os.path.commonpath([base, full]) != base:
             self.send_error(403, "Access denied")
             return
         if not os.path.isdir(full):
@@ -1769,14 +1992,18 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                 })
         except Exception as e:
             entries = [{"error": str(e)}]
-        self._json({"items": entries, "path": browse_path})
+        self._json({"items": entries, "path": browse_path, "workspace": base})
 
     def _read_file(self):
         qs = urllib.parse.urlparse(self.path).query
         params = urllib.parse.parse_qs(qs)
         fpath = params.get("path", [""])[0]
-        full = os.path.normpath(os.path.join(HERMES_HOME, fpath)) if fpath else ""
-        if not full or not full.startswith(HERMES_HOME) or not os.path.isfile(full):
+        try:
+            base = _resolve_workspace(params.get("workspace", [""])[0])
+        except Exception as e:
+            return self._json({"content": str(e), "name": "", "path": fpath, "size": 0, "type": "text"}, 400)
+        full = os.path.normpath(os.path.join(base, fpath)) if fpath else ""
+        if not full or os.path.commonpath([base, full]) != base or not os.path.isfile(full):
             self._json({"content": "(File not found)", "name": "", "path": fpath, "size": 0, "type": "text"}, 404)
             return
         try:
@@ -1793,13 +2020,17 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
         fpath = body.get("path", "")
         content = body.get("content", "")
-        full = os.path.normpath(os.path.join(HERMES_HOME, fpath)) if fpath else ""
-        if not full or not full.startswith(HERMES_HOME):
+        try:
+            base = _resolve_workspace(body.get("workspace"))
+        except Exception as e:
+            return self._json({"error": str(e)}, 400)
+        full = os.path.normpath(os.path.join(base, fpath)) if fpath else ""
+        if not full or os.path.commonpath([base, full]) != base:
             self.send_error(403, "Access denied")
             return
         os.makedirs(os.path.dirname(full), exist_ok=True)
         open(full, "w").write(content)
-        self._json({"ok": True})
+        self._json({"ok": True, "success": True})
 
     # ── RTF → plain-text conversion (macOS textutil) ──
     # Used by the composer drop/file-picker so users can attach Rich Text
@@ -2190,6 +2421,10 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_cancel()
         elif self.path == "/api/ui-conversations":
             self._conversations_load()
+        elif self.path == "/api/workspaces":
+            self._workspaces_load()
+        elif self.path.startswith("/api/workspaces/browse"):
+            self._workspace_browse()
         elif self.path.startswith("/logs/stream"):
             self._stream_logs()
         elif self.path.startswith("/browse"):
@@ -2234,6 +2469,14 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._terminal_exec()
         elif self.path == "/api/ui-conversations":
             self._conversations_save()
+        elif self.path == "/api/workspaces/add":
+            self._workspace_add()
+        elif self.path == "/api/workspaces/remove":
+            self._workspace_remove()
+        elif self.path == "/api/workspaces/rename":
+            self._workspace_rename()
+        elif self.path == "/api/workspaces/switch":
+            self._workspace_switch()
         elif self.path.startswith("/writefile"):
             self._write_file()
         elif self.path == "/api/convert/rtf-to-txt":
