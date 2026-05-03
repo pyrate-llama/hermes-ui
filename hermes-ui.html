@@ -1342,6 +1342,42 @@
   .composer-chip-option.active::after {
     content: "✓"; color: var(--accent); font-weight: 800;
   }
+  .composer-chip-input {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 6px 0 4px 0;
+    padding: 8px 9px;
+    border-radius: 9px;
+    border: 1px solid var(--glass-border);
+    background: rgba(0,0,0,0.18);
+    color: var(--text);
+    font: 12px 'JetBrains Mono', monospace;
+    outline: none;
+  }
+  .composer-chip-input:focus {
+    border-color: rgba(128,144,255,0.55);
+    box-shadow: 0 0 0 2px rgba(128,144,255,0.12);
+  }
+  .feedback-menu {
+    position: fixed; right: 16px; bottom: 38px;
+    z-index: 22; min-width: 210px; padding: 8px;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    background: var(--glass-strong);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    box-shadow: 0 14px 36px rgba(0,0,0,0.38);
+  }
+  .feedback-link {
+    width: 100%; border: 0; border-radius: 9px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 9px; background: transparent; color: var(--text-secondary);
+    cursor: pointer; font-size: 12px; text-decoration: none;
+  }
+  .feedback-link:hover {
+    background: rgba(128,144,255,0.12);
+    color: var(--text);
+  }
 
   .slash-command-menu {
     position: absolute;
@@ -2828,6 +2864,7 @@ function Icon({ name, size, className, strokeWidth }) {
     case 'message-square': return (<svg {...common}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>);
     case 'mail': return (<svg {...common}><rect x="3" y="5" width="18" height="14" rx="2" ry="2"/><polyline points="3 7 12 13 21 7"/></svg>);
     case 'cog': return (<svg {...common}><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/></svg>);
+    case 'cpu': return (<svg {...common}><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>);
     case 'activity': return (<svg {...common}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>);
     case 'palette': return (<svg {...common}><circle cx="13.5" cy="6.5" r=".8" fill="currentColor" stroke="none"/><circle cx="17.5" cy="10.5" r=".8" fill="currentColor" stroke="none"/><circle cx="8.5" cy="7.5" r=".8" fill="currentColor" stroke="none"/><circle cx="6.5" cy="12.5" r=".8" fill="currentColor" stroke="none"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.96 0 1.75-.78 1.75-1.75 0-.45-.17-.86-.45-1.17-.27-.31-.45-.72-.45-1.17 0-.96.79-1.75 1.75-1.75H17c2.76 0 5-2.24 5-5C22 6.01 17.52 2 12 2z"/></svg>);
     case 'check': return (<svg {...common}><polyline points="20 6 9 17 4 12"/></svg>);
@@ -7007,6 +7044,7 @@ function DelegationChatView() {
 /* ── Status Bar ── */
 function StatusBar({ connected, conversations, messages, sessionTokens }) {
   var [stats, setStats] = useState({ model: '...', provider: '', capabilities: null, memory: 0, uptime: '' });
+  var [feedbackOpen, setFeedbackOpen] = useState(false);
   // Derive sessions count reactively from props so it stays in sync as chats load.
   // (Previous version captured conversations in a stale closure inside useEffect[].)
   var sessionsCount = conversations ? conversations.length : 0;
@@ -7093,6 +7131,51 @@ function StatusBar({ connected, conversations, messages, sessionTokens }) {
         </React.Fragment>
       )}
       <div style={{flex:1}}></div>
+      <div className="status-bar-item" style={{position:'relative'}}>
+        <button
+          className={"composer-chip " + (feedbackOpen ? 'active' : '')}
+          onClick={function(){ setFeedbackOpen(!feedbackOpen); }}
+          title="Report a bug or request a feature on GitHub"
+          style={{height:'22px', padding:'2px 8px', fontSize:'11px'}}
+        >
+          <Icon name="message-square" size={12}/>
+          <span>Feedback</span>
+        </button>
+        {feedbackOpen && (
+          <React.Fragment>
+            <div onClick={function(){ setFeedbackOpen(false); }} style={{position:'fixed', inset:0, zIndex:21}} />
+            <div className="feedback-menu">
+              <div className="composer-chip-menu-title">
+                <Icon name="message-square" size={13}/>
+                <span>GitHub feedback</span>
+              </div>
+              <div className="composer-chip-menu-note">
+                Opens the Hermes UI issue tracker in a new tab.
+              </div>
+              <a
+                className="feedback-link"
+                href="https://github.com/pyrate-llama/hermes-ui/issues/new?template=bug_report.md&labels=bug"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={function(){ setFeedbackOpen(false); }}
+              >
+                <span>Report a bug</span>
+                <span>↗</span>
+              </a>
+              <a
+                className="feedback-link"
+                href="https://github.com/pyrate-llama/hermes-ui/issues/new?template=feature_request.md&labels=enhancement"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={function(){ setFeedbackOpen(false); }}
+              >
+                <span>Request a feature</span>
+                <span>↗</span>
+              </a>
+            </div>
+          </React.Fragment>
+        )}
+      </div>
       <div className="status-bar-item status-bar-version" style={{opacity:0.5}}>
         <span>Hermes UI v3.1</span>
       </div>
@@ -7628,6 +7711,13 @@ function App() {
   // to send pasted/dropped images via the native multimodal path (vision-
   // capable) or route through the Gemini-describe fallback (e.g. MiniMax).
   const [currentModel, setCurrentModel] = useState('');
+  const [selectedChatModel, setSelectedChatModel] = useState(function() {
+    try { return localStorage.getItem('hermes-chat-model') || ''; } catch(e) { return ''; }
+  });
+  const [modelOptions, setModelOptions] = useState([]);
+  const [showModelMenu, setShowModelMenu] = useState(false);
+  const [customModelDraft, setCustomModelDraft] = useState('');
+  const activeChatModel = selectedChatModel || currentModel;
   const [showSettings, setShowSettings] = useState(false);
   const [pendingImages, setPendingImages] = useState([]);
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -7800,6 +7890,24 @@ function App() {
   useEffect(function() {
     try { localStorage.setItem('hermes-reasoning-effort', normalizeReasoningEffort(reasoningEffort)); } catch(e) {}
   }, [reasoningEffort]);
+
+  useEffect(function() {
+    try {
+      if (selectedChatModel) localStorage.setItem('hermes-chat-model', selectedChatModel);
+      else localStorage.removeItem('hermes-chat-model');
+    } catch(e) {}
+  }, [selectedChatModel]);
+
+  useEffect(function() {
+    fetch(API_BASE + '/api/models')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var models = (d && Array.isArray(d.models)) ? d.models : [];
+        setModelOptions(models);
+        if (!currentModel && d && d.current) setCurrentModel(String(d.current));
+      })
+      .catch(function() {});
+  }, []);
 
   useEffect(function() {
     try { localStorage.setItem('hermes-personality', normalizePersonality(personality)); } catch(e) {}
@@ -8070,6 +8178,7 @@ function App() {
           apply_behavioral_guidelines: !!opts.applyBehavioralGuidelines,
           profile: normalizePersonality(opts.profile || 'default'),
           reasoning_effort: normalizeReasoningEffort(opts.reasoningEffort || ''),
+          model: opts.model || '',
           workspace: opts.workspace || '',
         }),
         signal: signal,
@@ -8476,7 +8585,7 @@ function App() {
   const processImages = async (files) => {
     var imageHelperMode = normalizeImageHelperMode(config && config.imageHelperMode);
     var imageHelperModel = normalizeImageHelperModel(config && config.imageHelperModel);
-    var canSeeDirectly = imageHelperMode === 'direct' || (imageHelperMode === 'auto' && isVisionModel(currentModel));
+    var canSeeDirectly = imageHelperMode === 'direct' || (imageHelperMode === 'auto' && isVisionModel(activeChatModel));
     // Native fast-path — skip Gemini entirely when the active model can
     // see the image itself. dataUrl gets forwarded as-is in sendMessage.
     if (canSeeDirectly) {
@@ -9362,6 +9471,7 @@ function App() {
           applyBehavioralGuidelines: !!(config && config.applyBehavioralGuidelines === true),
           profile: personality,
           reasoningEffort: reasoningEffort,
+          model: activeChatModel || '',
           workspace: activeWorkspace.path || '',
           // Native multimodal images for vision-capable models. Empty when
           // the active model routes through Gemini-describe (MiniMax, etc.).
@@ -9553,7 +9663,7 @@ function App() {
         id: 'retry-' + Date.now() + '-' + Math.random(),
         dataUrl: img.dataUrl,
         description: img.description || null,
-        native: !!(img.dataUrl && isVisionModel(currentModel)),
+        native: !!(img.dataUrl && isVisionModel(activeChatModel)),
         analyzing: false,
       };
     });
@@ -9928,7 +10038,7 @@ function App() {
     };
     document.addEventListener('paste', handlePaste);
     return () => document.removeEventListener('paste', handlePaste);
-  }, [config.geminiKey, config.imageHelperMode, config.imageHelperModel, currentModel]);
+  }, [config.geminiKey, config.imageHelperMode, config.imageHelperModel, activeChatModel]);
 
   // ── Render ──
   var latestUserForTodos = null;
@@ -10477,6 +10587,90 @@ function App() {
                       {!config.geminiKey && normalizeImageHelperMode(config.imageHelperMode) !== 'direct' && <span style={{opacity:0.6}}>· add Gemini key for helper images</span>}
                       {/* Export chat dropdown — inline in hint row, right-aligned */}
                       <div className="input-hint-actions">
+                        <div className="composer-chip-wrap">
+                          <button
+                            className={"composer-chip " + (selectedChatModel ? 'active' : '')}
+                            onClick={function(){
+                              setCustomModelDraft(selectedChatModel || currentModel || '');
+                              setShowModelMenu(!showModelMenu);
+                            }}
+                            title="Model for subsequent messages in this conversation"
+                          >
+                            <Icon name="cpu" size={13}/>
+                            <span>{activeChatModel ? activeChatModel.split('/').pop() : 'Model'}</span>
+                          </button>
+                          {showModelMenu && (
+                            <React.Fragment>
+                              <div onClick={function(){ setShowModelMenu(false); }} style={{position:'fixed', inset:0, zIndex:19}} />
+                              <div className="composer-chip-menu" style={{minWidth:'260px'}}>
+                                <div className="composer-chip-menu-title">
+                                  <Icon name="cpu" size={13}/>
+                                  <span>Chat model</span>
+                                </div>
+                                <div className="composer-chip-menu-note">
+                                  Changes apply to the next message. This keeps the same conversation context.
+                                </div>
+                                <button
+                                  className={"composer-chip-option " + (!selectedChatModel ? 'active' : '')}
+                                  onClick={function(){
+                                    setSelectedChatModel('');
+                                    setCustomModelDraft(currentModel || '');
+                                    setShowModelMenu(false);
+                                  }}
+                                >
+                                  <span>Auto default</span>
+                                </button>
+                                {modelOptions.concat(selectedChatModel && !modelOptions.some(function(m) { return m.id === selectedChatModel; }) ? [{ id: selectedChatModel, label: selectedChatModel.split('/').pop() }] : []).map(function(item) {
+                                  var id = item.id || '';
+                                  if (!id) return null;
+                                  var active = selectedChatModel === id;
+                                  return (
+                                    <button
+                                      key={id}
+                                      className={"composer-chip-option " + (active ? 'active' : '')}
+                                      title={id}
+                                      onClick={function(){
+                                        setSelectedChatModel(id);
+                                        setCustomModelDraft(id);
+                                        setShowModelMenu(false);
+                                      }}
+                                    >
+                                      <span>{item.label || id}</span>
+                                    </button>
+                                  );
+                                })}
+                                <input
+                                  className="composer-chip-input"
+                                  value={customModelDraft}
+                                  placeholder="provider/model or model id"
+                                  onChange={function(e){ setCustomModelDraft(e.target.value); }}
+                                  onKeyDown={function(e){
+                                    if (e.key === 'Enter') {
+                                      var next = customModelDraft.trim();
+                                      if (next) setSelectedChatModel(next);
+                                      setShowModelMenu(false);
+                                    }
+                                  }}
+                                />
+                                <button
+                                  className="composer-chip-option"
+                                  onClick={function(){
+                                    var next = customModelDraft.trim();
+                                    if (next) {
+                                      setSelectedChatModel(next);
+                                      setModelOptions(function(prev) {
+                                        return prev.some(function(m) { return m.id === next; }) ? prev : prev.concat([{ id: next, label: next.split('/').pop() }]);
+                                      });
+                                    }
+                                    setShowModelMenu(false);
+                                  }}
+                                >
+                                  <span>Use custom model</span>
+                                </button>
+                              </div>
+                            </React.Fragment>
+                          )}
+                        </div>
                         <div className="composer-chip-wrap">
                           <button
                             className={"composer-chip " + (reasoningEffort ? 'active' : '')}

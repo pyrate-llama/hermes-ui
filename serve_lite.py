@@ -342,7 +342,7 @@ def _get_ai_agent():
     return _AIAgent
 
 
-def _resolve_model_and_credentials():
+def _resolve_model_and_credentials(model_override=None):
     """Read model/provider from config.yaml and resolve API credentials."""
     import yaml
     config_path = os.path.join(HERMES_HOME, "config.yaml")
@@ -374,7 +374,29 @@ def _resolve_model_and_credentials():
     except Exception as e:
         print(f"[serve] WARNING: resolve_runtime_provider failed: {e}", flush=True)
 
+    override = str(model_override or "").strip()
+    if override:
+        model = override
     return model, provider, base_url, api_key
+
+
+def _configured_model_options(current_model=None):
+    """Return model choices configured for the UI model switcher."""
+    raw = (
+        os.environ.get("HERMES_UI_MODELS")
+        or os.environ.get("HERMES_MODEL_OPTIONS")
+        or os.environ.get("HERMES_MODELS")
+        or ""
+    )
+    items = []
+    for part in raw.replace("\n", ",").split(","):
+        value = part.strip()
+        if value and value not in items:
+            items.append(value)
+    current = str(current_model or "").strip()
+    if current and current not in items:
+        items.insert(0, current)
+    return items
 
 
 def _resolve_delegation_credentials():
@@ -832,7 +854,7 @@ def _get_or_create_session(session_id):
     return new_session
 
 
-def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="", reasoning_effort="", workspace=None):
+def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="", reasoning_effort="", workspace=None, model_override=""):
     """Run AIAgent in a background thread, pushing SSE events to the queue."""
     q = STREAMS.get(stream_id)
     if q is None:
@@ -894,7 +916,9 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             put("error", {"message": "AIAgent not available — check hermes-agent installation"})
             return
 
-        model, provider, base_url, api_key = _resolve_model_and_credentials()
+        model, provider, base_url, api_key = _resolve_model_and_credentials(model_override)
+        if model_override:
+            print(f"[serve] model_override={model}", flush=True)
 
         # Initialize SessionDB for session_search
         _session_db = None
@@ -1174,6 +1198,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
                              and _pending_msgs[-1].get("content") == user_msg):
             _pending_msgs.append({"role": "user", "content": user_msg})
         session["messages"] = _pending_msgs
+        session["model"] = model
         _save_session(session_id, session)
 
         # ── Periodic checkpoint thread (Issue #765) ──
@@ -1263,6 +1288,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
                 if _img_count:
                     _m["_image_count"] = _img_count
             session["messages"] = _merged
+            session["model"] = model
             _save_session(session_id, session)  # Persist to disk (matches webui s.save())
 
         # Detect silent agent failure (no assistant reply produced)
@@ -1347,6 +1373,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             "session": {
                 "session_id": session_id,
                 "messages": session.get("messages", []),
+                "model": session.get("model") or model,
             },
             "usage": {
                 "input_tokens": input_tokens,
@@ -1575,6 +1602,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         # User-configurable base system prompt from Settings → General
         base_system_prompt = (body.get("base_system_prompt") or "").strip()
         reasoning_effort = str(body.get("reasoning_effort") or "").strip().lower()
+        model_override = str(body.get("model") or "").strip()
         if reasoning_effort == "auto":
             reasoning_effort = ""
         if reasoning_effort and reasoning_effort not in _REASONING_EFFORTS:
@@ -1659,7 +1687,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
 
         thr = threading.Thread(
             target=_run_agent_streaming,
-            args=(session_id, messages, stream_id, base_system_prompt, reasoning_effort, workspace),
+            args=(session_id, messages, stream_id, base_system_prompt, reasoning_effort, workspace, model_override),
             daemon=True,
         )
         thr.start()
@@ -1824,6 +1852,31 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
     def _handle_providers(self):
         try:
             self._json(_read_provider_config_status())
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+
+    def _handle_models(self):
+        """GET /api/models — return model choices for the chat model switcher."""
+        try:
+            model, provider, _, _ = _resolve_model_and_credentials()
+            options = _configured_model_options(model)
+            self._json({
+                "current": model or "",
+                "provider": provider or "",
+                "models": [
+                    {
+                        "id": item,
+                        "label": item.split("/")[-1] if "/" in item else item,
+                        "active": item == model,
+                    }
+                    for item in options
+                ],
+                "configured": bool(
+                    os.environ.get("HERMES_UI_MODELS")
+                    or os.environ.get("HERMES_MODEL_OPTIONS")
+                    or os.environ.get("HERMES_MODELS")
+                ),
+            })
         except Exception as e:
             self._json({"error": str(e)}, 500)
 
@@ -2622,6 +2675,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_toolsets()
         elif self.path == "/api/providers":
             self._handle_providers()
+        elif self.path == "/api/models":
+            self._handle_models()
         elif self.path == "/cron/list":
             self._handle_cron_list()
         elif self.path == "/api/delegation/info":

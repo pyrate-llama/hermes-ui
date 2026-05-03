@@ -48,12 +48,14 @@ Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily com
 **Chat and composer upgrades**
 - **Slash command menu** — quick access to common chat actions from the composer
 - **Chat profiles** — switch response styles and have the selected profile apply to outgoing messages
+- **Per-message model switching** — pick a different chat model from the composer without losing the current conversation context
 - **Mermaid rendering** — diagrams render directly in chat messages
 - **Helper model controls** — configure helper behavior for image handling and related fallback flows
 - **Context meter fix** — context pressure now estimates current visible messages instead of cumulative session counters
 
 **Operations and visibility**
 - **Restart tab** — restart, pull, and update controls now live in a dedicated settings area
+- **Version + feedback shortcuts** — the status bar shows the running Hermes UI version and links directly to GitHub bug/feature reports
 - **Startup interpreter recovery** — `serve_lite.py` detects the wrong Python and relaunches with the Hermes venv when possible
 - **Subagent/delegation cards** — delegated work and batch delegation calls are easier to follow in the chat stream
 - **Live todo panel polish** — todo panels update more reliably and no longer resurface stale state
@@ -75,6 +77,7 @@ Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily com
 - Retry / redo from older prompts without deleting later messages
 - Session search across titles and message content
 - Image paste/drop with native vision passthrough for supported models, plus Gemini fallback when needed
+- Switch the chat model from the composer for the next reply while keeping the same conversation context
 - Document upload in the composer (.txt, .md, .pdf, .json, .csv, .py, .js, .ts) — RTF auto-converts to plain text
 - Pause, steer, and stop controls mid-stream
 - Reasoning effort selector in the composer
@@ -149,6 +152,7 @@ Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily com
 - Resizable left and right columns
 - Active space selector in the sidebar and chat header
 - System status bar with connection, model, capability pills, memory count, sessions, and context pressure
+- Version badge and GitHub feedback menu in the bottom-right status bar
 - Sidebar activity indicators for streaming, unread, and recent chats
 - Inter + JetBrains Mono typography
 - Keyboard shortcuts
@@ -204,6 +208,16 @@ HERMES_UI_PASSWORD="choose-a-strong-password" ~/.hermes/hermes-agent/venv/bin/py
 ```
 
 When this is set, browser API calls require a local login cookie. Leave it unset for the normal no-login localhost experience.
+
+### Optional Chat Model Shortcuts
+
+The composer model picker always includes the active configured model, and you can type a custom model id directly in the picker. To show a reusable quick-pick list for everyone using the UI, set one of these environment variables before starting the server:
+
+```bash
+HERMES_UI_MODELS="MiniMax-M2.7,openai/gpt-4o-mini,anthropic/claude-sonnet-4-20250514" ~/.hermes/hermes-agent/venv/bin/python3 serve_lite.py
+```
+
+`HERMES_MODEL_OPTIONS` and `HERMES_MODELS` are accepted aliases. The selected model applies to the next chat message and preserves the existing conversation.
 
 ### Using OpenRouter or Custom Inference Endpoints
 
