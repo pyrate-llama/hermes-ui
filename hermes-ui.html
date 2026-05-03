@@ -158,7 +158,7 @@
     box-shadow: 0 4px 20px rgba(124,111,224,0.4);
     transform: translateY(-1px);
   }
-  .sidebar-search { padding: 6px 10px; }
+  .sidebar-search { padding: 6px 10px; display: flex; gap: 6px; align-items: center; }
   .sidebar-search input {
     width: 100%; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
     border-radius: 10px; padding: 8px 12px; color: var(--text-primary);
@@ -190,7 +190,7 @@
   .conv-item.unread .conv-item-icon { opacity: 0.95; color: var(--accent); }
   .conv-item.streaming .conv-item-icon { opacity: 1; color: var(--warning); }
   .conv-item-text { flex: 1 1 auto; min-width: 0; padding-right: 4px; transition: padding-right 0.1s; }
-  .conv-item:hover .conv-item-text { padding-right: 48px; }
+  .conv-item:hover .conv-item-text { padding-right: 104px; }
   .conv-item-title { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .conv-item-date { font-size: 9px; color: var(--text-muted); margin-top: 0px; }
   .conv-rename-input {
@@ -198,17 +198,25 @@
     border: 1px solid var(--accent); border-radius: 4px; color: var(--text-primary);
     padding: 2px 6px; width: 100%; outline: none;
   }
-  .conv-item-delete, .conv-item-rename {
+  .conv-item-delete, .conv-item-rename, .conv-item-pin, .conv-item-archive {
     position: absolute; top: 50%; transform: translateY(-50%);
     width: 22px; height: 22px; opacity: 0; background: var(--bg-hover); border: none; color: var(--text-muted);
     cursor: pointer; font-size: 14px; padding: 0; border-radius: 4px; transition: all 0.1s;
     display: flex; align-items: center; justify-content: center;
   }
+  .conv-item-pin { right: 78px; }
+  .conv-item-archive { right: 54px; }
   .conv-item-rename { right: 30px; }
   .conv-item-delete { right: 6px; }
-  .conv-item:hover .conv-item-delete, .conv-item:hover .conv-item-rename { opacity: 1; }
+  .conv-item:hover .conv-item-delete, .conv-item:hover .conv-item-rename, .conv-item:hover .conv-item-pin, .conv-item:hover .conv-item-archive { opacity: 1; }
+  .conv-item.pinned .conv-item-pin { opacity: 1; color: var(--accent); }
   .conv-item-delete:hover { color: var(--danger); background: rgba(224,85,85,0.1); }
   .conv-item-rename:hover { color: var(--accent); background: rgba(124,111,224,0.1); }
+  .conv-item-pin:hover, .conv-item-archive:hover { color: var(--accent); background: rgba(124,111,224,0.1); }
+  .conv-filter-toggle {
+    background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-secondary);
+    border-radius: 8px; padding: 6px 8px; font-size: 11px; cursor: pointer; white-space: nowrap;
+  }
 
   .sidebar-footer { padding: 8px 10px; border-top: 1px solid var(--border); }
   .personality-label {
@@ -581,6 +589,20 @@
   .tool-calls-list {
     display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;
     padding: 8px 0;
+  }
+  .reasoning-card {
+    margin: 0 0 12px 0; border: 1px solid rgba(124,111,224,0.28);
+    background: linear-gradient(135deg, rgba(124,111,224,0.12), rgba(68,216,138,0.05));
+    border-radius: 10px; overflow: hidden;
+  }
+  .reasoning-card summary {
+    cursor: pointer; padding: 8px 10px; color: var(--text-secondary);
+    font-size: 12px; font-weight: 700; user-select: none;
+  }
+  .reasoning-card-body {
+    padding: 0 10px 10px 10px; color: var(--text-muted);
+    font-family: 'Monaco', 'Menlo', monospace; font-size: 11px; line-height: 1.5;
+    white-space: pre-wrap;
   }
   .tool-call-row {
     display: flex; align-items: center; gap: 10px;
@@ -1466,6 +1488,23 @@
     border: 1px solid var(--border);
   }
   .modal-btn.secondary:hover { background: var(--bg-hover); }
+
+  .auth-gate {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(124,111,224,0.22), transparent 30%),
+      radial-gradient(circle at 80% 70%, rgba(68,216,138,0.14), transparent 28%),
+      var(--bg-primary);
+    padding: 24px;
+  }
+  .auth-card {
+    width: min(420px, 100%); padding: 28px; border-radius: 18px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    box-shadow: 0 24px 70px rgba(0,0,0,0.45);
+  }
+  .auth-title { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+  .auth-copy { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+  .auth-error { color: var(--danger); font-size: 12px; margin-top: 10px; }
 
   .lightbox-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000;
@@ -2605,7 +2644,7 @@
     /* Header title truncation */
     .header-title { font-size: 14px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     /* Always show conv action buttons on mobile (no hover) */
-    .conv-item-delete, .conv-item-rename { opacity: 0.7 !important; }
+    .conv-item-delete, .conv-item-rename, .conv-item-pin, .conv-item-archive { opacity: 0.7 !important; }
     /* Files view: stack panels vertically */
     .files-layout-mobile { flex-direction: column !important; }
     .files-tree-panel-mobile { width: 100% !important; border-right: none !important; border-bottom: 1px solid var(--border); max-height: 55vh; }
@@ -3746,6 +3785,10 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
   var visibleToolCalls = (message.toolCalls || []).filter(function(tool) {
     return !isTodoTool(tool);
   });
+  var reasoningItems = Array.isArray(message.reasoning) ? message.reasoning : [];
+  var reasoningText = reasoningItems.map(function(item) {
+    return typeof item === 'string' ? item : (item && item.text) || '';
+  }).filter(Boolean).join('\n');
 
   useEffect(() => {
     if (!contentRef.current) return;
@@ -3831,6 +3874,13 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
             <img key={i} src={img.dataUrl} alt="Attached" className="message-image-thumb" onClick={() => onImageClick(img.dataUrl)} />
           ))}
         </div>
+      )}
+
+      {reasoningText && (
+        <details className="reasoning-card" open={message.streaming}>
+          <summary>Reasoning notes</summary>
+          <div className="reasoning-card-body">{reasoningText}</div>
+        </details>
       )}
 
       {message.content && (
@@ -5303,6 +5353,79 @@ function FilesView({ activeWorkspace }) {
       });
   }
 
+  function refreshFiles() {
+    setDirCache({});
+    setRootItems([]);
+    fetchDir('', true);
+  }
+
+  function fileParent(path) {
+    var parts = String(path || '').split('/').filter(Boolean);
+    parts.pop();
+    return parts.join('/');
+  }
+
+  function runFileOp(endpoint, payload) {
+    return fetch(API_BASE + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ workspace: activeWorkspace && activeWorkspace.path || '' }, payload))
+    }).then(function(r) {
+      return r.json().then(function(data) {
+        if (!r.ok || data.ok === false) throw new Error(data.error || 'File action failed');
+        return data;
+      });
+    });
+  }
+
+  function createFile() {
+    var path = window.prompt('New file path inside this Space');
+    if (!path) return;
+    runFileOp('/api/files/create', { path: path, content: '' })
+      .then(function(data) { refreshFiles(); selectFile(data.path || path); })
+      .catch(function(e) { window.alert(e.message || e); });
+  }
+
+  function createFolder() {
+    var path = window.prompt('New folder path inside this Space');
+    if (!path) return;
+    runFileOp('/api/files/mkdir', { path: path })
+      .then(function() { refreshFiles(); })
+      .catch(function(e) { window.alert(e.message || e); });
+  }
+
+  function renamePath(defaultPath) {
+    var path = defaultPath || (fileMetadata && fileMetadata.path) || '';
+    path = window.prompt('Path to rename inside this Space', path);
+    if (!path) return;
+    var nextPath = window.prompt('New path inside this Space', path);
+    if (!nextPath || nextPath === path) return;
+    runFileOp('/api/files/rename', { path: path, new_path: nextPath })
+      .then(function(data) {
+        refreshFiles();
+        if (selectedFilePath === path) selectFile(data.path || nextPath);
+      })
+      .catch(function(e) { window.alert(e.message || e); });
+  }
+
+  function deletePath(defaultPath) {
+    var path = defaultPath || (fileMetadata && fileMetadata.path) || '';
+    path = window.prompt('Path to delete inside this Space', path);
+    if (!path) return;
+    if (!window.confirm('Delete "' + path + '" from this Space?')) return;
+    runFileOp('/api/files/delete', { path: path })
+      .then(function() {
+        if (selectedFilePath === path) {
+          setSelectedFilePath(null);
+          setFileContent('');
+          setFileMetadata(null);
+          setIsEditing(false);
+        }
+        refreshFiles();
+      })
+      .catch(function(e) { window.alert(e.message || e); });
+  }
+
   function formatSize(bytes) {
     if (!bytes) return '';
     if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
@@ -5350,11 +5473,19 @@ function FilesView({ activeWorkspace }) {
     <div className="files-layout-mobile" style={{display:'flex',height:'100%',overflow:'hidden'}}>
       <div className="files-tree-panel-mobile" style={{width:'40%',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
         <div style={{padding:'16px',flex:1,overflowY:'auto'}}>
-          <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px',flexWrap:'wrap'}}>
             <input type="text" placeholder="Search files..." value={searchTerm}
               onChange={function(e) { setSearchTerm(e.target.value); }}
-              style={{flex:1,background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'8px 12px',color:'var(--text-primary)',fontSize:'13px',outline:'none'}} />
-            <button onClick={function() { setDirCache({}); setRootItems([]); fetchDir('', true); }}
+              style={{flex:'1 1 160px',background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'8px',padding:'8px 12px',color:'var(--text-primary)',fontSize:'13px',outline:'none'}} />
+            <button onClick={createFile}
+              style={{background:'var(--accent)',border:'none',borderRadius:'6px',padding:'6px 10px',color:'white',cursor:'pointer',fontSize:'12px',fontWeight:'700'}} title="Create file">File</button>
+            <button onClick={createFolder}
+              style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',color:'var(--text-secondary)',cursor:'pointer',fontSize:'12px'}} title="Create folder">Folder</button>
+            <button onClick={function() { renamePath(); }}
+              style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',color:'var(--text-secondary)',cursor:'pointer',fontSize:'12px'}} title="Rename any path">Rename</button>
+            <button onClick={function() { deletePath(); }}
+              style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',color:'var(--danger)',cursor:'pointer',fontSize:'12px'}} title="Delete any path">Delete</button>
+            <button onClick={refreshFiles}
               style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'6px 10px',color:'var(--text-secondary)',cursor:'pointer',fontSize:'14px'}} title="Refresh">{'↻'}</button>
           </div>
           <div style={{fontSize:'11px',color:'var(--text-muted)',marginBottom:'10px',fontWeight:'600',textTransform:'uppercase',letterSpacing:'0.5px'}}>
@@ -5374,7 +5505,7 @@ function FilesView({ activeWorkspace }) {
       <div className="files-content-panel-mobile" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
         {selectedFilePath ? (
           <React.Fragment>
-            <div style={{padding:'10px 16px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:'12px'}}>
+            <div style={{padding:'10px 16px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:'12px',flexWrap:'wrap'}}>
               <span style={{fontSize:'16px'}}>{fileType === 'image' ? '🖼' : '📄'}</span>
               <div style={{flex:1}}>
                 <div style={{fontSize:'13px',fontWeight:'600',color:'var(--text-primary)'}}>{fileMetadata ? fileMetadata.name : ''}</div>
@@ -5383,6 +5514,14 @@ function FilesView({ activeWorkspace }) {
               {fileType === 'text' && !isEditing && (
                 <button onClick={startEdit}
                   style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'5px 12px',color:'var(--text-secondary)',cursor:'pointer',fontSize:'12px'}}>Edit</button>
+              )}
+              {!isEditing && (
+                <button onClick={function() { renamePath(fileMetadata && fileMetadata.path); }}
+                  style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'5px 12px',color:'var(--text-secondary)',cursor:'pointer',fontSize:'12px'}}>Rename</button>
+              )}
+              {!isEditing && (
+                <button onClick={function() { deletePath(fileMetadata && fileMetadata.path); }}
+                  style={{background:'var(--bg-tertiary)',border:'1px solid var(--border)',borderRadius:'6px',padding:'5px 12px',color:'var(--danger)',cursor:'pointer',fontSize:'12px'}}>Delete</button>
               )}
               {isEditing && (
                 <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
@@ -7285,6 +7424,7 @@ function App() {
   });
 
   const [conversations, _setConversations] = useState([]);
+  const [showArchivedConversations, setShowArchivedConversations] = useState(false);
   const [workspaces, setWorkspaces] = useState(function() {
     try { return normalizeWorkspaceList(JSON.parse(localStorage.getItem('hermes-workspaces') || '[]'), ''); }
     catch(e) { return []; }
@@ -8548,6 +8688,26 @@ function App() {
     }
   };
 
+  const togglePinConversation = (convId) => {
+    setConversations(function(prev) {
+      return prev.map(function(c) {
+        return c.id === convId ? Object.assign({}, c, { pinned: !c.pinned }) : c;
+      });
+    });
+  };
+
+  const toggleArchiveConversation = (convId) => {
+    setConversations(function(prev) {
+      return prev.map(function(c) {
+        return c.id === convId ? Object.assign({}, c, { archived: !c.archived, pinned: c.archived ? c.pinned : false }) : c;
+      });
+    });
+    if (activeConvId === convId && !showArchivedConversations) {
+      setActiveConvId(null);
+      setMessages([]);
+    }
+  };
+
   const [editingConvId, setEditingConvId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
   const startRenameConv = function(convId, currentTitle) {
@@ -9179,11 +9339,16 @@ function App() {
             // Restore thinking bubble if it was removed by a tool event
             // (matches webui: appendThinking() recreates thinkingRow on each reasoning event)
             if (thinkingText.startsWith('[reasoning] ')) {
+              var reasoningNote = thinkingText.replace(/^\[reasoning\]\s*/, '').trim();
               updateStreamMessages(sessionId, function(prev) {
                 var updated = [...prev];
                 var last = updated[updated.length - 1];
-                if (last && last.role === 'assistant' && last.streaming && !last.thinking) {
-                  updated[updated.length - 1] = { ...last, thinking: true };
+                if (last && last.role === 'assistant' && last.streaming) {
+                  var nextReasoning = (last.reasoning || []).slice();
+                  if (reasoningNote && nextReasoning[nextReasoning.length - 1]?.text !== reasoningNote) {
+                    nextReasoning.push({ text: reasoningNote, timestamp: new Date().toISOString() });
+                  }
+                  updated[updated.length - 1] = { ...last, thinking: true, reasoning: nextReasoning.slice(-24) };
                 }
                 return updated;
               });
@@ -9574,7 +9739,14 @@ function App() {
   };
 
   // ── Search / filter ──
-  const filteredConvs = conversations.filter(c => (c.title || '').toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredConvs = conversations
+    .filter(function(c) { return showArchivedConversations ? !!c.archived : !c.archived; })
+    .filter(function(c) { return (c.title || '').toLowerCase().includes(searchQuery.toLowerCase()); })
+    .slice()
+    .sort(function(a, b) {
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+      return String(b.last_active_at || b.created || '').localeCompare(String(a.last_active_at || a.created || ''));
+    });
 
   // v0.7.x: Global search uses a command-palette modal (see SearchModal component)
   // — opened via the header search button or Cmd/Ctrl+K. The old searchMode
@@ -9911,6 +10083,9 @@ function App() {
 
         <div className="sidebar-search">
           <input type="text" placeholder="Filter chats..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+          <button className="conv-filter-toggle" onClick={function() { setShowArchivedConversations(function(v) { return !v; }); }} title="Show active or archived chats">
+            {showArchivedConversations ? 'Active' : 'Archive'}
+          </button>
         </div>
         <div className="conversation-list">
           {filteredConvs.map(function(conv) {
@@ -9921,10 +10096,11 @@ function App() {
               + (conv.id === activeConvId ? 'active ' : '')
               + (convStreaming ? 'streaming ' : '')
               + (convUnread ? 'unread ' : '')
-              + (convRecent ? 'recent ' : '');
+              + (convRecent ? 'recent ' : '')
+              + (conv.pinned ? 'pinned ' : '');
             return (
               <div key={conv.id} className={convClass} onClick={() => selectConversation(conv.id)} title={convUnread ? 'Unread activity' : undefined}>
-                <div className="conv-item-icon">{convStreaming ? '⚡' : conv.source === 'telegram' ? '✈️' : '💬'}</div>
+                <div className="conv-item-icon">{convStreaming ? '⚡' : conv.pinned ? '★' : conv.source === 'telegram' ? '✈️' : '💬'}</div>
                 <div className="conv-item-text">
                   {editingConvId === conv.id ? (
                     <input className="conv-rename-input" value={editingTitle} autoFocus
@@ -9942,11 +10118,18 @@ function App() {
                     {formatConversationActivity(conv)}
                   </div>
                 </div>
+                <button className="conv-item-pin" onClick={function(e) { e.stopPropagation(); togglePinConversation(conv.id); }} title={conv.pinned ? 'Unpin' : 'Pin'}>{conv.pinned ? '★' : '☆'}</button>
+                <button className="conv-item-archive" onClick={function(e) { e.stopPropagation(); toggleArchiveConversation(conv.id); }} title={conv.archived ? 'Restore' : 'Archive'}>{conv.archived ? '↩' : '▾'}</button>
                 <button className="conv-item-rename" onClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }} title="Rename">{'✏'}</button>
                 <button className="conv-item-delete" onClick={e => { e.stopPropagation(); deleteConversation(conv.id); }}>{'×'}</button>
               </div>
             );
           })}
+          {filteredConvs.length === 0 && (
+            <div style={{padding:'12px',fontSize:'12px',color:'var(--text-muted)'}}>
+              {showArchivedConversations ? 'No archived chats yet.' : 'No active chats found.'}
+            </div>
+          )}
         </div>
         <div className="sidebar-footer">
           <div className="space-switcher">
@@ -10459,6 +10642,71 @@ function App() {
   );
 }
 
+function AuthGate({ children }) {
+  const [checking, setChecking] = useState(true);
+  const [requiresAuth, setRequiresAuth] = useState(false);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(function() {
+    fetch(API_BASE + '/api/auth/status')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        setRequiresAuth(!!(data.enabled && !data.authenticated));
+        setChecking(false);
+      })
+      .catch(function() {
+        setRequiresAuth(false);
+        setChecking(false);
+      });
+  }, []);
+
+  function submitLogin(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    fetch(API_BASE + '/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: password })
+    })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+      .then(function(result) {
+        if (result.ok && result.data.authenticated) {
+          setRequiresAuth(false);
+          setPassword('');
+        } else {
+          setError((result.data && result.data.error) || 'Could not sign in');
+        }
+        setBusy(false);
+      })
+      .catch(function() {
+        setError('Could not reach Hermes UI');
+        setBusy(false);
+      });
+  }
+
+  if (checking) {
+    return <div className="auth-gate"><div className="auth-card"><div className="auth-title">Hermes UI</div><div className="auth-copy">Checking access...</div></div></div>;
+  }
+  if (!requiresAuth) return children;
+  return (
+    <div className="auth-gate">
+      <form className="auth-card" onSubmit={submitLogin}>
+        <div className="auth-title">Hermes UI</div>
+        <div className="auth-copy">This computer has password protection turned on. Enter the local Hermes UI password to continue.</div>
+        <input className="modal-input" type="password" value={password} autoFocus placeholder="Password"
+          onChange={function(e) { setPassword(e.target.value); }} />
+        {error && <div className="auth-error">{error}</div>}
+        <div className="modal-buttons">
+          <button className="modal-btn primary" type="submit" disabled={busy || !password}>{busy ? 'Opening...' : 'Open Hermes'}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 /* ── Error Boundary ── */
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -10477,7 +10725,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><App /></ErrorBoundary>);
+ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><AuthGate><App /></AuthGate></ErrorBoundary>);
 </script>
 </body>
 </html>

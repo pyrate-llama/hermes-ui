@@ -9,16 +9,21 @@ Usage:
     python3 serve_lite.py --port 8080
 """
 import http.server
+import base64
+import hashlib
+import hmac
 import json
 import os
 import signal
 import shlex
+import shutil
 import sys
 import queue
 import threading
 import subprocess
 import time
 import pathlib
+import secrets
 import tempfile
 import uuid
 import traceback
@@ -84,6 +89,9 @@ DIR = os.path.dirname(os.path.abspath(__file__))
 PORT = 3333
 WORKSPACES_FILE = pathlib.Path(HERMES_HOME) / "ui-workspaces.json"
 LAST_WORKSPACE_FILE = pathlib.Path(HERMES_HOME) / "ui-last-workspace.txt"
+AUTH_PASSWORD = os.environ.get("HERMES_UI_PASSWORD") or os.environ.get("HERMES_WEBUI_PASSWORD")
+AUTH_COOKIE_NAME = "hermes_ui_auth"
+AUTH_SECRET_FILE = pathlib.Path(HERMES_HOME) / "ui-auth-secret"
 
 def _workspace_label(path):
     p = pathlib.Path(path)
@@ -158,6 +166,49 @@ def _resolve_workspace(path=None):
     if not p.is_dir():
         raise ValueError(f"Workspace does not exist: {raw}")
     return str(p)
+
+def _workspace_target(workspace, rel_path, require_existing_parent=True):
+    base = _resolve_workspace(workspace)
+    raw = str(rel_path or "").replace("\\", "/").strip().lstrip("/")
+    if not raw or raw in (".", "..") or raw.startswith("../"):
+        raise ValueError("A file or folder path is required")
+    full = os.path.normpath(os.path.join(base, raw))
+    if os.path.commonpath([base, full]) != base:
+        raise PermissionError("Access denied")
+    if require_existing_parent and not os.path.isdir(os.path.dirname(full)):
+        raise FileNotFoundError("Parent folder does not exist")
+    return base, raw, full
+
+def _auth_enabled():
+    return bool(AUTH_PASSWORD)
+
+def _auth_secret():
+    AUTH_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if AUTH_SECRET_FILE.exists():
+        return AUTH_SECRET_FILE.read_bytes().strip()
+    secret = secrets.token_bytes(32)
+    AUTH_SECRET_FILE.write_bytes(base64.urlsafe_b64encode(secret))
+    try:
+        os.chmod(AUTH_SECRET_FILE, 0o600)
+    except Exception:
+        pass
+    return AUTH_SECRET_FILE.read_bytes().strip()
+
+def _auth_sign(value):
+    return hmac.new(_auth_secret(), value.encode("utf-8"), hashlib.sha256).hexdigest()
+
+def _auth_make_token():
+    value = secrets.token_urlsafe(24)
+    return value + "." + _auth_sign(value)
+
+def _auth_verify_token(token):
+    try:
+        value, signature = str(token or "").split(".", 1)
+    except ValueError:
+        return False
+    if not value or not signature:
+        return False
+    return hmac.compare_digest(signature, _auth_sign(value))
 
 def _default_workspaces():
     root = str(PROJECT_ROOT.resolve())
@@ -1437,6 +1488,67 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _read_json_body(self):
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        if length <= 0:
+            return {}
+        return json.loads(self.rfile.read(length) or b"{}")
+
+    def _auth_cookie_value(self):
+        cookie = self.headers.get("Cookie", "")
+        for part in cookie.split(";"):
+            name, sep, value = part.strip().partition("=")
+            if sep and name == AUTH_COOKIE_NAME:
+                return value
+        return ""
+
+    def _is_authenticated(self):
+        return (not _auth_enabled()) or _auth_verify_token(self._auth_cookie_value())
+
+    def _auth_required(self):
+        return self._json({"ok": False, "error": "Authentication required"}, 401)
+
+    def _route_requires_auth(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path in ("/health", "/api/auth/status", "/api/auth/login", "/api/auth/logout"):
+            return False
+        static_exts = (".html", ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".woff", ".woff2")
+        if path == "/" or path.endswith(static_exts):
+            return False
+        return True
+
+    def _auth_status(self):
+        return self._json({"enabled": _auth_enabled(), "authenticated": self._is_authenticated()})
+
+    def _auth_login(self):
+        if not _auth_enabled():
+            return self._json({"ok": True, "authenticated": True, "enabled": False})
+        try:
+            body = self._read_json_body()
+        except Exception:
+            return self._json({"ok": False, "error": "Invalid login request"}, 400)
+        password = str(body.get("password") or "")
+        if not hmac.compare_digest(password, AUTH_PASSWORD):
+            return self._json({"ok": False, "error": "Wrong password"}, 401)
+        token = _auth_make_token()
+        payload = json.dumps({"ok": True, "authenticated": True, "enabled": True}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Set-Cookie", f"{AUTH_COOKIE_NAME}={token}; Path=/; Max-Age=86400; HttpOnly; SameSite=Lax")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _auth_logout(self):
+        payload = json.dumps({"ok": True, "authenticated": False}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Set-Cookie", f"{AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
     def _sse_event(self, event, data):
         """Write one SSE event."""
         payload = f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -2032,6 +2144,65 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         open(full, "w").write(content)
         self._json({"ok": True, "success": True})
 
+    def _file_create(self):
+        try:
+            body = self._read_json_body()
+            base, rel_path, full = _workspace_target(body.get("workspace"), body.get("path"), require_existing_parent=True)
+            if os.path.exists(full):
+                return self._json({"ok": False, "error": "File already exists"}, 409)
+            with open(full, "w", encoding="utf-8") as f:
+                f.write(str(body.get("content") or ""))
+            self._json({"ok": True, "path": rel_path, "workspace": base})
+        except PermissionError as e:
+            self._json({"ok": False, "error": str(e)}, 403)
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 400)
+
+    def _file_mkdir(self):
+        try:
+            body = self._read_json_body()
+            base, rel_path, full = _workspace_target(body.get("workspace"), body.get("path"), require_existing_parent=True)
+            if os.path.exists(full):
+                return self._json({"ok": False, "error": "Folder already exists"}, 409)
+            os.mkdir(full)
+            self._json({"ok": True, "path": rel_path, "workspace": base})
+        except PermissionError as e:
+            self._json({"ok": False, "error": str(e)}, 403)
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 400)
+
+    def _file_rename(self):
+        try:
+            body = self._read_json_body()
+            base, rel_path, full = _workspace_target(body.get("workspace"), body.get("path"), require_existing_parent=False)
+            _, new_rel_path, new_full = _workspace_target(body.get("workspace"), body.get("new_path"), require_existing_parent=True)
+            if not os.path.exists(full):
+                return self._json({"ok": False, "error": "Item not found"}, 404)
+            if os.path.exists(new_full):
+                return self._json({"ok": False, "error": "Destination already exists"}, 409)
+            os.rename(full, new_full)
+            self._json({"ok": True, "path": new_rel_path, "old_path": rel_path, "workspace": base})
+        except PermissionError as e:
+            self._json({"ok": False, "error": str(e)}, 403)
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 400)
+
+    def _file_delete(self):
+        try:
+            body = self._read_json_body()
+            base, rel_path, full = _workspace_target(body.get("workspace"), body.get("path"), require_existing_parent=False)
+            if not os.path.exists(full):
+                return self._json({"ok": False, "error": "Item not found"}, 404)
+            if os.path.isdir(full):
+                shutil.rmtree(full)
+            else:
+                os.remove(full)
+            self._json({"ok": True, "path": rel_path, "workspace": base})
+        except PermissionError as e:
+            self._json({"ok": False, "error": str(e)}, 403)
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 400)
+
     # ── RTF → plain-text conversion (macOS textutil) ──
     # Used by the composer drop/file-picker so users can attach Rich Text
     # Format files directly — Hermes reads the plain text, no RTF control
@@ -2411,7 +2582,11 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
 
     # ── Request routing ──
     def do_GET(self):
-        if self.path == "/health":
+        if self.path == "/api/auth/status":
+            self._auth_status()
+        elif _auth_enabled() and self._route_requires_auth() and not self._is_authenticated():
+            self._auth_required()
+        elif self.path == "/health":
             self._handle_health()
         elif self.path.startswith("/api/chat/stream/status"):
             self._handle_chat_stream_status()
@@ -2457,7 +2632,13 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
 
     def do_POST(self):
-        if self.path == "/api/chat/start":
+        if self.path == "/api/auth/login":
+            self._auth_login()
+        elif self.path == "/api/auth/logout":
+            self._auth_logout()
+        elif _auth_enabled() and self._route_requires_auth() and not self._is_authenticated():
+            self._auth_required()
+        elif self.path == "/api/chat/start":
             self._handle_chat_start()
         elif self.path == "/api/chat/cancel":
             self._handle_cancel()
@@ -2479,6 +2660,14 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._workspace_switch()
         elif self.path.startswith("/writefile"):
             self._write_file()
+        elif self.path == "/api/files/create":
+            self._file_create()
+        elif self.path == "/api/files/mkdir":
+            self._file_mkdir()
+        elif self.path == "/api/files/rename":
+            self._file_rename()
+        elif self.path == "/api/files/delete":
+            self._file_delete()
         elif self.path == "/api/convert/rtf-to-txt":
             self._handle_rtf_to_txt()
         elif self.path == "/api/memory":
@@ -2505,7 +2694,9 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._json({"error": "Not found"}, 404)
 
     def do_PUT(self):
-        if self.path == "/api/memory":
+        if _auth_enabled() and self._route_requires_auth() and not self._is_authenticated():
+            self._auth_required()
+        elif self.path == "/api/memory":
             self._handle_memory_write()
         else:
             self._json({"error": "Not found"}, 404)
