@@ -6,7 +6,7 @@ The command center for [Hermes Agent](https://github.com/pyrate-llama/hermes-age
 
 Built as a single-file HTML application with React 18, Hermes UI provides a full-featured chat interface, real-time log streaming, file browsing, memory inspection, and more — all through a lightweight Python proxy server.
 
-![v3.0](https://img.shields.io/badge/version-3.0-ef4444?style=for-the-badge)
+![v3.1](https://img.shields.io/badge/version-3.1-ef4444?style=for-the-badge)
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
@@ -27,40 +27,41 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 ![Connected MCP servers grouped by category](screenshots/mcp-tools.png)
 
 ### File Browser
-![Live file browser for the ~/.hermes directory with inline preview](screenshots/files.png)
+![Live file browser for the active workspace with inline preview](screenshots/files.png)
 
 ### Terminal
 ![Built-in terminal area with Hermes and Claude Code tabs](screenshots/terminal.png)
 
 ---
 
-## What's new in v3.0
+## What's new in v3.1
 
-Hermes UI 3.0 is the release where the web client catches up with the bigger Hermes Agent 0.11 world instead of feeling like a thin wrapper around chat.
+Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily command center for real projects instead of a single chat surface.
 
-**Hermes Agent 0.11 features now surfaced in the UI**
-- **Provider and API-key management in Settings** — save local provider keys without hand-editing config files
-- **Live model capability labels** — see at a glance whether the active model supports vision, steer, reasoning, tools, and live model discovery
-- **Reasoning effort control in the composer** — `Off`, `Low`, `Med`, `High`, `XHigh`, or `Auto`
-- **Steer during streaming** — send guidance into a running turn without pausing or canceling it
-- **Native image path for vision-capable models** — pasted images go straight through when the current model supports vision, with Gemini still available as the fallback path for MiniMax-style setups
-- **Provider and model status surfaced across the dashboard, composer, and status bar** so 0.11's expanded routing/provider surface is visible instead of hidden
+**Spaces / workspaces**
+- **Spaces screen** — add, rename, remove, and switch saved workspace roots from the UI
+- **Folder picker for new spaces** — choose a folder from Home, Desktop, Documents, Downloads, OneDrive, drives, or the computer root without typing a path
+- **Workspace-aware chats** — new chats and side questions carry the active workspace into Hermes as context
+- **Workspace-aware file browser** — the Files view follows the active space instead of always browsing `~/.hermes`
+- **`/workspace` slash command** — switch the active space by name or path from the composer
 
-**Big UX additions in this release**
-- **Search across all chat sessions** — title and content search from the global search entrypoint
-- **Redo / retry on older prompts without deleting newer turns** — retries append as a new branch at the bottom instead of wiping history underneath
-- **Resizable layout** — left and right columns can be dragged tighter or wider
-- **Token / context meter** — simple context pressure shown in the bottom status bar
-- **Sidebar attention indicators** — active, unread, and recent activity are much easier to spot
-- **Streaming polish** — better incremental markdown rendering, cleaner tool-output ordering, and stronger compression/session-rotation handling
+**Chat and composer upgrades**
+- **Slash command menu** — quick access to common chat actions from the composer
+- **Chat profiles** — switch response styles and have the selected profile apply to outgoing messages
+- **Mermaid rendering** — diagrams render directly in chat messages
+- **Helper model controls** — configure helper behavior for image handling and related fallback flows
+- **Context meter fix** — context pressure now estimates current visible messages instead of cumulative session counters
 
-**Everything good from the earlier builds stays**
-- Document upload in chat
-- Artifact panel for HTML, SVG, PDF, and CSV previews
-- MCP Tools browser
-- Base System Prompt support and `extra_system_prompt.md`
-- Built-in shell / Hermes / Claude Code terminal area
-- File browser, memory tools, cron jobs, skills browser, themes, and mobile layout support
+**Operations and visibility**
+- **Restart tab** — restart, pull, and update controls now live in a dedicated settings area
+- **Startup interpreter recovery** — `serve_lite.py` detects the wrong Python and relaunches with the Hermes venv when possible
+- **Subagent/delegation cards** — delegated work and batch delegation calls are easier to follow in the chat stream
+- **Live todo panel polish** — todo panels update more reliably and no longer resurface stale state
+- **Local artifact protection** — `.gitignore` now excludes local agent state, handoff notes, and unrelated project artifacts
+
+**Previous v3.0 highlights remain**
+- Provider/API-key management, model capability labels, reasoning effort control, and steering during streaming
+- Session search, retry/redo, resizable layout, artifact panel, MCP Tools browser, terminal tabs, memory tools, cron jobs, skills browser, themes, and mobile layout support
 
 ---
 
@@ -70,6 +71,7 @@ Hermes UI 3.0 is the release where the web client catches up with the bigger Her
 - SSE streaming with incremental markdown rendering
 - Tool call visualization with expandable results
 - Message editing and re-sending
+- Composer slash commands for common actions
 - Retry / redo from older prompts without deleting later messages
 - Session search across titles and message content
 - Image paste/drop with native vision passthrough for supported models, plus Gemini fallback when needed
@@ -80,12 +82,19 @@ Hermes UI 3.0 is the release where the web client catches up with the bigger Her
 - Multiple personality modes (default, technical, creative, pirate, kawaii, and more)
 - Base System Prompt field in Settings — write your own persona or instructions
 - PDF and HTML chat export
-- Markdown rendering with syntax-highlighted code blocks
+- Markdown rendering with syntax-highlighted code blocks and Mermaid diagrams
+- Subagent/delegation cards for delegated work
 
 **Dashboard**
 - Live auto-refreshing stats (sessions, messages, tools, tokens)
 - System info panel (model, provider, uptime, capabilities)
 - Hermes configuration overview
+
+**Spaces / Workspaces**
+- Save multiple workspace roots and switch between them from the sidebar or Spaces screen
+- Add spaces with a cross-platform folder picker instead of typing paths manually
+- New chats, side questions, and Files view inherit the active workspace
+- `/workspace [name or path]` command for fast switching
 
 **Artifact Panel**
 - Dedicated tab in the live right panel (alongside Errors, Web UI, All)
@@ -104,8 +113,8 @@ Hermes UI 3.0 is the release where the web client catches up with the bigger Her
 - Live connection indicator with line count
 
 **File Browser**
-- Browse `~/.hermes` directory tree
-- View and edit config files, logs, and memory files in-place
+- Browse the active workspace selected in Spaces
+- View and edit project files in-place
 - Image preview support
 
 **Memory Inspector**
@@ -132,6 +141,7 @@ Hermes UI 3.0 is the release where the web client catches up with the bigger Her
 - Glassmorphism design with ambient animated glow
 - Collapsible sidebar and right panel
 - Resizable left and right columns
+- Active space selector in the sidebar and chat header
 - System status bar with connection, model, capability pills, memory count, sessions, and context pressure
 - Sidebar activity indicators for streaming, unread, and recent chats
 - Inter + JetBrains Mono typography
