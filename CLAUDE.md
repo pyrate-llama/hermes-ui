@@ -5,7 +5,7 @@ Do NOT use sandbox tools (Bash, Read, Write, Edit, Grep, Glob). Use Desktop Comm
 
 ## Important Rules
 - NEVER restart Hermes WebAPI, kill hermes processes, or kill claude-code-bridge processes without asking first
-- The hermes-ui project lives at /Users/jonbest/hermes-ui/
+- The hermes-ui project lives in the checked-out repository directory.
 - Always read context-keep memories at the start of a session for project context
 
 ## Architecture
