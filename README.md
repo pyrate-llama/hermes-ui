@@ -114,8 +114,14 @@ Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily com
 
 **File Browser**
 - Browse the active workspace selected in Spaces
-- View and edit project files in-place
+- View, edit, create, rename, and delete project files in-place
+- Create folders inside the active workspace
 - Image preview support
+
+**Sessions**
+- Pin important chats to the top of the sidebar
+- Archive old chats without deleting them
+- View reasoning notes on assistant messages when the model streams them
 
 **Memory Inspector**
 - View and edit Hermes internal memory (MEMORY.md, USER.md)
@@ -188,6 +194,16 @@ That's it — no `npm install`, no build step, no dependencies beyond Python's s
 The proxy server connects to Hermes at `http://127.0.0.1:8642` by default. To change this, edit the `HERMES` variable at the top of `serve_lite.py`.
 
 Provider keys can be managed directly in **Settings**, including local API-key storage for supported providers. For image analysis fallback on non-vision setups, add your Gemini API key there as well.
+
+### Optional Password Protection
+
+Hermes UI is local-first by default. If you expose it on a LAN, Tailscale network, or shared machine, set `HERMES_UI_PASSWORD` before starting the server:
+
+```bash
+HERMES_UI_PASSWORD="choose-a-strong-password" ~/.hermes/hermes-agent/venv/bin/python3 serve_lite.py
+```
+
+When this is set, browser API calls require a local login cookie. Leave it unset for the normal no-login localhost experience.
 
 ### Using OpenRouter or Custom Inference Endpoints
 
