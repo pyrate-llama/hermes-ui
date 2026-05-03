@@ -29,3 +29,14 @@ backups/
 not_updated.png
 updated.png
 third.png
+
+# Local-only: agent/session state and handoff notes
+--stdio.save
+.hermes/
+.nano_claude/
+AGENTS.md
+HANDOFF-*.md
+ui_codex_HANDOFF-*.md
+
+# Local-only: unrelated plugin/audio project artifacts
+MinistryVocalChain/
