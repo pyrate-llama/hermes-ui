@@ -4594,10 +4594,10 @@ function WebExtractStatusCard({ info, compact }) {
   var toolsets = (info && Array.isArray(info.toolsets)) ? info.toolsets : [];
   var status = enabled ? 'Connected' : installed ? 'Installed' : ready ? 'Detected' : 'Optional';
   var desc = enabled
-    ? 'Scrapling is connected through Hermes tools. Ask Hermes to extract or monitor a URL and it can use the Scrapling toolset when appropriate.'
+    ? 'Hermes has web extraction tools enabled. Ask Hermes to extract, summarize, or monitor a URL and it can use the connected web_extract tool.'
     : installed
-      ? 'Scrapling appears installed locally, but Hermes has not exposed it as an enabled toolset yet.'
-      : 'Scrapling can add resilient web extraction through MCP without making Hermes UI depend on scraping packages for everyone.';
+      ? 'Scrapling appears installed locally, but Hermes has not exposed web extraction as an enabled toolset yet.'
+      : 'Web Extract can use Hermes web_extract tools now, and can also surface optional Scrapling-backed extraction when configured.';
   return (
     <div className={"web-extract-card " + (ready ? '' : 'disabled')}>
       <div className="web-extract-title">
@@ -4616,7 +4616,7 @@ function WebExtractStatusCard({ info, compact }) {
         <div className="web-extract-actions">
           <span className="web-extract-code">{(info && info.install_hint) || 'uvx scrapling mcp'}</span>
           <a href={(info && info.docs_url) || 'https://github.com/D4Vinci/Scrapling'} target="_blank" rel="noopener noreferrer" style={{color:'var(--accent)',fontSize:'12px',fontWeight:700,textDecoration:'none'}}>
-            Scrapling docs ↗
+            Optional Scrapling docs ↗
           </a>
         </div>
       )}
@@ -4679,14 +4679,14 @@ function WebExtractView({ info }) {
         <div className="info-card" style={{gridColumn:'1 / -1'}}>
           <div className="info-card-title">
             <Icon name="globe" size={16}/>
-            <span>Scrapling Web Extract</span>
+            <span>Web Extract</span>
           </div>
           <WebExtractStatusCard info={info} />
           <div style={{color:'var(--text-secondary)',fontSize:'13px',lineHeight:1.6}}>
             {connected ? (
               <React.Fragment>
                 <p style={{margin:'0 0 10px 0'}}>
-                  Use this from chat by asking Hermes to extract, summarize, monitor, or gather structured data from a URL. Hermes will route through the connected Scrapling MCP tools when they are available.
+                  Use this from chat by asking Hermes to extract, summarize, monitor, or gather structured data from a URL. Hermes will route through the connected web extraction tools when they are available.
                 </p>
                 <div className="web-extract-code" style={{display:'inline-block'}}>
                   Extract the main article from https://example.com and summarize the key claims.
@@ -4698,7 +4698,7 @@ function WebExtractView({ info }) {
                   Web Extract is optional. It stays out of the core app so Hermes UI keeps working for everyone on Mac, Windows, and Linux without extra scraping dependencies.
                 </p>
                 <p style={{margin:'0'}}>
-                  To enable it, connect Scrapling as an MCP server in Hermes, for example with <span className="web-extract-code">{(info && info.install_hint) || 'uvx scrapling mcp'}</span>, then restart or refresh Hermes tool discovery.
+                  To add Scrapling as an optional extraction backend, connect it as an MCP server in Hermes, for example with <span className="web-extract-code">{(info && info.install_hint) || 'uvx scrapling mcp'}</span>, then restart or refresh Hermes tool discovery.
                 </p>
               </React.Fragment>
             )}
@@ -10316,7 +10316,7 @@ function App() {
             <span className="nav-item-label">Skills</span>
           </div>
           {webExtractIsReady(webExtractInfo) && (
-            <div className={"nav-item " + (currentView === 'web-extract' ? 'active' : '')} onClick={function() { setCurrentView('web-extract'); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Scrapling-powered web extraction">
+            <div className={"nav-item " + (currentView === 'web-extract' ? 'active' : '')} onClick={function() { setCurrentView('web-extract'); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Web extraction tools">
               <span className="nav-item-icon" style={{color:'#55c088'}}><Icon name="globe" size={15}/></span>
               <span className="nav-item-label">Web Extract</span>
             </div>
