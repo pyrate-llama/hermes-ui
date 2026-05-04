@@ -7144,7 +7144,7 @@ function StatusBar({ connected, conversations, messages, sessionTokens }) {
         </button>
         {feedbackOpen && (
           <React.Fragment>
-            <div onClick={function(){ setFeedbackOpen(false); }} style={{position:'fixed', inset:0, zIndex:21}} />
+            <div onClick={function(){ setFeedbackOpen(false); }} style={{position:'fixed', inset:0, zIndex:10003}} />
             <div className="feedback-menu">
               <div className="composer-chip-menu-title">
                 <Icon name="message-square" size={13}/>
