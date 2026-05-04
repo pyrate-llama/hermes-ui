@@ -2397,22 +2397,30 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             toolset_error = str(e)
 
+        def mentions_scrapling(value):
+            if value is None:
+                return False
+            text = str(value).lower()
+            return "scrapling" in text
+
         def mentions_web_extract(value):
             if value is None:
                 return False
             text = str(value).lower()
             return (
-                "scrapling" in text
-                or "web_extract" in text
+                "web_extract" in text
                 or "web extract" in text
                 or "scrape" in text
                 or "scraping" in text
             )
 
         web_extract_toolsets = []
+        scrapling_toolsets = []
         for ts in toolsets:
             fields = [ts.get("name"), ts.get("label"), ts.get("description")]
             fields.extend(ts.get("tools") or [])
+            if any(mentions_scrapling(field) for field in fields):
+                scrapling_toolsets.append(ts)
             if any(mentions_web_extract(field) for field in fields):
                 web_extract_toolsets.append(ts)
 
@@ -2421,20 +2429,26 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         uvx_available = shutil.which("uvx") is not None
         enabled = any(ts.get("enabled") for ts in web_extract_toolsets)
         configured = bool(web_extract_toolsets)
+        scrapling_enabled = any(ts.get("enabled") for ts in scrapling_toolsets)
+        scrapling_configured = bool(scrapling_toolsets)
         installed = package_available or cli_available
+        backend = "scrapling" if scrapling_enabled else ("hermes-web" if enabled else "none")
         self._json({
             "name": "web_extract",
             "label": "Web Extract",
-            "description": "Hermes web extraction through enabled Web Search & Scraping tools, with optional Scrapling support.",
+            "description": "Web extraction status, including whether the preferred Scrapling backend is active.",
             "available": configured or installed,
             "enabled": enabled,
             "configured": configured,
             "installed": installed,
-            "backend": "scrapling" if installed else "hermes-web",
+            "backend": backend,
+            "scrapling_enabled": scrapling_enabled,
+            "scrapling_configured": scrapling_configured,
             "package_available": package_available,
             "cli_available": cli_available,
             "uvx_available": uvx_available,
             "toolsets": web_extract_toolsets,
+            "scrapling_toolsets": scrapling_toolsets,
             "toolset_error": toolset_error,
             "install_hint": "uvx scrapling mcp",
             "docs_url": "https://github.com/D4Vinci/Scrapling",
