@@ -1691,6 +1691,42 @@
     font-size: 11px; font-weight: 500;
     background: rgba(85,192,136,0.15); color: var(--success);
   }
+  .web-extract-card {
+    background:
+      radial-gradient(circle at 12% 0%, rgba(85,192,136,0.15), transparent 36%),
+      linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)),
+      var(--bg-tertiary);
+    border: 1px solid rgba(85,192,136,0.28);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .web-extract-card.disabled {
+    border-color: var(--border);
+    opacity: 0.82;
+  }
+  .web-extract-title {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    color: var(--text); font-weight: 700; margin-bottom: 6px;
+  }
+  .web-extract-status {
+    border-radius: 999px; padding: 3px 9px; font-size: 10.5px; font-weight: 700;
+    background: rgba(85,192,136,0.16); color: var(--success);
+  }
+  .web-extract-status.offline {
+    background: rgba(232,176,74,0.14); color: var(--warning);
+  }
+  .web-extract-desc {
+    color: var(--text-secondary); font-size: 12px; line-height: 1.45; margin-bottom: 10px;
+  }
+  .web-extract-actions {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  .web-extract-code {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary);
+    background: rgba(0,0,0,0.18); border: 1px solid var(--border);
+    border-radius: 7px; padding: 5px 7px;
+  }
 
   /* Workspace split */
   .main-split {
@@ -4547,7 +4583,48 @@ function Lightbox({ src, onClose }) {
 }
 
 /* ── MCP Browser Modal ── */
-function MCPBrowserModal({ tools, onClose }) {
+function webExtractIsReady(info) {
+  return !!(info && (info.enabled || info.available || info.configured));
+}
+
+function WebExtractStatusCard({ info, compact }) {
+  var ready = webExtractIsReady(info);
+  var enabled = !!(info && info.enabled);
+  var installed = !!(info && info.installed);
+  var toolsets = (info && Array.isArray(info.toolsets)) ? info.toolsets : [];
+  var status = enabled ? 'Connected' : installed ? 'Installed' : ready ? 'Detected' : 'Optional';
+  var desc = enabled
+    ? 'Scrapling is connected through Hermes tools. Ask Hermes to extract or monitor a URL and it can use the Scrapling toolset when appropriate.'
+    : installed
+      ? 'Scrapling appears installed locally, but Hermes has not exposed it as an enabled toolset yet.'
+      : 'Scrapling can add resilient web extraction through MCP without making Hermes UI depend on scraping packages for everyone.';
+  return (
+    <div className={"web-extract-card " + (ready ? '' : 'disabled')}>
+      <div className="web-extract-title">
+        <span><Icon name="globe" size={15}/> Web Extract</span>
+        <span className={"web-extract-status " + (ready ? '' : 'offline')}>{status}</span>
+      </div>
+      <div className="web-extract-desc">{desc}</div>
+      {toolsets.length > 0 && (
+        <div style={{marginBottom:'8px',display:'flex',flexWrap:'wrap',gap:'5px'}}>
+          {toolsets.map(function(ts, i) {
+            return <span key={i} className="web-extract-code">{ts.label || ts.name}</span>;
+          })}
+        </div>
+      )}
+      {!enabled && !compact && (
+        <div className="web-extract-actions">
+          <span className="web-extract-code">{(info && info.install_hint) || 'uvx scrapling mcp'}</span>
+          <a href={(info && info.docs_url) || 'https://github.com/D4Vinci/Scrapling'} target="_blank" rel="noopener noreferrer" style={{color:'var(--accent)',fontSize:'12px',fontWeight:700,textDecoration:'none'}}>
+            Scrapling docs ↗
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MCPBrowserModal({ tools, webExtractInfo, onClose }) {
   // `tools` is nesq-shape: array of toolsets [{name,label,description,enabled,available,configured,tools:[string]}]
   var toolsets = Array.isArray(tools) ? tools : [];
   var enabledToolsets = toolsets.filter(function(t) { return t.enabled; });
@@ -4556,6 +4633,7 @@ function MCPBrowserModal({ tools, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content mcp-browser-modal" onClick={e => e.stopPropagation()}>
         <h2 className="modal-title">{'🔧 Connected MCP Tools'}</h2>
+        <WebExtractStatusCard info={webExtractInfo} />
         {toolsets.length > 0 ? (
           <div>
             <div style={{fontSize:'12px',color:'var(--text-muted)',marginBottom:'10px'}}>
@@ -4587,6 +4665,44 @@ function MCPBrowserModal({ tools, onClose }) {
         )}
         <div className="modal-buttons" style={{marginTop: '20px'}}>
           <button className="modal-btn secondary" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WebExtractView({ info }) {
+  var connected = !!(info && info.enabled);
+  return (
+    <div className="view-dashboard">
+      <div className="card-row">
+        <div className="info-card" style={{gridColumn:'1 / -1'}}>
+          <div className="info-card-title">
+            <Icon name="globe" size={16}/>
+            <span>Scrapling Web Extract</span>
+          </div>
+          <WebExtractStatusCard info={info} />
+          <div style={{color:'var(--text-secondary)',fontSize:'13px',lineHeight:1.6}}>
+            {connected ? (
+              <React.Fragment>
+                <p style={{margin:'0 0 10px 0'}}>
+                  Use this from chat by asking Hermes to extract, summarize, monitor, or gather structured data from a URL. Hermes will route through the connected Scrapling MCP tools when they are available.
+                </p>
+                <div className="web-extract-code" style={{display:'inline-block'}}>
+                  Extract the main article from https://example.com and summarize the key claims.
+                </div>
+              </React.Fragment>
+            ) : (
+              <React.Fragment>
+                <p style={{margin:'0 0 10px 0'}}>
+                  Web Extract is optional. It stays out of the core app so Hermes UI keeps working for everyone on Mac, Windows, and Linux without extra scraping dependencies.
+                </p>
+                <p style={{margin:'0'}}>
+                  To enable it, connect Scrapling as an MCP server in Hermes, for example with <span className="web-extract-code">{(info && info.install_hint) || 'uvx scrapling mcp'}</span>, then restart or refresh Hermes tool discovery.
+                </p>
+              </React.Fragment>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -7825,6 +7941,7 @@ function App() {
     });
   };
   const [mcpTools, setMcpTools] = useState([]);
+  const [webExtractInfo, setWebExtractInfo] = useState(null);
   // Delegation model info — drives the "Ask <Model>" nav item label
   const [delegationInfo, setDelegationInfo] = useState({ configured: null, label: '' });
   useEffect(function() {
@@ -8065,6 +8182,15 @@ function App() {
         }
       } catch (e) {
         console.error('Toolsets fetch failed:', e);
+      }
+      try {
+        const r2 = await fetch(API_BASE + '/api/tools/web-extract');
+        if (r2.ok) {
+          const data2 = await r2.json();
+          setWebExtractInfo(data2 || null);
+        }
+      } catch (e) {
+        console.error('Web Extract status fetch failed:', e);
       }
     };
     fetchToolsets();
@@ -10189,6 +10315,12 @@ function App() {
             <span className="nav-item-icon" style={{color:'#7b83b8'}}><Icon name="sparkles" size={15}/></span>
             <span className="nav-item-label">Skills</span>
           </div>
+          {webExtractIsReady(webExtractInfo) && (
+            <div className={"nav-item " + (currentView === 'web-extract' ? 'active' : '')} onClick={function() { setCurrentView('web-extract'); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Scrapling-powered web extraction">
+              <span className="nav-item-icon" style={{color:'#55c088'}}><Icon name="globe" size={15}/></span>
+              <span className="nav-item-label">Web Extract</span>
+            </div>
+          )}
           <div className="nav-item" onClick={function() { setShowMCPBrowser(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Browse connected MCP tools">
             <span className="nav-item-icon" style={{color:'#7b83b8'}}><Icon name="wrench" size={15}/></span>
             <span className="nav-item-label">MCP Tools</span>
@@ -10768,7 +10900,7 @@ function App() {
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">
-                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
+                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'web-extract' ? 'Web Extract' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
               </div>
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
@@ -10785,6 +10917,7 @@ function App() {
             {currentView === 'jobs' && <JobsView />}
             {currentView === 'memory' && <MemoryView />}
             {currentView === 'skills' && <SkillsView />}
+            {currentView === 'web-extract' && <WebExtractView info={webExtractInfo} />}
             {currentView === 'delegation' && <DelegationChatView />}
           </React.Fragment>
         )}
@@ -10817,7 +10950,7 @@ function App() {
       {/* Modals */}
       {showSettings && <SettingsModal config={config} onSave={setConfig} onClose={() => setShowSettings(false)} mcpToolCount={mcpTools.length} />}
       {lightboxSrc && <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
-      {showMCPBrowser && <MCPBrowserModal tools={mcpTools} onClose={() => setShowMCPBrowser(false)} />}
+      {showMCPBrowser && <MCPBrowserModal tools={mcpTools} webExtractInfo={webExtractInfo} onClose={() => setShowMCPBrowser(false)} />}
       {showShortcuts && <ShortcutsModal onClose={function(){ setShowShortcuts(false); }} />}
       <SearchModal open={showSearchModal} onClose={function(){ setShowSearchModal(false); }} conversations={conversations} onSelectConversation={function(id, options){ selectConversation(id, options); }} />
       {showWelcome && <WelcomePopup onClose={function(){ setShowWelcome(false); try { localStorage.setItem('hermes-ui-welcomed', '1'); } catch(e){} }} onOpenRemoteSetup={function(){ setShowSettings(true); }} />}

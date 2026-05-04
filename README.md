@@ -145,6 +145,7 @@ Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily com
 **MCP Tool Browser**
 - Browse all connected MCP servers and their tools
 - View tool descriptions and status
+- Optional Scrapling Web Extract integration appears when Scrapling is installed or exposed through Hermes MCP tools
 
 **UI/UX**
 - Glassmorphism design with ambient animated glow
@@ -218,6 +219,18 @@ HERMES_UI_MODELS="MiniMax-M2.7,openai/gpt-4o-mini,anthropic/claude-sonnet-4-2025
 ```
 
 `HERMES_MODEL_OPTIONS` and `HERMES_MODELS` are accepted aliases. The selected model applies to the next chat message and preserves the existing conversation.
+
+### Optional Scrapling Web Extract
+
+Hermes UI can surface [Scrapling](https://github.com/D4Vinci/Scrapling) as an optional Web Extract capability when Hermes exposes it through MCP tools. This is intentionally optional so the UI still works for everyone without installing heavier scraping/browser dependencies.
+
+If Scrapling is connected, Hermes UI shows a **Web Extract** sidebar item and highlights it in **MCP Tools**. If it is not connected, the MCP Tools modal shows setup guidance instead. A common MCP launch command is:
+
+```bash
+uvx scrapling mcp
+```
+
+After enabling Scrapling in Hermes tool configuration, restart or refresh Hermes tool discovery, then ask Hermes from chat to extract, summarize, monitor, or gather structured data from a URL.
 
 ### Using OpenRouter or Custom Inference Endpoints
 

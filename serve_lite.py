@@ -12,6 +12,7 @@ import http.server
 import base64
 import hashlib
 import hmac
+import importlib.util
 import json
 import os
 import signal
@@ -2353,34 +2354,83 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._json({"jobs": [], "error": str(e)})
 
     # ── Toolsets API (mirrors nesq webui /api/tools/toolsets) ──
+    def _collect_toolsets(self):
+        """Return per-toolset info matching nesq shape."""
+        from hermes_cli.tools_config import (
+            _get_effective_configurable_toolsets,
+            _get_platform_tools,
+            _toolset_has_keys,
+        )
+        from toolsets import resolve_toolset
+        from hermes_cli.config import load_config
+        cfg = load_config()
+        enabled = _get_platform_tools(cfg, "cli", include_default_mcp_servers=False)
+        result = []
+        for name, label, desc in _get_effective_configurable_toolsets():
+            try:
+                tools = sorted(set(resolve_toolset(name)))
+            except Exception:
+                tools = []
+            is_enabled = name in enabled
+            result.append({
+                "name": name, "label": label, "description": desc,
+                "enabled": is_enabled, "available": is_enabled,
+                "configured": _toolset_has_keys(name, cfg),
+                "tools": tools,
+            })
+        return result
+
     def _handle_toolsets(self):
         """GET /api/tools/toolsets — return per-toolset info matching nesq shape."""
         try:
-            from hermes_cli.tools_config import (
-                _get_effective_configurable_toolsets,
-                _get_platform_tools,
-                _toolset_has_keys,
-            )
-            from toolsets import resolve_toolset
-            from hermes_cli.config import load_config
-            cfg = load_config()
-            enabled = _get_platform_tools(cfg, "cli", include_default_mcp_servers=False)
-            result = []
-            for name, label, desc in _get_effective_configurable_toolsets():
-                try:
-                    tools = sorted(set(resolve_toolset(name)))
-                except Exception:
-                    tools = []
-                is_enabled = name in enabled
-                result.append({
-                    "name": name, "label": label, "description": desc,
-                    "enabled": is_enabled, "available": is_enabled,
-                    "configured": _toolset_has_keys(name, cfg),
-                    "tools": tools,
-                })
+            result = self._collect_toolsets()
             self._json(result)
         except Exception as e:
             self._json({"error": str(e)}, 500)
+
+    def _handle_web_extract_status(self):
+        """GET /api/tools/web-extract — optional Scrapling integration status."""
+        toolsets = []
+        toolset_error = None
+        try:
+            toolsets = self._collect_toolsets()
+        except Exception as e:
+            toolset_error = str(e)
+
+        def mentions_scrapling(value):
+            if value is None:
+                return False
+            return "scrapling" in str(value).lower()
+
+        scrapling_toolsets = []
+        for ts in toolsets:
+            fields = [ts.get("name"), ts.get("label"), ts.get("description")]
+            fields.extend(ts.get("tools") or [])
+            if any(mentions_scrapling(field) for field in fields):
+                scrapling_toolsets.append(ts)
+
+        package_available = importlib.util.find_spec("scrapling") is not None
+        cli_available = shutil.which("scrapling") is not None
+        uvx_available = shutil.which("uvx") is not None
+        enabled = any(ts.get("enabled") for ts in scrapling_toolsets)
+        configured = bool(scrapling_toolsets)
+        installed = package_available or cli_available
+        self._json({
+            "name": "scrapling",
+            "label": "Web Extract",
+            "description": "Optional Scrapling-powered web extraction through Hermes MCP tools.",
+            "available": installed or enabled,
+            "enabled": enabled,
+            "configured": configured,
+            "installed": installed,
+            "package_available": package_available,
+            "cli_available": cli_available,
+            "uvx_available": uvx_available,
+            "toolsets": scrapling_toolsets,
+            "toolset_error": toolset_error,
+            "install_hint": "uvx scrapling mcp",
+            "docs_url": "https://github.com/D4Vinci/Scrapling",
+        })
 
     # ── Skills API ──
     def _handle_skills(self):
@@ -2673,6 +2723,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_skills()
         elif self.path == "/api/tools/toolsets" or self.path.startswith("/api/tools/toolsets?"):
             self._handle_toolsets()
+        elif self.path == "/api/tools/web-extract" or self.path.startswith("/api/tools/web-extract?"):
+            self._handle_web_extract_status()
         elif self.path == "/api/providers":
             self._handle_providers()
         elif self.path == "/api/models":
