@@ -2364,7 +2364,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         from toolsets import resolve_toolset
         from hermes_cli.config import load_config
         cfg = load_config()
-        enabled = _get_platform_tools(cfg, "cli", include_default_mcp_servers=False)
+        enabled = _get_platform_tools(cfg, "cli")
         result = []
         for name, label, desc in _get_effective_configurable_toolsets():
             try:
@@ -2376,6 +2376,28 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                 "name": name, "label": label, "description": desc,
                 "enabled": is_enabled, "available": is_enabled,
                 "configured": _toolset_has_keys(name, cfg),
+                "tools": tools,
+            })
+        mcp_servers = cfg.get("mcp_servers") or {}
+        try:
+            from tools.mcp_tool import discover_mcp_tools
+            discovered_mcp_tools = sorted(set(discover_mcp_tools()))
+        except Exception:
+            discovered_mcp_tools = []
+        for name, server_cfg in mcp_servers.items():
+            if not isinstance(server_cfg, dict):
+                continue
+            server_name = str(name)
+            slug = server_name.replace("-", "_")
+            tools = [tool for tool in discovered_mcp_tools if tool.startswith(f"mcp_{slug}_")]
+            is_enabled = server_name in enabled
+            result.append({
+                "name": server_name,
+                "label": f"MCP: {server_name.replace('-', ' ').title()}",
+                "description": f"{server_name} MCP server",
+                "enabled": is_enabled,
+                "available": bool(tools) or is_enabled,
+                "configured": True,
                 "tools": tools,
             })
         return result
