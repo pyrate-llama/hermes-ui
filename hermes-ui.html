@@ -4699,47 +4699,6 @@ function MCPBrowserModal({ tools, webExtractInfo, onClose }) {
   );
 }
 
-function WebExtractView({ info }) {
-  var connected = !!(info && info.enabled);
-  var scraplingEnabled = !!(info && info.scrapling_enabled);
-  return (
-    <div className="view-dashboard">
-      <div className="card-row">
-        <div className="info-card" style={{gridColumn:'1 / -1'}}>
-          <div className="info-card-title">
-            <Icon name="globe" size={16}/>
-            <span>Web Extract</span>
-          </div>
-          <WebExtractStatusCard info={info} />
-          <div style={{color:'var(--text-secondary)',fontSize:'13px',lineHeight:1.6}}>
-            {connected ? (
-              <React.Fragment>
-                <p style={{margin:'0 0 10px 0'}}>
-                  {scraplingEnabled
-                    ? 'Use this from chat by asking Hermes to extract, summarize, monitor, or gather structured data from a URL. Hermes will route through Scrapling when that tool is selected by the agent.'
-                    : 'Use this from chat by asking Hermes to extract, summarize, monitor, or gather structured data from a URL. Right now this is using Hermes web_extract, not Scrapling.'}
-                </p>
-                <div className="web-extract-code" style={{display:'inline-block'}}>
-                  {scraplingEnabled ? 'Use Scrapling to extract the main article from https://example.com and summarize the key claims.' : 'Extract the main article from https://example.com and summarize the key claims.'}
-                </div>
-              </React.Fragment>
-            ) : (
-              <React.Fragment>
-                <p style={{margin:'0 0 10px 0'}}>
-                  Web Extract is optional. It stays out of the core app so Hermes UI keeps working for everyone on Mac, Windows, and Linux without extra scraping dependencies.
-                </p>
-                <p style={{margin:'0'}}>
-                  To add Scrapling as an optional extraction backend, connect it as an MCP server in Hermes, for example with <span className="web-extract-code">{(info && info.install_hint) || 'uvx scrapling mcp'}</span>, then restart or refresh Hermes tool discovery.
-                </p>
-              </React.Fragment>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── Terminal / Live Logs Panel ── */
 function TerminalPanel({ isOpen, onClose, onClear, localLogs, artifacts, onArtifactTab, onAddArtifact, onRemoveArtifact }) {
   const [logLines, setLogLines] = useState([]);
@@ -10346,12 +10305,6 @@ function App() {
             <span className="nav-item-icon" style={{color:'#7b83b8'}}><Icon name="sparkles" size={15}/></span>
             <span className="nav-item-label">Skills</span>
           </div>
-          {webExtractIsReady(webExtractInfo) && (
-            <div className={"nav-item " + (currentView === 'web-extract' ? 'active' : '')} onClick={function() { setCurrentView('web-extract'); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Web extraction tools">
-              <span className="nav-item-icon" style={{color:'#55c088'}}><Icon name="globe" size={15}/></span>
-              <span className="nav-item-label">Web Extract</span>
-            </div>
-          )}
           <div className="nav-item" onClick={function() { setShowMCPBrowser(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Browse connected MCP tools">
             <span className="nav-item-icon" style={{color:'#7b83b8'}}><Icon name="wrench" size={15}/></span>
             <span className="nav-item-label">MCP Tools</span>
@@ -10931,7 +10884,7 @@ function App() {
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">
-                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'web-extract' ? 'Web Extract' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
+                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
               </div>
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
@@ -10948,7 +10901,6 @@ function App() {
             {currentView === 'jobs' && <JobsView />}
             {currentView === 'memory' && <MemoryView />}
             {currentView === 'skills' && <SkillsView />}
-            {currentView === 'web-extract' && <WebExtractView info={webExtractInfo} />}
             {currentView === 'delegation' && <DelegationChatView />}
           </React.Fragment>
         )}
