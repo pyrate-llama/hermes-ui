@@ -4591,20 +4591,41 @@ function WebExtractStatusCard({ info, compact }) {
   var ready = webExtractIsReady(info);
   var enabled = !!(info && info.enabled);
   var installed = !!(info && info.installed);
+  var scraplingEnabled = !!(info && info.scrapling_enabled);
+  var scraplingConfigured = !!(info && info.scrapling_configured);
+  var backend = (info && info.backend) || 'none';
   var toolsets = (info && Array.isArray(info.toolsets)) ? info.toolsets : [];
-  var status = enabled ? 'Connected' : installed ? 'Installed' : ready ? 'Detected' : 'Optional';
-  var desc = enabled
-    ? 'Hermes has web extraction tools enabled. Ask Hermes to extract, summarize, or monitor a URL and it can use the connected web_extract tool.'
-    : installed
-      ? 'Scrapling appears installed locally, but Hermes has not exposed web extraction as an enabled toolset yet.'
-      : 'Web Extract can use Hermes web_extract tools now, and can also surface optional Scrapling-backed extraction when configured.';
+  var scraplingToolsets = (info && Array.isArray(info.scrapling_toolsets)) ? info.scrapling_toolsets : [];
+  var status = scraplingEnabled ? 'Scrapling Active' : enabled ? 'Hermes Fallback' : installed ? 'Scrapling Installed' : ready ? 'Hermes Detected' : 'Optional';
+  var desc = scraplingEnabled
+    ? 'Scrapling is connected through Hermes MCP tools. This is the preferred high-quality extraction backend.'
+    : enabled
+      ? 'Hermes web_extract is available, but Scrapling is not active. Extraction can work, but it is using the built-in Hermes web extraction path, not Scrapling.'
+      : installed
+        ? 'Scrapling appears installed locally, but Hermes has not exposed a Scrapling MCP toolset yet.'
+        : 'Scrapling is not connected yet. Hermes can still show generic web extraction if available, but Scrapling needs its MCP server configured before it is used.';
+  var statusStyle = scraplingEnabled
+    ? {}
+    : enabled
+      ? {background:'rgba(245, 185, 77, 0.18)',color:'#f5d18a',border:'1px solid rgba(245,185,77,0.35)'}
+      : {};
   return (
     <div className={"web-extract-card " + (ready ? '' : 'disabled')}>
       <div className="web-extract-title">
         <span><Icon name="globe" size={15}/> Web Extract</span>
-        <span className={"web-extract-status " + (ready ? '' : 'offline')}>{status}</span>
+        <span className={"web-extract-status " + (ready ? '' : 'offline')} style={statusStyle}>{status}</span>
       </div>
       <div className="web-extract-desc">{desc}</div>
+      {backend !== 'none' && (
+        <div style={{marginBottom:'8px',fontSize:'11px',color:'var(--text-muted)'}}>
+          Active backend: <span className="web-extract-code">{backend === 'scrapling' ? 'Scrapling' : 'Hermes web_extract'}</span>
+        </div>
+      )}
+      {scraplingConfigured && !scraplingEnabled && (
+        <div style={{marginBottom:'8px',fontSize:'11px',color:'#f5d18a'}}>
+          Scrapling is configured but currently disabled in Hermes tools.
+        </div>
+      )}
       {toolsets.length > 0 && (
         <div style={{marginBottom:'8px',display:'flex',flexWrap:'wrap',gap:'5px'}}>
           {toolsets.map(function(ts, i) {
@@ -4612,11 +4633,18 @@ function WebExtractStatusCard({ info, compact }) {
           })}
         </div>
       )}
-      {!enabled && !compact && (
+      {scraplingToolsets.length > 0 && (
+        <div style={{marginBottom:'8px',display:'flex',flexWrap:'wrap',gap:'5px'}}>
+          {scraplingToolsets.map(function(ts, i) {
+            return <span key={'scrapling-' + i} className="web-extract-code">Scrapling: {ts.label || ts.name}</span>;
+          })}
+        </div>
+      )}
+      {!scraplingEnabled && !compact && (
         <div className="web-extract-actions">
           <span className="web-extract-code">{(info && info.install_hint) || 'uvx scrapling mcp'}</span>
           <a href={(info && info.docs_url) || 'https://github.com/D4Vinci/Scrapling'} target="_blank" rel="noopener noreferrer" style={{color:'var(--accent)',fontSize:'12px',fontWeight:700,textDecoration:'none'}}>
-            Optional Scrapling docs ↗
+            Scrapling docs ↗
           </a>
         </div>
       )}
@@ -4673,6 +4701,7 @@ function MCPBrowserModal({ tools, webExtractInfo, onClose }) {
 
 function WebExtractView({ info }) {
   var connected = !!(info && info.enabled);
+  var scraplingEnabled = !!(info && info.scrapling_enabled);
   return (
     <div className="view-dashboard">
       <div className="card-row">
@@ -4686,10 +4715,12 @@ function WebExtractView({ info }) {
             {connected ? (
               <React.Fragment>
                 <p style={{margin:'0 0 10px 0'}}>
-                  Use this from chat by asking Hermes to extract, summarize, monitor, or gather structured data from a URL. Hermes will route through the connected web extraction tools when they are available.
+                  {scraplingEnabled
+                    ? 'Use this from chat by asking Hermes to extract, summarize, monitor, or gather structured data from a URL. Hermes will route through Scrapling when that tool is selected by the agent.'
+                    : 'Use this from chat by asking Hermes to extract, summarize, monitor, or gather structured data from a URL. Right now this is using Hermes web_extract, not Scrapling.'}
                 </p>
                 <div className="web-extract-code" style={{display:'inline-block'}}>
-                  Extract the main article from https://example.com and summarize the key claims.
+                  {scraplingEnabled ? 'Use Scrapling to extract the main article from https://example.com and summarize the key claims.' : 'Extract the main article from https://example.com and summarize the key claims.'}
                 </div>
               </React.Fragment>
             ) : (

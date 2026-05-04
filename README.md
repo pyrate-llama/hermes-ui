@@ -222,9 +222,9 @@ HERMES_UI_MODELS="MiniMax-M2.7,openai/gpt-4o-mini,anthropic/claude-sonnet-4-2025
 
 ### Optional Web Extract / Scrapling
 
-Hermes UI can surface Web Extract when Hermes exposes `web_extract` through MCP tools. [Scrapling](https://github.com/D4Vinci/Scrapling) can also be connected as an optional extraction backend. This is intentionally optional so the UI still works for everyone without installing heavier scraping/browser dependencies.
+Hermes UI can surface Web Extract when Hermes exposes `web_extract` through MCP tools. [Scrapling](https://github.com/D4Vinci/Scrapling) is the preferred extraction backend when connected, but Hermes UI keeps the generic Hermes `web_extract` fallback visible so the app still works for everyone without requiring heavier scraping/browser dependencies.
 
-If web extraction is connected, Hermes UI shows a **Web Extract** sidebar item and highlights it in **MCP Tools**. If you want to add Scrapling specifically, a common MCP launch command is:
+If web extraction is connected, Hermes UI shows a **Web Extract** sidebar item and highlights it in **MCP Tools**. The status card distinguishes **Scrapling Active** from **Hermes Fallback** so users can tell whether Scrapling is actually being used. If you want to add Scrapling specifically, a common MCP launch command is:
 
 ```bash
 uvx scrapling mcp
