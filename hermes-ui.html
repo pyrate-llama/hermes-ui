@@ -1360,10 +1360,10 @@
   }
   .feedback-menu {
     position: fixed; right: 16px; bottom: 38px;
-    z-index: 22; min-width: 210px; padding: 8px;
+    z-index: 10004; min-width: 210px; padding: 8px;
     border: 1px solid var(--glass-border);
     border-radius: 12px;
-    background: var(--glass-strong);
+    background: rgba(16,16,28,0.96);
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
     box-shadow: 0 14px 36px rgba(0,0,0,0.38);
@@ -2111,13 +2111,14 @@
 
   /* ── Status Bar ── */
   .status-bar {
+    position: relative;
     display: flex; align-items: center; gap: 12px;
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid var(--glass-border);
     padding: 6px 20px; font-size: 11px; color: var(--text-muted);
     font-family: 'JetBrains Mono', 'Monaco', monospace;
-    height: 32px; flex-shrink: 0; z-index: 2; box-sizing: border-box;
-    overflow: hidden; white-space: nowrap;
+    height: 32px; flex-shrink: 0; z-index: 10000; box-sizing: border-box;
+    overflow: visible; white-space: nowrap;
   }
   .status-bar-item {
     display: flex; align-items: center; gap: 5px;
