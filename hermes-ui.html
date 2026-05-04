@@ -2112,10 +2112,10 @@
   /* ── Status Bar ── */
   .status-bar {
     position: relative;
-    display: flex; align-items: center; gap: 12px;
+    display: flex; align-items: center; gap: 9px;
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid var(--glass-border);
-    padding: 6px 20px; font-size: 11px; color: var(--text-muted);
+    padding: 6px 16px; font-size: 11px; color: var(--text-muted);
     font-family: 'JetBrains Mono', 'Monaco', monospace;
     height: 32px; flex-shrink: 0; z-index: 10000; box-sizing: border-box;
     overflow: visible; white-space: nowrap;
@@ -2124,6 +2124,10 @@
     display: flex; align-items: center; gap: 5px;
     transition: color 0.2s;
     flex: 0 0 auto;
+  }
+  .status-icon-btn {
+    width: 28px; height: 22px; padding: 0;
+    justify-content: center;
   }
   .context-meter {
     gap: 7px;
@@ -7046,6 +7050,7 @@ function DelegationChatView() {
 function StatusBar({ connected, conversations, messages, sessionTokens }) {
   var [stats, setStats] = useState({ model: '...', provider: '', capabilities: null, memory: 0, uptime: '' });
   var [feedbackOpen, setFeedbackOpen] = useState(false);
+  var feedbackRef = useRef(null);
   // Derive sessions count reactively from props so it stays in sync as chats load.
   // (Previous version captured conversations in a stale closure inside useEffect[].)
   var sessionsCount = conversations ? conversations.length : 0;
@@ -7094,18 +7099,28 @@ function StatusBar({ connected, conversations, messages, sessionTokens }) {
     return function() { clearInterval(iv); };
   }, []);
 
+  useEffect(function() {
+    if (!feedbackOpen) return;
+    var closeOnOutsidePointer = function(e) {
+      if (feedbackRef.current && feedbackRef.current.contains(e.target)) return;
+      setFeedbackOpen(false);
+    };
+    var closeOnEscape = function(e) {
+      if (e.key === 'Escape') setFeedbackOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer, true);
+    document.addEventListener('keydown', closeOnEscape);
+    return function() {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [feedbackOpen]);
+
   return (
     <div className="status-bar">
       <div className="status-bar-item">
         <div className={connected === false ? 'status-dot-dead' : 'status-dot-live'}></div>
         <span>{connected === false ? 'Offline' : 'Connected'}</span>
-      </div>
-      <div className="status-bar-sep"></div>
-      <div className="status-bar-item" title="Model">
-        <span>{'🧠'}</span> <span>{stats.model}</span>
-      </div>
-      <div className="status-bar-caps">
-        <ModelCapabilityPills model={stats.model} provider={stats.provider} capabilities={stats.capabilities} compact={true} />
       </div>
       <div className="status-bar-sep"></div>
       <div className="status-bar-item" title="Memory entries">
@@ -7132,20 +7147,17 @@ function StatusBar({ connected, conversations, messages, sessionTokens }) {
         </React.Fragment>
       )}
       <div style={{flex:1}}></div>
-      <div className="status-bar-item" style={{position:'relative'}}>
+      <div className="status-bar-item" style={{position:'relative'}} ref={feedbackRef}>
         <button
-          className={"composer-chip " + (feedbackOpen ? 'active' : '')}
+          className={"composer-chip status-icon-btn " + (feedbackOpen ? 'active' : '')}
           onClick={function(){ setFeedbackOpen(!feedbackOpen); }}
-          title="Report a bug or request a feature on GitHub"
-          style={{height:'22px', padding:'2px 8px', fontSize:'11px'}}
+          aria-label="Report a bug or request a feature on GitHub"
+          style={{height:'22px', fontSize:'11px'}}
         >
           <Icon name="message-square" size={12}/>
-          <span>Feedback</span>
         </button>
         {feedbackOpen && (
-          <React.Fragment>
-            <div onClick={function(){ setFeedbackOpen(false); }} style={{position:'fixed', inset:0, zIndex:10003}} />
-            <div className="feedback-menu">
+          <div className="feedback-menu">
               <div className="composer-chip-menu-title">
                 <Icon name="message-square" size={13}/>
                 <span>GitHub feedback</span>
@@ -7174,7 +7186,6 @@ function StatusBar({ connected, conversations, messages, sessionTokens }) {
                 <span>↗</span>
               </a>
             </div>
-          </React.Fragment>
         )}
       </div>
       <div className="status-bar-item status-bar-version" style={{opacity:0.5}}>
@@ -10595,15 +10606,15 @@ function App() {
                               setCustomModelDraft(selectedChatModel || currentModel || '');
                               setShowModelMenu(!showModelMenu);
                             }}
-                            title="Model for subsequent messages in this conversation"
+                            aria-label="Model for subsequent messages in this conversation"
                           >
                             <Icon name="cpu" size={13}/>
                             <span>{activeChatModel ? activeChatModel.split('/').pop() : 'Model'}</span>
                           </button>
                           {showModelMenu && (
                             <React.Fragment>
-                              <div onClick={function(){ setShowModelMenu(false); }} style={{position:'fixed', inset:0, zIndex:19}} />
-                              <div className="composer-chip-menu" style={{minWidth:'260px'}}>
+                              <div onClick={function(){ setShowModelMenu(false); }} style={{position:'fixed', inset:0, zIndex:10003}} />
+                              <div className="composer-chip-menu" style={{minWidth:'260px', zIndex:10004}}>
                                 <div className="composer-chip-menu-title">
                                   <Icon name="cpu" size={13}/>
                                   <span>Chat model</span>
@@ -10676,15 +10687,15 @@ function App() {
                           <button
                             className={"composer-chip " + (reasoningEffort ? 'active' : '')}
                             onClick={function(){ setShowReasoningMenu(!showReasoningMenu); }}
-                            title="Reasoning effort for new messages"
+                            aria-label="Reasoning effort for new messages"
                           >
                             <Icon name="brain" size={13}/>
                             <span>{reasoningEffortLabel(reasoningEffort)}</span>
                           </button>
                           {showReasoningMenu && (
                             <React.Fragment>
-                              <div onClick={function(){ setShowReasoningMenu(false); }} style={{position:'fixed', inset:0, zIndex:19}} />
-                              <div className="composer-chip-menu">
+                              <div onClick={function(){ setShowReasoningMenu(false); }} style={{position:'fixed', inset:0, zIndex:10003}} />
+                              <div className="composer-chip-menu" style={{zIndex:10004}}>
                                 <div className="composer-chip-menu-title">
                                   <Icon name="brain" size={13}/>
                                   <span>Reasoning effort</span>
