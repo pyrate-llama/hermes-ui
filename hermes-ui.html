@@ -130,12 +130,19 @@
   .sidebar-resize-handle::after { right: 4px; }
   .sidebar.collapsed { margin-left: -280px; }
   .sidebar-header {
-    padding: 10px 14px;
+    padding: 9px 12px;
     border-bottom: 1px solid var(--glass-border);
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
   }
+  .sidebar-brand {
+    display: inline-flex; align-items: center; gap: 9px; min-width: 0;
+  }
+  .sidebar-wordmark {
+    width: min(150px, 100%); height: 30px; object-fit: contain; object-position: left center;
+    filter: drop-shadow(0 0 8px rgba(245,185,77,0.16));
+  }
   .sidebar-header h1 {
-    font-size: 18px; font-weight: 800; letter-spacing: -0.5px;
+    font-size: 17px; font-weight: 800; letter-spacing: -0.5px;
     background: linear-gradient(135deg, #9488f0, #c8a0ff, #7c6fe0);
     background-size: 200% 200%;
     animation: gradientShift 6s ease infinite;
@@ -148,8 +155,8 @@
   }
   .new-chat-btn {
     background: linear-gradient(135deg, var(--accent), #9488f0); color: white;
-    border: none; border-radius: 10px; padding: 8px 16px;
-    font-size: 13px; font-weight: 600; cursor: pointer;
+    border: none; border-radius: 10px; padding: 7px 13px;
+    font-size: 12px; font-weight: 650; cursor: pointer;
     transition: all 0.25s ease; white-space: nowrap;
     box-shadow: 0 2px 12px rgba(124,111,224,0.25);
   }
@@ -157,6 +164,10 @@
     background: linear-gradient(135deg, var(--accent-hover), #a898ff);
     box-shadow: 0 4px 20px rgba(124,111,224,0.4);
     transform: translateY(-1px);
+  }
+  .nav-new-chat {
+    margin-left: auto; padding: 4px 10px; border-radius: 8px; font-size: 11px;
+    min-height: 26px; box-shadow: none;
   }
   .sidebar-search { padding: 6px 10px; display: flex; gap: 6px; align-items: center; }
   .sidebar-search input {
@@ -209,7 +220,9 @@
   .conv-item-rename { right: 30px; }
   .conv-item-delete { right: 6px; }
   .conv-item:hover .conv-item-delete, .conv-item:hover .conv-item-rename, .conv-item:hover .conv-item-pin, .conv-item:hover .conv-item-archive { opacity: 1; }
-  .conv-item.pinned .conv-item-pin { opacity: 1; color: var(--accent); }
+  .conv-item-pin {
+    width: 22px; font-size: 14px; font-weight: 700;
+  }
   .conv-item-delete:hover { color: var(--danger); background: rgba(224,85,85,0.1); }
   .conv-item-rename:hover { color: var(--accent); background: rgba(124,111,224,0.1); }
   .conv-item-pin:hover, .conv-item-archive:hover { color: var(--accent); background: rgba(124,111,224,0.1); }
@@ -218,7 +231,7 @@
     border-radius: 8px; padding: 6px 8px; font-size: 11px; cursor: pointer; white-space: nowrap;
   }
 
-  .sidebar-footer { padding: 8px 10px; border-top: 1px solid var(--border); }
+  .sidebar-footer { padding: 7px 10px; border-top: 1px solid var(--border); }
   .personality-label {
     display: flex; align-items: center; gap: 6px;
     margin: 0 2px 6px;
@@ -238,7 +251,7 @@
     border-color: rgba(124,111,224,0.45);
     box-shadow: 0 0 0 3px rgba(124,111,224,0.10);
   }
-  .space-switcher { margin: 8px 0 10px; display: flex; flex-direction: column; gap: 6px; }
+  .space-switcher { margin: 0 0 10px; display: flex; flex-direction: column; gap: 6px; }
   .space-label {
     display: flex; align-items: center; gap: 6px; margin: 0 2px;
     color: var(--text-muted); font-size: 10px; font-weight: 750;
@@ -262,6 +275,12 @@
     font-size: 12px; min-width: 0; cursor: pointer;
   }
   .space-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .space-chip-select {
+    max-width: 190px; border: 0; background: transparent; color: var(--text-secondary);
+    font: inherit; font-size: 12px; outline: none; cursor: pointer; appearance: none;
+    padding: 0 16px 0 0; min-width: 84px;
+  }
+  .space-chip-select option { color: #111; background: #fff; }
   .spaces-view { padding: 20px; height: 100%; overflow: auto; }
   .spaces-grid {
     display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
@@ -562,8 +581,12 @@
     color: white;
   }
   .message-avatar.assistant {
-    background: linear-gradient(135deg, var(--success) 0%, #6eea9f 100%);
-    color: #0a1410;
+    background: rgba(255,255,255,0.04);
+    color: transparent;
+    background-image: url("assets/hermes-agent-avatar.png");
+    background-size: cover;
+    background-position: center;
+    border: 1px solid rgba(111,179,194,0.42);
   }
   .message-role { font-size: 13px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em; }
   /* Message content gets a soft accent stripe on the left */
@@ -1280,7 +1303,7 @@
   .input-area {
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid var(--glass-border);
-    padding: 8px 20px 4px 20px;
+    padding: 8px 20px 6px 20px;
   }
 
   .input-container { display: flex; flex-direction: column; gap: 4px; }
@@ -1404,7 +1427,7 @@
     display: flex; gap: 10px; align-items: flex-end;
     background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.01));
     border: 1px solid var(--glass-border);
-    border-radius: 16px; padding: 12px 12px 12px 16px;
+    border-radius: 16px; padding: 10px 12px 10px 16px;
     transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
     position: relative;
     box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 4px 14px rgba(0,0,0,0.15);
@@ -1427,7 +1450,7 @@
   textarea {
     flex: 1; background: transparent; border: none; color: var(--text-primary);
     outline: none; font-family: inherit; font-size: 14px; line-height: 1.4;
-    resize: none; max-height: 200px; min-height: 40px;
+    resize: none; max-height: 220px; min-height: 58px;
   }
   textarea::placeholder { color: var(--text-muted); }
 
@@ -1489,16 +1512,27 @@
   /* Input hint: keyboard-style chip row */
   .input-hint {
     font-size: 11px; color: var(--text-muted);
-    padding: 4px 4px 0 4px;
+    padding: 0 2px;
     display: flex; flex-wrap: nowrap; gap: 8px; align-items: center;
-    min-height: 30px; overflow: hidden;
+    min-height: 0; overflow: visible;
   }
+  .composer-state-copy { opacity: 0.72; }
   .input-hint > span { flex: 0 0 auto; white-space: nowrap; }
   .input-hint-secondary { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .input-hint-actions {
     margin-left: auto; position: relative; display: inline-flex; align-items: center; gap: 8px;
     flex: 0 0 auto;
   }
+  .composer-control-row {
+    justify-content: space-between;
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', 'Monaco', monospace;
+  }
+  .composer-status-inline {
+    min-width: 0; display: inline-flex; align-items: center; gap: 8px;
+    overflow: hidden; white-space: nowrap;
+  }
+  .composer-control-row .input-hint-actions { margin-left: 0; }
   .input-hint kbd {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 18px; height: 18px; padding: 0 5px; margin: 0 1px;
@@ -2130,7 +2164,7 @@
 
   /* Navigation Section */
   .sidebar-nav {
-    padding: 2px 6px; margin-bottom: 0; border-bottom: 1px solid var(--border);
+    padding: 2px 6px 5px; margin-bottom: 0; border-bottom: 1px solid var(--border);
   }
   .nav-section-label {
     font-size: 10px; font-weight: 700; color: var(--text-muted);
@@ -2175,6 +2209,25 @@
   .nav-item.active .nav-item-icon { filter: drop-shadow(0 0 4px rgba(124,111,224,0.4)); }
   .nav-item-icon { font-size: 14px; flex-shrink: 0; }
   .nav-item-label { font-size: 13px; font-weight: 500; }
+  .nav-expander {
+    width: calc(100% - 16px); margin: 5px 8px 2px;
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    background: rgba(255,255,255,0.026); color: var(--text-secondary);
+    padding: 7px 10px; display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; font: inherit; font-size: 12px; font-weight: 650;
+  }
+  .nav-expander-arrow { font-size: 18px; line-height: 1; font-weight: 900; color: var(--text-primary); }
+  .nav-expander:hover {
+    color: var(--text-primary); border-color: rgba(124,111,224,0.32);
+    background: rgba(124,111,224,0.07);
+  }
+  .nav-expander.active {
+    color: var(--text-primary); border-color: rgba(124,111,224,0.36);
+    background: rgba(124,111,224,0.10);
+  }
+  .nav-extra {
+    margin: 3px 0 0; padding-top: 3px; border-top: 1px solid rgba(255,255,255,0.055);
+  }
 
   /* Dashboard View */
   .view-dashboard { padding: 20px; overflow-y: auto; }
@@ -2374,12 +2427,12 @@
   /* ── Status Bar ── */
   .status-bar {
     position: relative;
-    display: flex; align-items: center; gap: 9px;
+    display: flex; align-items: center; gap: 8px;
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid var(--glass-border);
-    padding: 6px 16px; font-size: 11px; color: var(--text-muted);
+    padding: 3px 14px; font-size: 10.5px; color: var(--text-muted);
     font-family: 'JetBrains Mono', 'Monaco', monospace;
-    height: 32px; flex-shrink: 0; z-index: 10000; box-sizing: border-box;
+    height: 25px; flex-shrink: 0; z-index: 10000; box-sizing: border-box;
     overflow: visible; white-space: nowrap;
   }
   .status-bar-item {
@@ -2388,7 +2441,7 @@
     flex: 0 0 auto;
   }
   .status-icon-btn {
-    width: 28px; height: 22px; padding: 0;
+    width: 26px; height: 20px; padding: 0;
     justify-content: center;
   }
   .context-meter {
@@ -2439,6 +2492,19 @@
   .status-bar-sep {
     width: 1px; height: 12px; background: var(--border); margin: 0 2px;
   }
+  .status-update-pill {
+    border: 1px solid rgba(245,185,77,0.32); border-radius: 999px;
+    background: rgba(245,185,77,0.10); color: #f5d18a;
+    padding: 2px 8px; text-decoration: none; font-weight: 700;
+  }
+  .status-update-pill:hover { color: #ffe2a2; border-color: rgba(245,185,77,0.5); }
+  .status-mini-dismiss {
+    width: 18px; height: 18px; border-radius: 999px; border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.035); color: var(--text-muted);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; font: inherit; line-height: 1; padding: 0;
+  }
+  .status-mini-dismiss:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
 
   /* ── View transition ── */
   .view-enter {
@@ -7847,7 +7913,7 @@ function DelegationChatView() {
 
 /* ── Main App ── */
 /* ── Status Bar ── */
-function StatusBar({ connected, conversations, messages, sessionTokens }) {
+function StatusBar({ connected, conversations, messages, sessionTokens, versionInfo, showVersionNotice, showAgentVersionNotice, onDismissVersion, onDismissAgentVersion }) {
   var [stats, setStats] = useState({ model: '...', provider: '', capabilities: null, memory: 0, uptime: '' });
   var [feedbackOpen, setFeedbackOpen] = useState(false);
   var feedbackRef = useRef(null);
@@ -7923,14 +7989,6 @@ function StatusBar({ connected, conversations, messages, sessionTokens }) {
         <span>{connected === false ? 'Offline' : 'Connected'}</span>
       </div>
       <div className="status-bar-sep"></div>
-      <div className="status-bar-item" title="Memory entries">
-        <span>{'💾'}</span> <span>{stats.memory} memories</span>
-      </div>
-      <div className="status-bar-sep"></div>
-      <div className="status-bar-item" title="Total sessions">
-        <span>{'💬'}</span> <span>{sessionsCount} sessions</span>
-      </div>
-      <div className="status-bar-sep"></div>
       <div className={'status-bar-item context-meter ' + contextPressure.level} title={contextPressure.title}>
         <Icon name="activity" size={13}/>
         <span className="context-meter-label">Context {contextPressure.label}</span>
@@ -7938,15 +7996,23 @@ function StatusBar({ connected, conversations, messages, sessionTokens }) {
           <span className="context-meter-fill" style={{width: Math.max(3, contextPressure.percent) + '%'}}></span>
         </span>
       </div>
-      {stats.uptime && (
-        <React.Fragment>
-          <div className="status-bar-sep"></div>
-          <div className="status-bar-item" title="Uptime">
-            <span>{'⏱'}</span> <span>{stats.uptime}</span>
-          </div>
-        </React.Fragment>
-      )}
       <div style={{flex:1}}></div>
+      {showVersionNotice && (
+        <div className="status-bar-item">
+          <a className="status-update-pill" href={(versionInfo && versionInfo.html_url) || 'https://github.com/pyrate-llama/hermes-ui/releases'} target="_blank" rel="noopener noreferrer" title="Hermes UI update available">
+            UI v{versionInfo.latest} available
+          </a>
+          <button className="status-mini-dismiss" onClick={onDismissVersion} title="Dismiss UI update notice">×</button>
+        </div>
+      )}
+      {showAgentVersionNotice && (
+        <div className="status-bar-item">
+          <a className="status-update-pill" href={(versionInfo && versionInfo.agent && versionInfo.agent.html_url) || 'https://github.com/pyrate-llama/hermes-agent/releases'} target="_blank" rel="noopener noreferrer" title="Hermes Agent update available">
+            Agent update
+          </a>
+          <button className="status-mini-dismiss" onClick={onDismissAgentVersion} title="Dismiss agent update notice">×</button>
+        </div>
+      )}
       <div className="status-bar-item" style={{position:'relative'}} ref={feedbackRef}>
         <button
           className={"composer-chip status-icon-btn " + (feedbackOpen ? 'active' : '')}
@@ -8539,6 +8605,9 @@ function App() {
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth <= 768);
+  const [sidebarToolsExpanded, setSidebarToolsExpanded] = useState(function() {
+    try { return localStorage.getItem('hermes-sidebar-tools-expanded') === '1'; } catch(e) { return false; }
+  });
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.innerWidth > 768);
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredNumber('hermes-sidebar-width', 280, 180, 440));
   const [rightColumnWidth, setRightColumnWidth] = useState(() => readStoredNumber('hermes-right-column-width', 320, 180, 680));
@@ -8572,6 +8641,9 @@ function App() {
   useEffect(function() {
     try { localStorage.setItem('hermes-right-column-width', String(rightColumnWidth)); } catch(e) {}
   }, [rightColumnWidth]);
+  useEffect(function() {
+    try { localStorage.setItem('hermes-sidebar-tools-expanded', sidebarToolsExpanded ? '1' : '0'); } catch(e) {}
+  }, [sidebarToolsExpanded]);
   useEffect(function() {
     if (!resizingLayout) return;
     var onMove = function(e) {
@@ -10921,6 +10993,8 @@ function App() {
   var firstRenderedMessageIndex = Math.max(0, messages.length - messageRenderLimit);
   var visibleMessages = messages.slice(firstRenderedMessageIndex);
   var hiddenMessageCount = firstRenderedMessageIndex;
+  var extraNavActive = ['dashboard','delegation','spaces','terminal','jobs','memory','skills'].indexOf(currentView) !== -1;
+  var composerContextPressure = getContextPressure(messages, sessionTokens);
   var sidebarStyle = isDesktopLayout
     ? {
         width: sidebarWidth + 'px',
@@ -10969,26 +11043,21 @@ function App() {
           />
         )}
         <div className="sidebar-header">
-          <h1>Hermes</h1>
-          <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-            <button className="new-chat-btn" onClick={newConversation}>New</button>
-            <button className="sidebar-close-btn" onClick={() => setSidebarCollapsed(true)} title="Hide sidebar"
-              style={{background:'none',border:'none',color:'var(--text-muted)',cursor:'pointer',padding:'6px 8px',borderRadius:'6px',fontSize:'14px',transition:'color 0.2s',minWidth:'32px',minHeight:'32px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-              {'✕'}
-            </button>
+          <div className="sidebar-brand" title="Hermes Agent">
+            <img className="sidebar-wordmark" src="assets/hermes-agent-wordmark.png" alt="Hermes Agent" />
           </div>
+          <button className="sidebar-close-btn" onClick={() => setSidebarCollapsed(true)} title="Hide sidebar"
+            style={{background:'none',border:'none',color:'var(--text-muted)',cursor:'pointer',padding:'6px 8px',borderRadius:'6px',fontSize:'14px',transition:'color 0.2s',minWidth:'32px',minHeight:'32px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            {'✕'}
+          </button>
         </div>
 
         {/* Navigation */}
         <div className="sidebar-nav">
-          {/* section labels removed for density */}
-          <div className={"nav-item " + (currentView === 'dashboard' ? 'active' : '')} onClick={function() { setCurrentView('dashboard'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon" style={{color:'#6fb3c2'}}><Icon name="layout-dashboard" size={15}/></span>
-            <span className="nav-item-label">Dashboard</span>
-          </div>
           <div className={"nav-item " + (currentView === 'chat' ? 'active' : '')} onClick={function() { setCurrentView('chat'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon" style={{color:'#7a9cc4'}}><Icon name="message-square" size={15}/></span>
             <span className="nav-item-label">Chat</span>
+            <button className="new-chat-btn nav-new-chat" onClick={function(e){ e.stopPropagation(); newConversation(); }} title="New chat">New</button>
           </div>
           <div className={"nav-item " + (currentView === 'tasks' ? 'active' : '')} onClick={function() { setCurrentView('tasks'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon" style={{color:'#6fb3c2'}}><Icon name="list-todo" size={15}/></span>
@@ -10998,50 +11067,57 @@ function App() {
             <span className="nav-item-icon" style={{color:'#69a68a'}}><Icon name="activity" size={15}/></span>
             <span className="nav-item-label">Health</span>
           </div>
-          {delegationInfo.configured !== false && (
-            <div className={"nav-item " + (currentView === 'delegation' ? 'active' : '')} onClick={function() { setCurrentView('delegation'); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Chat directly with the delegation model (bypasses main agent loop)">
-              <span className="nav-item-icon" style={{color:'#d48aa8'}}><Icon name="message-circle" size={15}/></span>
-              <span className="nav-item-label">Ask {delegationInfo.label || '…'}</span>
-            </div>
-          )}
           <div className={"nav-item " + (currentView === 'files' ? 'active' : '')} onClick={function() { setCurrentView('files'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon" style={{color:'#c9a754'}}><Icon name="folder" size={15}/></span>
             <span className="nav-item-label">Files</span>
           </div>
-          <div className={"nav-item " + (currentView === 'spaces' ? 'active' : '')} onClick={function() { setCurrentView('spaces'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon" style={{color:'#8aa8d4'}}><Icon name="folder" size={15}/></span>
-            <span className="nav-item-label">Spaces</span>
-          </div>
-          <div className={"nav-item " + (currentView === 'terminal' ? 'active' : '')} onClick={function() { setCurrentView('terminal'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon" style={{color:'#69a68a'}}><Icon name="terminal" size={15}/></span>
-            <span className="nav-item-label">Terminal</span>
-          </div>
-          <div className={"nav-item " + (currentView === 'jobs' ? 'active' : '')} onClick={function() { setCurrentView('jobs'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon" style={{color:'#c78b5e'}}><Icon name="clock" size={15}/></span>
-            <span className="nav-item-label">Cron Jobs</span>
-          </div>
 
-          <div style={{borderTop:'1px solid var(--border)',margin:'2px 8px'}} />
-          <div className={"nav-item " + (currentView === 'memory' ? 'active' : '')} onClick={function() { setCurrentView('memory'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon" style={{color:'#a589c5'}}><Icon name="brain" size={15}/></span>
-            <span className="nav-item-label">Memory</span>
-          </div>
-          <div className={"nav-item " + (currentView === 'skills' ? 'active' : '')} onClick={function() { setCurrentView('skills'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
-            <span className="nav-item-icon" style={{color:'#7b83b8'}}><Icon name="sparkles" size={15}/></span>
-            <span className="nav-item-label">Skills</span>
-          </div>
-          <div className="nav-item" onClick={function() { setShowMCPBrowser(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Browse connected MCP tools">
-            <span className="nav-item-icon" style={{color:'#7b83b8'}}><Icon name="wrench" size={15}/></span>
-            <span className="nav-item-label">MCP Tools</span>
-          </div>
-
-          <div style={{borderTop:'1px solid var(--border)',margin:'2px 8px'}} />
-          <div className="nav-item" onClick={function() { setShowShortcuts(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Keyboard shortcuts (?)">
-            <span className="nav-item-icon" style={{color:'#94a3b8'}}><Icon name="keyboard" size={15}/></span>
-            <span className="nav-item-label">Shortcuts</span>
-          </div>
-
-          <div style={{borderTop:'1px solid var(--border)',margin:'2px 8px'}} />
+          {sidebarToolsExpanded && (
+            <div className="nav-extra">
+              <div className={"nav-item " + (currentView === 'dashboard' ? 'active' : '')} onClick={function() { setCurrentView('dashboard'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
+                <span className="nav-item-icon" style={{color:'#6fb3c2'}}><Icon name="layout-dashboard" size={15}/></span>
+                <span className="nav-item-label">Dashboard</span>
+              </div>
+              {delegationInfo.configured !== false && (
+                <div className={"nav-item " + (currentView === 'delegation' ? 'active' : '')} onClick={function() { setCurrentView('delegation'); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Chat directly with the delegation model (bypasses main agent loop)">
+                  <span className="nav-item-icon" style={{color:'#d48aa8'}}><Icon name="message-circle" size={15}/></span>
+                  <span className="nav-item-label">Ask {delegationInfo.label || '…'}</span>
+                </div>
+              )}
+              <div className={"nav-item " + (currentView === 'spaces' ? 'active' : '')} onClick={function() { setCurrentView('spaces'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
+                <span className="nav-item-icon" style={{color:'#8aa8d4'}}><Icon name="folder" size={15}/></span>
+                <span className="nav-item-label">Spaces</span>
+              </div>
+              <div className={"nav-item " + (currentView === 'terminal' ? 'active' : '')} onClick={function() { setCurrentView('terminal'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
+                <span className="nav-item-icon" style={{color:'#69a68a'}}><Icon name="terminal" size={15}/></span>
+                <span className="nav-item-label">Terminal</span>
+              </div>
+              <div className={"nav-item " + (currentView === 'jobs' ? 'active' : '')} onClick={function() { setCurrentView('jobs'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
+                <span className="nav-item-icon" style={{color:'#c78b5e'}}><Icon name="clock" size={15}/></span>
+                <span className="nav-item-label">Cron Jobs</span>
+              </div>
+              <div className={"nav-item " + (currentView === 'memory' ? 'active' : '')} onClick={function() { setCurrentView('memory'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
+                <span className="nav-item-icon" style={{color:'#a589c5'}}><Icon name="brain" size={15}/></span>
+                <span className="nav-item-label">Memory</span>
+              </div>
+              <div className={"nav-item " + (currentView === 'skills' ? 'active' : '')} onClick={function() { setCurrentView('skills'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
+                <span className="nav-item-icon" style={{color:'#7b83b8'}}><Icon name="sparkles" size={15}/></span>
+                <span className="nav-item-label">Skills</span>
+              </div>
+              <div className="nav-item" onClick={function() { setShowMCPBrowser(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Browse connected MCP tools">
+                <span className="nav-item-icon" style={{color:'#7b83b8'}}><Icon name="wrench" size={15}/></span>
+                <span className="nav-item-label">MCP Tools</span>
+              </div>
+              <div className="nav-item" onClick={function() { setShowShortcuts(true); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Keyboard shortcuts (?)">
+                <span className="nav-item-icon" style={{color:'#94a3b8'}}><Icon name="keyboard" size={15}/></span>
+                <span className="nav-item-label">Shortcuts</span>
+              </div>
+            </div>
+          )}
+          <button className={"nav-expander " + (extraNavActive ? 'active' : '')} onClick={function(){ setSidebarToolsExpanded(function(v){ return !v; }); }} title="Show more tools">
+            <span>{sidebarToolsExpanded ? 'Less tools' : 'More tools'}</span>
+            <span className="nav-expander-arrow">{sidebarToolsExpanded ? '▴' : '▾'}</span>
+          </button>
         </div>
 
         <div className="sidebar-search">
@@ -11081,7 +11157,7 @@ function App() {
                     {formatConversationActivity(conv)}
                   </div>
                 </div>
-                <button className="conv-item-pin" onClick={function(e) { e.stopPropagation(); togglePinConversation(conv.id); }} title={conv.pinned ? 'Unpin' : 'Pin'}>{conv.pinned ? '★' : '☆'}</button>
+                <button className="conv-item-pin" onClick={function(e) { e.stopPropagation(); togglePinConversation(conv.id); }} title={conv.pinned ? 'Unpin this chat' : 'Pin this chat'}>{conv.pinned ? '★' : '☆'}</button>
                 <button className="conv-item-archive" onClick={function(e) { e.stopPropagation(); toggleArchiveConversation(conv.id); }} title={conv.archived ? 'Restore' : 'Archive'}>{conv.archived ? '↩' : '▾'}</button>
                 <button className="conv-item-rename" onClick={function(e) { e.stopPropagation(); startRenameConv(conv.id, conv.title); }} title="Rename">{'✏'}</button>
                 <button className="conv-item-delete" onClick={e => { e.stopPropagation(); deleteConversation(conv.id); }}>{'×'}</button>
@@ -11095,20 +11171,6 @@ function App() {
           )}
         </div>
         <div className="sidebar-footer">
-          <div className="space-switcher">
-            <div className="space-label"><Icon name="folder" size={11}/><span>Space</span></div>
-            <select
-              className="space-select"
-              value={activeWorkspace.path || ''}
-              onChange={function(e) { switchWorkspace(e.target.value); }}
-              title="Active workspace for new chats and files"
-            >
-              {(workspaces.length ? workspaces : [activeWorkspace]).map(function(space) {
-                return <option key={space.path || 'default'} value={space.path || ''}>{space.name || workspaceNameFromPath(space.path) || 'Default'}</option>;
-              })}
-            </select>
-            <div className="space-path">{activeWorkspace.path ? shortWorkspacePath(activeWorkspace.path) : 'Server default'}</div>
-          </div>
           <div className="personality-label"><Icon name="brain" size={11}/><span>Profile</span></div>
           <select
             className={"personality-select " + (normalizePersonality(personality) !== 'default' ? 'active' : '')}
@@ -11123,71 +11185,25 @@ function App() {
 
       {/* Main panel */}
       <div className={"main " + (currentView !== 'chat' ? 'non-chat-view' : '')}>
-        {showVersionNotice && (
-          <div className="update-notice" style={{
-            background:'linear-gradient(90deg,rgba(123,131,184,0.12),rgba(165,137,197,0.12))',
-          }}>
-            <span>
-              <span style={{marginRight:'8px'}}>{'✨'}</span>
-              Hermes UI <strong>v{versionInfo.latest}</strong> is available
-              {versionInfo.current ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>(you're on v{versionInfo.current})</span> : null}
-            </span>
-            <span className="update-notice-actions">
-              {versionInfo.html_url && (
-                <a href={versionInfo.html_url} target="_blank" rel="noopener noreferrer"
-                   style={{color:'var(--accent)',textDecoration:'none',fontWeight:'600'}}>
-                  View release notes →
-                </a>
-              )}
-              <button onClick={dismissVersionNotice} title="Dismiss until next release"
-                style={{background:'transparent',border:'1px solid var(--border)',color:'var(--text-secondary)',
-                        borderRadius:'4px',padding:'2px 8px',cursor:'pointer',fontSize:'11px'}}>
-                Dismiss
-              </button>
-            </span>
-          </div>
-        )}
-        {showAgentVersionNotice && (
-          <div className="update-notice" style={{
-            background:'linear-gradient(90deg,rgba(245,185,77,0.12),rgba(123,131,184,0.10))',
-          }}>
-            <span>
-              <span style={{marginRight:'8px'}}>{'⚕'}</span>
-              Hermes Agent update available
-              {versionInfo.agent.installed ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>(installed {versionInfo.agent.installed})</span> : null}
-              {versionInfo.agent.latest_name ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>latest: {versionInfo.agent.latest_name}</span> : null}
-            </span>
-            <span className="update-notice-actions">
-              {versionInfo.agent.html_url && (
-                <a href={versionInfo.agent.html_url} target="_blank" rel="noopener noreferrer"
-                   style={{color:'var(--accent)',textDecoration:'none',fontWeight:'600'}}>
-                  Official release →
-                </a>
-              )}
-              <button onClick={dismissAgentVersionNotice} title="Dismiss until next agent release"
-                style={{background:'transparent',border:'1px solid var(--border)',color:'var(--text-secondary)',
-                        borderRadius:'4px',padding:'2px 8px',cursor:'pointer',fontSize:'11px'}}>
-                Dismiss
-              </button>
-            </span>
-          </div>
-        )}
         {currentView === 'chat' ? (
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">{activeConvId ? (conversations.find(c => c.id === activeConvId)?.title || 'Hermes') : 'Hermes'}</div>
-              <button className="space-chip hide-mobile" onClick={function(){ setCurrentView('spaces'); }} title="Active space">
+              <div className="space-chip hide-mobile" title="Active space for new chats and files">
                 <Icon name="folder" size={13}/>
-                <span>{activeWorkspace.name || workspaceNameFromPath(activeWorkspace.path) || 'Default'}</span>
-              </button>
+                <select
+                  className="space-chip-select"
+                  value={activeWorkspace.path || ''}
+                  onChange={function(e) { switchWorkspace(e.target.value); }}
+                >
+                  {(workspaces.length ? workspaces : [activeWorkspace]).map(function(space) {
+                    return <option key={space.path || 'default'} value={space.path || ''}>{space.name || workspaceNameFromPath(space.path) || 'Default'}</option>;
+                  })}
+                </select>
+              </div>
               {visibleAgentState ? (
                 <AgentStatePill state={visibleAgentState} compact={true} showDetail={false} />
-              ) : (
-                <div className="header-status">
-                  <div className={"status-dot " + (connected === false ? 'disconnected' : '')}></div>
-                  {connected === null ? 'Checking...' : connected ? 'Connected' : 'Offline'}
-                </div>
-              )}
+              ) : null}
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
                 <div className="toolbar-pill">
@@ -11455,20 +11471,36 @@ function App() {
                     )}
                   </div>
                 </div>
-                <div className="input-hint">
-                  {asideMode ? (
-                    <span><kbd>⏎</kbd> ask aside · does not change the main thread</span>
-                  ) : isStreaming ? (
-                    <span><kbd>⏎</kbd> steer · Pause · Stop to cancel</span>
-                  ) : isPaused ? (
-                    <span><kbd>⏎</kbd> send interjection · Dismiss to keep partial</span>
-                  ) : (
-                    <React.Fragment>
-                      <span><kbd>⏎</kbd> send</span>
-                      <span className="input-hint-newline"><kbd>⇧</kbd><kbd>⏎</kbd> new line</span>
-                      <span className="input-hint-secondary">Paste / drop images & files</span>
-                      {!config.geminiKey && normalizeImageHelperMode(config.imageHelperMode) !== 'direct' && <span style={{opacity:0.6}}>· add Gemini key for helper images</span>}
-                      {/* Export chat dropdown — inline in hint row, right-aligned */}
+                <div className="input-hint composer-control-row">
+                  <div className="composer-status-inline">
+                    <span className="status-bar-item">
+                      <span className={connected === false ? 'status-dot-dead' : 'status-dot-live'}></span>
+                      <span>{connected === false ? 'Offline' : 'Connected'}</span>
+                    </span>
+                    <span className={'status-bar-item context-meter ' + composerContextPressure.level} title={composerContextPressure.title}>
+                      <Icon name="activity" size={13}/>
+                      <span className="context-meter-label">Context {composerContextPressure.label}</span>
+                      <span className="context-meter-track" aria-hidden="true">
+                        <span className="context-meter-fill" style={{width: Math.max(3, composerContextPressure.percent) + '%'}}></span>
+                      </span>
+                    </span>
+                    {showVersionNotice && (
+                      <span className="status-bar-item">
+                        <a className="status-update-pill" href={(versionInfo && versionInfo.html_url) || 'https://github.com/pyrate-llama/hermes-ui/releases'} target="_blank" rel="noopener noreferrer">UI v{versionInfo.latest} available</a>
+                        <button className="status-mini-dismiss" onClick={dismissVersionNotice} title="Dismiss UI update notice">×</button>
+                      </span>
+                    )}
+                    {showAgentVersionNotice && (
+                      <span className="status-bar-item">
+                        <a className="status-update-pill" href={(versionInfo && versionInfo.agent && versionInfo.agent.html_url) || 'https://github.com/pyrate-llama/hermes-agent/releases'} target="_blank" rel="noopener noreferrer">Agent update</a>
+                        <button className="status-mini-dismiss" onClick={dismissAgentVersionNotice} title="Dismiss agent update notice">×</button>
+                      </span>
+                    )}
+                    <span className="status-bar-item status-bar-version">Hermes UI v3.2</span>
+                    <a className="composer-chip status-icon-btn" href="https://github.com/pyrate-llama/hermes-ui/issues" target="_blank" rel="noopener noreferrer" title="Open Hermes UI issues on GitHub">
+                      <Icon name="message-square" size={12}/>
+                    </a>
+                  </div>
                       <div className="input-hint-actions">
                         <div className="composer-chip-wrap">
                           <button
@@ -11639,9 +11671,8 @@ function App() {
                           </React.Fragment>
                         )}
                       </div>
-                    </React.Fragment>
-                  )}
                 </div>
+
               </div>
             </div>
           </React.Fragment>
@@ -11706,8 +11737,6 @@ function App() {
       {showWelcome && <WelcomePopup onClose={function(){ setShowWelcome(false); try { localStorage.setItem('hermes-ui-welcomed', '1'); } catch(e){} }} onOpenRemoteSetup={function(){ setShowSettings(true); }} />}
 
     </div>
-    {/* Status Bar */}
-    <StatusBar connected={connected} conversations={conversations} messages={messages} sessionTokens={sessionTokens} />
 
     {/* Mobile Bottom Navigation */}
     <div className="mobile-bottom-nav">
