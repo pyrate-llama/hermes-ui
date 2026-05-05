@@ -270,10 +270,12 @@ def _set_last_workspace(path):
 # GitHub. Keep in sync with the git tag (e.g. "3.1" corresponds to v3.1).
 __version__ = "3.1"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
+_HERMES_AGENT_RELEASES_API = "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest"
 
 # Cache for the latest-release lookup so we don't hammer GitHub. Stores
 # (timestamp, payload_dict). TTL of 1 hour is plenty for an update-nag.
 _latest_release_cache = {"ts": 0.0, "data": None}
+_agent_release_cache = {"ts": 0.0, "data": None}
 
 # Add hermes-agent to sys.path so we can import AIAgent directly
 if AGENT_DIR not in sys.path:
@@ -398,6 +400,40 @@ def _configured_model_options(current_model=None):
     if current and current not in items:
         items.insert(0, current)
     return items
+
+def _infer_model_provider(model_id, fallback_provider=None):
+    model = str(model_id or "").strip()
+    if "/" in model:
+        candidate = model.split("/", 1)[0].strip().lower()
+        if candidate:
+            return candidate
+    return str(fallback_provider or "").strip().lower()
+
+def _model_context_hint(model_id):
+    name = str(model_id or "").lower()
+    if any(s in name for s in ("gpt-5", "claude-opus-4", "claude-sonnet-4", "gemini-2.5")):
+        return "large"
+    if any(s in name for s in ("minimax", "qwen3", "glm-4.6", "kimi", "deepseek")):
+        return "large"
+    if any(s in name for s in ("gpt-4o", "gpt-4.1", "claude-3", "gemini-1.5")):
+        return "128k+"
+    return ""
+
+def _get_installed_agent_version():
+    try:
+        import importlib.metadata as _md
+        return _md.version("hermes-agent")
+    except Exception:
+        pass
+    try:
+        import tomllib
+        pyproject = pathlib.Path(AGENT_DIR) / "pyproject.toml"
+        if pyproject.exists():
+            data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+            return str((data.get("project") or {}).get("version") or "")
+    except Exception:
+        pass
+    return ""
 
 
 def _resolve_delegation_credentials():
@@ -1858,6 +1894,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         self._json({
             "status": "ok" if agent_ok else "degraded",
             "agent": agent_ok,
+            "agent_version": _get_installed_agent_version(),
             "model": model,
             "provider": provider,
             "capabilities": _model_capabilities(model, provider, agent_ok=agent_ok),
@@ -1882,6 +1919,10 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                     {
                         "id": item,
                         "label": item.split("/")[-1] if "/" in item else item,
+                        "provider": _infer_model_provider(item, provider),
+                        "provider_label": _PROVIDER_DISPLAY.get(_infer_model_provider(item, provider), _infer_model_provider(item, provider) or "Default"),
+                        "context_hint": _model_context_hint(item),
+                        "capabilities": _model_capabilities(item, _infer_model_provider(item, provider), agent_ok=True),
                         "active": item == model,
                     }
                     for item in options
@@ -2616,6 +2657,10 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         current = __version__
         latest = None
         html_url = None
+        agent_installed = _get_installed_agent_version()
+        agent_latest = None
+        agent_latest_name = None
+        agent_html_url = None
         error = None
 
         try:
@@ -2643,6 +2688,29 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             error = str(e)
 
+        try:
+            now = _time.time()
+            cache = _agent_release_cache
+            if cache["data"] and (now - cache["ts"]) < 3600:
+                payload = cache["data"]
+            else:
+                req = _ur.Request(
+                    _HERMES_AGENT_RELEASES_API,
+                    headers={
+                        "User-Agent": f"hermes-ui/{current}",
+                        "Accept": "application/vnd.github+json",
+                    },
+                )
+                with _ur.urlopen(req, timeout=5) as resp:
+                    payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+                cache["ts"] = now
+                cache["data"] = payload
+            agent_latest = (payload or {}).get("tag_name") or None
+            agent_latest_name = (payload or {}).get("name") or None
+            agent_html_url = (payload or {}).get("html_url") or None
+        except Exception:
+            pass
+
         def _ver_tuple(v):
             try:
                 return tuple(int(x) for x in str(v).split("."))
@@ -2658,6 +2726,14 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             "latest": latest,
             "update_available": update_available,
             "html_url": html_url,
+            "agent": {
+                "installed": agent_installed,
+                "latest": agent_latest,
+                "latest_name": agent_latest_name,
+                "html_url": agent_html_url,
+                "update_available": bool(agent_installed and agent_latest and agent_installed not in str(agent_latest_name or agent_latest)),
+                "repo": "NousResearch/hermes-agent",
+            },
         }
         if error:
             out["error"] = error

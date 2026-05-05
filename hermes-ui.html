@@ -3236,6 +3236,15 @@ function modelNameAlreadyShowsProvider(modelName, providerName) {
   return false;
 }
 
+function modelProviderLabel(item) {
+  var provider = (item && (item.provider_label || item.provider)) || '';
+  return provider ? String(provider) : 'Default';
+}
+
+function modelContextLabel(item) {
+  return (item && item.context_hint) ? String(item.context_hint) : '';
+}
+
 function ModelCapabilityPills({ model, provider, capabilities, compact }) {
   var caps = inferModelCapabilities(model, provider, capabilities);
   var items = [];
@@ -3391,6 +3400,46 @@ function getStoredTheme() {
   try { return localStorage.getItem('hermes-theme') || 'midnight'; } catch(e) { return 'midnight'; }
 }
 
+function redactSensitiveText(value) {
+  if (value == null) return value;
+  var text = String(value);
+  [
+    /\bsk-[A-Za-z0-9_-]{16,}\b/g,
+    /\bAIza[0-9A-Za-z_-]{20,}\b/g,
+    /\b(xox[baprs]-[A-Za-z0-9-]{12,})\b/g,
+    /\b(gh[pousr]_[A-Za-z0-9_]{16,})\b/g
+  ].forEach(function(re) {
+    text = text.replace(re, '[REDACTED]');
+  });
+  [
+    /\b([A-Za-z0-9_]*API[_-]?KEY[A-Za-z0-9_]*\s*[:=]\s*)(["']?)[^"'\s,}]+/gi,
+    /\b((?:authorization|access_token|refresh_token|id_token|auth_token|bearer_token|token|secret|password)\s*[:=]\s*)(["']?)[^"'\s,}]+/gi
+  ].forEach(function(re) {
+    text = text.replace(re, function(match, prefix, quote) {
+      return prefix + (quote || '') + '[REDACTED]';
+    });
+  });
+  text = text.replace(/\b(Bearer\s+)[A-Za-z0-9._~+/-]{12,}/gi, '$1[REDACTED]');
+  return text;
+}
+
+function redactSensitiveValue(value) {
+  if (value == null) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return redactSensitiveText(value);
+  }
+  if (Array.isArray(value)) return value.map(redactSensitiveValue);
+  if (typeof value === 'object') {
+    var out = {};
+    Object.keys(value).forEach(function(key) {
+      if (/api[_-]?key|token|secret|password|authorization/i.test(key)) out[key] = '[REDACTED]';
+      else out[key] = redactSensitiveValue(value[key]);
+    });
+    return out;
+  }
+  return value;
+}
+
 /* ── Export chat as Markdown ── */
 function exportChatAsMarkdown(msgs, sessionTitle) {
   var title = sessionTitle || 'Chat Export';
@@ -3401,7 +3450,7 @@ function exportChatAsMarkdown(msgs, sessionTitle) {
     } else {
       lines.push('## Hermes', '');
     }
-    lines.push(msg.content || '', '');
+    lines.push(redactSensitiveText(msg.content || ''), '');
     lines.push('---', '');
   });
   var mdText = lines.join('\n');
@@ -3458,7 +3507,7 @@ function ShortcutsModal({ onClose }) {
 function generatePDF(msgs, sessionTitle) {
   var title = sessionTitle || 'Chat Export';
   var bodyHtml = msgs.map(function(msg) {
-    var safeContent = (msg.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    var safeContent = redactSensitiveText(msg.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     var roleLabel = msg.role === 'user' ? 'You' : 'Hermes';
     var roleClass = msg.role;
     return '<div class="message ' + roleClass + '"><div class="role">' + roleLabel + '</div><div>' + safeContent + '</div></div>';
@@ -3860,6 +3909,7 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
 
   var formatResult = function(result) {
     if (!result) return '(no output)';
+    result = redactSensitiveValue(result);
     if (typeof result === 'string') {
       if (result.length > 2000) return result.slice(0, 2000) + '\n... (' + result.length + ' chars total)';
       return result;
@@ -4665,8 +4715,27 @@ function WebExtractStatusCard({ info, compact }) {
 function MCPBrowserModal({ tools, webExtractInfo, onClose }) {
   // `tools` is nesq-shape: array of toolsets [{name,label,description,enabled,available,configured,tools:[string]}]
   var toolsets = Array.isArray(tools) ? tools : [];
+  var [query, setQuery] = useState('');
+  var q = query.trim().toLowerCase();
+  var filteredToolsets = toolsets.filter(function(ts) {
+    if (!q) return true;
+    var hay = [ts.name, ts.label, ts.description].concat(ts.tools || []).join(' ').toLowerCase();
+    return hay.indexOf(q) !== -1;
+  });
   var enabledToolsets = toolsets.filter(function(t) { return t.enabled; });
   var totalTools = toolsets.reduce(function(sum, t) { return sum + ((t.tools && t.tools.length) || 0); }, 0);
+  var grouped = filteredToolsets.reduce(function(acc, ts) {
+    var group = String(ts.name || '').indexOf('scrapling') !== -1 ? 'Preferred extraction' :
+      String(ts.name || '').indexOf('browser') !== -1 ? 'Browser and web' :
+      String(ts.name || '').indexOf('mcp') === 0 || String(ts.label || '').indexOf('MCP:') === 0 ? 'MCP servers' :
+      'Core tools';
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(ts);
+    return acc;
+  }, {});
+  var groupNames = ['Preferred extraction', 'MCP servers', 'Browser and web', 'Core tools'].filter(function(name) {
+    return grouped[name] && grouped[name].length;
+  });
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content mcp-browser-modal" onClick={e => e.stopPropagation()}>
@@ -4674,26 +4743,45 @@ function MCPBrowserModal({ tools, webExtractInfo, onClose }) {
         <WebExtractStatusCard info={webExtractInfo} />
         {toolsets.length > 0 ? (
           <div>
-            <div style={{fontSize:'12px',color:'var(--text-muted)',marginBottom:'10px'}}>
-              {enabledToolsets.length + ' of ' + toolsets.length + ' toolsets enabled · ' + totalTools + ' tools total'}
+            <div style={{display:'flex',gap:'8px',alignItems:'center',marginBottom:'10px'}}>
+              <input
+                className="composer-chip-input"
+                value={query}
+                placeholder="Search tools, servers, or capabilities..."
+                onChange={function(e) { setQuery(e.target.value); }}
+                style={{flex:1,minWidth:0}}
+              />
+              <span style={{fontSize:'11px',color:'var(--text-muted)',whiteSpace:'nowrap'}}>
+                {enabledToolsets.length + '/' + toolsets.length + ' enabled · ' + totalTools + ' tools'}
+              </span>
             </div>
-            {toolsets.map(function(ts, idx) {
+            {groupNames.length === 0 && <p style={{color:'var(--text-secondary)',fontSize:'13px'}}>No tools match that search.</p>}
+            {groupNames.map(function(groupName) {
               return (
-                <div key={idx} className="mcp-tool-item" style={{opacity: ts.enabled ? 1 : 0.55}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px'}}>
-                    <div className="mcp-tool-name">{ts.label || ts.name}</div>
-                    <span className="mcp-tool-status" style={{background: ts.enabled ? 'var(--success)' : 'var(--bg-secondary)', color: ts.enabled ? 'white' : 'var(--text-muted)'}}>
-                      {ts.enabled ? '✓ Enabled' : 'Disabled'}
-                    </span>
+                <div key={groupName} style={{marginBottom:'12px'}}>
+                  <div style={{fontSize:'11px',fontWeight:800,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.08em',margin:'10px 0 6px'}}>
+                    {groupName}
                   </div>
-                  <div className="mcp-tool-desc">{ts.description || ''}</div>
-                  {ts.tools && ts.tools.length > 0 && (
-                    <div style={{marginTop:'6px',display:'flex',flexWrap:'wrap',gap:'4px'}}>
-                      {ts.tools.map(function(toolName, j) {
-                        return <span key={j} style={{background:'var(--bg-secondary)',color:'var(--text-secondary)',fontSize:'10px',padding:'2px 6px',borderRadius:'4px',fontFamily:'JetBrains Mono, monospace'}}>{toolName}</span>;
-                      })}
-                    </div>
-                  )}
+                  {grouped[groupName].map(function(ts, idx) {
+                    return (
+                      <div key={groupName + '-' + idx} className="mcp-tool-item" style={{opacity: ts.enabled ? 1 : 0.55}}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px'}}>
+                          <div className="mcp-tool-name">{ts.label || ts.name}</div>
+                          <span className="mcp-tool-status" style={{background: ts.enabled ? 'var(--success)' : 'var(--bg-secondary)', color: ts.enabled ? 'white' : 'var(--text-muted)'}}>
+                            {ts.enabled ? '✓ Enabled' : 'Disabled'}
+                          </span>
+                        </div>
+                        <div className="mcp-tool-desc">{ts.description || ''}</div>
+                        {ts.tools && ts.tools.length > 0 && (
+                          <div style={{marginTop:'6px',display:'flex',flexWrap:'wrap',gap:'4px'}}>
+                            {ts.tools.map(function(toolName, j) {
+                              return <span key={j} style={{background:'var(--bg-secondary)',color:'var(--text-secondary)',fontSize:'10px',padding:'2px 6px',borderRadius:'4px',fontFamily:'JetBrains Mono, monospace'}}>{toolName}</span>;
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -7970,8 +8058,15 @@ function App() {
       setVersionNoticeDismissed(versionInfo.latest);
     }
   };
+  const dismissAgentVersionNotice = function() {
+    var key = versionInfo && versionInfo.agent && versionInfo.agent.latest ? ('agent:' + versionInfo.agent.latest) : 'agent';
+    try { localStorage.setItem('hermes-ui-update-dismissed', key); } catch(e) {}
+    setVersionNoticeDismissed(key);
+  };
   const showVersionNotice = versionInfo && versionInfo.update_available &&
     versionInfo.latest && versionNoticeDismissed !== versionInfo.latest;
+  const showAgentVersionNotice = versionInfo && versionInfo.agent && versionInfo.agent.update_available &&
+    versionNoticeDismissed !== ('agent:' + versionInfo.agent.latest);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showReasoningMenu, setShowReasoningMenu] = useState(false);
@@ -9523,7 +9618,7 @@ function App() {
             toolCalls.push({
               toolName: toolEvent.toolName,
               label: toolEvent.label,
-              args: toolEvent.args || {},
+              args: redactSensitiveValue(toolEvent.args || {}),
               timestamp: new Date(),
               done: false,
             });
@@ -9547,7 +9642,7 @@ function App() {
             flushStreamContent();
             var resultPreview = '';
             if (toolEvent.result) {
-              var rs = typeof toolEvent.result === 'string' ? toolEvent.result : JSON.stringify(toolEvent.result);
+              var rs = typeof toolEvent.result === 'string' ? redactSensitiveText(toolEvent.result) : JSON.stringify(redactSensitiveValue(toolEvent.result));
               rs = rs.replace(/\\n/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
               if (rs.length > 200) rs = rs.slice(0, 200) + '...';
               resultPreview = ' => ' + rs;
@@ -9555,8 +9650,8 @@ function App() {
             addLocalLog('INFO  [tool] ' + (toolEvent.toolName || 'tool') + ' completed' + resultPreview);
             var lastTc = toolCalls[toolCalls.length - 1];
             if (lastTc) {
-              lastTc.result = toolEvent.result;
-              if (toolEvent.args) lastTc.args = toolEvent.args;
+              lastTc.result = redactSensitiveValue(toolEvent.result);
+              if (toolEvent.args) lastTc.args = redactSensitiveValue(toolEvent.args);
               if (toolEvent.duration != null) lastTc.duration = toolEvent.duration;
               lastTc.done = true;
             }
@@ -10436,6 +10531,34 @@ function App() {
             </span>
           </div>
         )}
+        {showAgentVersionNotice && (
+          <div style={{
+            display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',
+            padding:'8px 16px',fontSize:'12px',
+            background:'linear-gradient(90deg,rgba(245,185,77,0.12),rgba(123,131,184,0.10))',
+            borderBottom:'1px solid var(--border)',color:'var(--text)'
+          }}>
+            <span>
+              <span style={{marginRight:'8px'}}>{'⚕'}</span>
+              Hermes Agent update available
+              {versionInfo.agent.installed ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>(installed {versionInfo.agent.installed})</span> : null}
+              {versionInfo.agent.latest_name ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>latest: {versionInfo.agent.latest_name}</span> : null}
+            </span>
+            <span style={{display:'flex',gap:'8px',alignItems:'center'}}>
+              {versionInfo.agent.html_url && (
+                <a href={versionInfo.agent.html_url} target="_blank" rel="noopener noreferrer"
+                   style={{color:'var(--accent)',textDecoration:'none',fontWeight:'600'}}>
+                  Official release →
+                </a>
+              )}
+              <button onClick={dismissAgentVersionNotice} title="Dismiss until next agent release"
+                style={{background:'transparent',border:'1px solid var(--border)',color:'var(--text-secondary)',
+                        borderRadius:'4px',padding:'2px 8px',cursor:'pointer',fontSize:'11px'}}>
+                Dismiss
+              </button>
+            </span>
+          </div>
+        )}
         {currentView === 'chat' ? (
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
@@ -10763,6 +10886,8 @@ function App() {
                                   var id = item.id || '';
                                   if (!id) return null;
                                   var active = selectedChatModel === id;
+                                  var providerLabel = modelProviderLabel(item);
+                                  var contextLabel = modelContextLabel(item);
                                   return (
                                     <button
                                       key={id}
@@ -10774,7 +10899,15 @@ function App() {
                                         setShowModelMenu(false);
                                       }}
                                     >
-                                      <span>{item.label || id}</span>
+                                      <span style={{display:'flex',flexDirection:'column',gap:'3px',minWidth:0}}>
+                                        <span>{item.label || id}</span>
+                                        <span style={{display:'flex',gap:'5px',alignItems:'center',flexWrap:'wrap',fontSize:'10px',color:'var(--text-muted)'}}>
+                                          <span>{providerLabel}</span>
+                                          {contextLabel && <span>{contextLabel}</span>}
+                                          {item.capabilities && item.capabilities.vision && <span>Vision</span>}
+                                          {item.capabilities && item.capabilities.reasoning && <span>Reasoning</span>}
+                                        </span>
+                                      </span>
                                     </button>
                                   );
                                 })}
