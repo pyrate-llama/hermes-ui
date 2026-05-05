@@ -3293,6 +3293,16 @@ function getConversationActivityTime(conv) {
   return Number.isFinite(ts) ? ts : 0;
 }
 
+function compareConversationsByActivity(a, b) {
+  var activityDelta = getConversationActivityTime(b) - getConversationActivityTime(a);
+  if (activityDelta) return activityDelta;
+  return String(b && b.id || '').localeCompare(String(a && a.id || ''));
+}
+
+function sortConversationsByActivity(list) {
+  return (Array.isArray(list) ? list : []).slice().sort(compareConversationsByActivity);
+}
+
 function formatConversationActivity(conv) {
   var ts = getConversationActivityTime(conv);
   if (!ts) return (conv && conv.created) || '';
@@ -9002,12 +9012,13 @@ function App() {
         var toolCalls = cleaned.reduce(function(sum, m) { return sum + (m.toolCalls ? m.toolCalls.length : 0); }, 0);
         return { ...c, messages: cleaned, message_count: totalMsgs, user_prompt_count: userMsgs, tool_call_count: toolCalls };
       });
+      const sortedConvs = sortConversationsByActivity(cleanConvs);
 
-      if (cleanConvs.length > 0) {
-        setConversations(cleanConvs);
+      if (sortedConvs.length > 0) {
+        setConversations(sortedConvs);
         const savedId = localStorage.getItem('hermes-active-session');
         if (savedId) {
-          const conv = cleanConvs.find(c => c.id === savedId);
+          const conv = sortedConvs.find(c => c.id === savedId);
           if (conv) {
             _setActiveConvId(savedId);
             activeConvRef.current = savedId;
@@ -9023,7 +9034,7 @@ function App() {
   // Persist conversations to localStorage + server whenever they change
   useEffect(() => {
     if (conversations.length === 0) return;
-    const toSave = conversations.slice(0, 50);
+    const toSave = sortConversationsByActivity(conversations).slice(0, 50);
     // Save to localStorage
     try {
       localStorage.setItem('hermes-conversations', JSON.stringify(toSave));
@@ -9983,7 +9994,7 @@ function App() {
     .slice()
     .sort(function(a, b) {
       if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-      return String(b.last_active_at || b.created || '').localeCompare(String(a.last_active_at || a.created || ''));
+      return compareConversationsByActivity(a, b);
     });
 
   // v0.7.x: Global search uses a command-palette modal (see SearchModal component)
