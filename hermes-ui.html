@@ -2574,9 +2574,17 @@
     box-shadow: 0 4px 16px rgba(124,111,224,0.22);
     transform: translateY(-1px);
   }
-  .floating-sidebar-btn svg { width: 16px; height: 16px; }
+	  .floating-sidebar-btn svg { width: 16px; height: 16px; }
+	  .update-notice {
+	    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+	    padding: 8px 16px; font-size: 12px;
+	    border-bottom: 1px solid var(--border); color: var(--text);
+	  }
+	  .update-notice-actions {
+	    display: flex; gap: 8px; align-items: center; flex-shrink: 0;
+	  }
 
-  /* Modal close button (X in top-right corner of modals) */
+	  /* Modal close button (X in top-right corner of modals) */
   .modal-close-btn {
     position: absolute; top: 14px; right: 14px;
     width: 32px; height: 32px; border-radius: 8px;
@@ -2704,10 +2712,22 @@
     .sidebar-close-btn { min-width: 40px !important; min-height: 40px !important; font-size: 18px !important; }
     /* Hide desktop-only controls on mobile */
     .hide-mobile { display: none !important; }
-    /* Add left padding to header so title clears the floating hamburger */
-    .header { padding-left: 52px; }
-    /* Slim down header controls */
-    .header-controls { gap: 2px; flex-wrap: nowrap; }
+	    /* Add left padding to header so title clears the floating hamburger */
+	    .header { padding-left: 52px; }
+	    .main > .update-notice {
+	      padding-left: 52px;
+	      align-items: flex-start;
+	    }
+	    .update-notice > span:first-child {
+	      min-width: 0;
+	    }
+	    .update-notice-actions {
+	      flex-direction: column;
+	      align-items: flex-end;
+	      gap: 4px;
+	    }
+	    /* Slim down header controls */
+	    .header-controls { gap: 2px; flex-wrap: nowrap; }
     .token-counter { display: none; }
     .theme-menu { display: none; }
     /* Hide input hint on mobile */
@@ -10505,18 +10525,15 @@ function App() {
       {/* Main panel */}
       <div className={"main " + (currentView !== 'chat' ? 'non-chat-view' : '')}>
         {showVersionNotice && (
-          <div style={{
-            display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',
-            padding:'8px 16px',fontSize:'12px',
+          <div className="update-notice" style={{
             background:'linear-gradient(90deg,rgba(123,131,184,0.12),rgba(165,137,197,0.12))',
-            borderBottom:'1px solid var(--border)',color:'var(--text)'
           }}>
             <span>
               <span style={{marginRight:'8px'}}>{'✨'}</span>
               Hermes UI <strong>v{versionInfo.latest}</strong> is available
               {versionInfo.current ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>(you're on v{versionInfo.current})</span> : null}
             </span>
-            <span style={{display:'flex',gap:'8px',alignItems:'center'}}>
+            <span className="update-notice-actions">
               {versionInfo.html_url && (
                 <a href={versionInfo.html_url} target="_blank" rel="noopener noreferrer"
                    style={{color:'var(--accent)',textDecoration:'none',fontWeight:'600'}}>
@@ -10532,11 +10549,8 @@ function App() {
           </div>
         )}
         {showAgentVersionNotice && (
-          <div style={{
-            display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',
-            padding:'8px 16px',fontSize:'12px',
+          <div className="update-notice" style={{
             background:'linear-gradient(90deg,rgba(245,185,77,0.12),rgba(123,131,184,0.10))',
-            borderBottom:'1px solid var(--border)',color:'var(--text)'
           }}>
             <span>
               <span style={{marginRight:'8px'}}>{'⚕'}</span>
@@ -10544,7 +10558,7 @@ function App() {
               {versionInfo.agent.installed ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>(installed {versionInfo.agent.installed})</span> : null}
               {versionInfo.agent.latest_name ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>latest: {versionInfo.agent.latest_name}</span> : null}
             </span>
-            <span style={{display:'flex',gap:'8px',alignItems:'center'}}>
+            <span className="update-notice-actions">
               {versionInfo.agent.html_url && (
                 <a href={versionInfo.agent.html_url} target="_blank" rel="noopener noreferrer"
                    style={{color:'var(--accent)',textDecoration:'none',fontWeight:'600'}}>
