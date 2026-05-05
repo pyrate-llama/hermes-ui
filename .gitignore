@@ -35,6 +35,7 @@ third.png
 .hermes/
 .nano_claude/
 AGENTS.md
+Start Hermes UI.command
 HANDOFF-*.md
 ui_codex_HANDOFF-*.md
 

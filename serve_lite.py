@@ -12,6 +12,7 @@ import http.server
 import base64
 import hashlib
 import hmac
+import importlib.util
 import json
 import os
 import signal
@@ -269,10 +270,12 @@ def _set_last_workspace(path):
 # GitHub. Keep in sync with the git tag (e.g. "3.1" corresponds to v3.1).
 __version__ = "3.1"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
+_HERMES_AGENT_RELEASES_API = "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest"
 
 # Cache for the latest-release lookup so we don't hammer GitHub. Stores
 # (timestamp, payload_dict). TTL of 1 hour is plenty for an update-nag.
 _latest_release_cache = {"ts": 0.0, "data": None}
+_agent_release_cache = {"ts": 0.0, "data": None}
 
 # Add hermes-agent to sys.path so we can import AIAgent directly
 if AGENT_DIR not in sys.path:
@@ -342,7 +345,7 @@ def _get_ai_agent():
     return _AIAgent
 
 
-def _resolve_model_and_credentials():
+def _resolve_model_and_credentials(model_override=None):
     """Read model/provider from config.yaml and resolve API credentials."""
     import yaml
     config_path = os.path.join(HERMES_HOME, "config.yaml")
@@ -374,7 +377,63 @@ def _resolve_model_and_credentials():
     except Exception as e:
         print(f"[serve] WARNING: resolve_runtime_provider failed: {e}", flush=True)
 
+    override = str(model_override or "").strip()
+    if override:
+        model = override
     return model, provider, base_url, api_key
+
+
+def _configured_model_options(current_model=None):
+    """Return model choices configured for the UI model switcher."""
+    raw = (
+        os.environ.get("HERMES_UI_MODELS")
+        or os.environ.get("HERMES_MODEL_OPTIONS")
+        or os.environ.get("HERMES_MODELS")
+        or ""
+    )
+    items = []
+    for part in raw.replace("\n", ",").split(","):
+        value = part.strip()
+        if value and value not in items:
+            items.append(value)
+    current = str(current_model or "").strip()
+    if current and current not in items:
+        items.insert(0, current)
+    return items
+
+def _infer_model_provider(model_id, fallback_provider=None):
+    model = str(model_id or "").strip()
+    if "/" in model:
+        candidate = model.split("/", 1)[0].strip().lower()
+        if candidate:
+            return candidate
+    return str(fallback_provider or "").strip().lower()
+
+def _model_context_hint(model_id):
+    name = str(model_id or "").lower()
+    if any(s in name for s in ("gpt-5", "claude-opus-4", "claude-sonnet-4", "gemini-2.5")):
+        return "large"
+    if any(s in name for s in ("minimax", "qwen3", "glm-4.6", "kimi", "deepseek")):
+        return "large"
+    if any(s in name for s in ("gpt-4o", "gpt-4.1", "claude-3", "gemini-1.5")):
+        return "128k+"
+    return ""
+
+def _get_installed_agent_version():
+    try:
+        import importlib.metadata as _md
+        return _md.version("hermes-agent")
+    except Exception:
+        pass
+    try:
+        import tomllib
+        pyproject = pathlib.Path(AGENT_DIR) / "pyproject.toml"
+        if pyproject.exists():
+            data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+            return str((data.get("project") or {}).get("version") or "")
+    except Exception:
+        pass
+    return ""
 
 
 def _resolve_delegation_credentials():
@@ -832,7 +891,7 @@ def _get_or_create_session(session_id):
     return new_session
 
 
-def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="", reasoning_effort="", workspace=None):
+def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="", reasoning_effort="", workspace=None, model_override=""):
     """Run AIAgent in a background thread, pushing SSE events to the queue."""
     q = STREAMS.get(stream_id)
     if q is None:
@@ -894,7 +953,9 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             put("error", {"message": "AIAgent not available — check hermes-agent installation"})
             return
 
-        model, provider, base_url, api_key = _resolve_model_and_credentials()
+        model, provider, base_url, api_key = _resolve_model_and_credentials(model_override)
+        if model_override:
+            print(f"[serve] model_override={model}", flush=True)
 
         # Initialize SessionDB for session_search
         _session_db = None
@@ -922,6 +983,20 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         except Exception as _e:
             print(f"[serve] WARNING: toolset resolution fallback ({_e})", flush=True)
             toolsets = ["hermes-cli"]
+
+        if "scrapling" in toolsets:
+            scrapling_guidance = (
+                "Web extraction routing: Scrapling MCP tools are available. "
+                "For URL extraction, page summarization, article reading, or structured data collection, "
+                "use Scrapling first, preferably a single mcp_scrapling_fetch or mcp_scrapling_get call. "
+                "Do not also use browser navigation/snapshot tools for the same URL unless Scrapling fails, "
+                "the page requires interactive browser state, or the user explicitly asks for browser testing. "
+                "If Scrapling cannot retrieve the needed content, fall back to Hermes web/browser tools and "
+                "briefly say that a fallback was needed."
+            )
+            _separator = "\n\n---\n\n" if base_system_prompt else ""
+            base_system_prompt = (base_system_prompt + _separator + scrapling_guidance).strip()
+            print("[serve] Scrapling-first web extraction guidance appended", flush=True)
 
         full_text = ""
         _token_sent = False
@@ -1174,6 +1249,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
                              and _pending_msgs[-1].get("content") == user_msg):
             _pending_msgs.append({"role": "user", "content": user_msg})
         session["messages"] = _pending_msgs
+        session["model"] = model
         _save_session(session_id, session)
 
         # ── Periodic checkpoint thread (Issue #765) ──
@@ -1263,6 +1339,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
                 if _img_count:
                     _m["_image_count"] = _img_count
             session["messages"] = _merged
+            session["model"] = model
             _save_session(session_id, session)  # Persist to disk (matches webui s.save())
 
         # Detect silent agent failure (no assistant reply produced)
@@ -1347,6 +1424,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             "session": {
                 "session_id": session_id,
                 "messages": session.get("messages", []),
+                "model": session.get("model") or model,
             },
             "usage": {
                 "input_tokens": input_tokens,
@@ -1575,6 +1653,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         # User-configurable base system prompt from Settings → General
         base_system_prompt = (body.get("base_system_prompt") or "").strip()
         reasoning_effort = str(body.get("reasoning_effort") or "").strip().lower()
+        model_override = str(body.get("model") or "").strip()
         if reasoning_effort == "auto":
             reasoning_effort = ""
         if reasoning_effort and reasoning_effort not in _REASONING_EFFORTS:
@@ -1659,7 +1738,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
 
         thr = threading.Thread(
             target=_run_agent_streaming,
-            args=(session_id, messages, stream_id, base_system_prompt, reasoning_effort, workspace),
+            args=(session_id, messages, stream_id, base_system_prompt, reasoning_effort, workspace, model_override),
             daemon=True,
         )
         thr.start()
@@ -1815,6 +1894,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         self._json({
             "status": "ok" if agent_ok else "degraded",
             "agent": agent_ok,
+            "agent_version": _get_installed_agent_version(),
             "model": model,
             "provider": provider,
             "capabilities": _model_capabilities(model, provider, agent_ok=agent_ok),
@@ -1824,6 +1904,35 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
     def _handle_providers(self):
         try:
             self._json(_read_provider_config_status())
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+
+    def _handle_models(self):
+        """GET /api/models — return model choices for the chat model switcher."""
+        try:
+            model, provider, _, _ = _resolve_model_and_credentials()
+            options = _configured_model_options(model)
+            self._json({
+                "current": model or "",
+                "provider": provider or "",
+                "models": [
+                    {
+                        "id": item,
+                        "label": item.split("/")[-1] if "/" in item else item,
+                        "provider": _infer_model_provider(item, provider),
+                        "provider_label": _PROVIDER_DISPLAY.get(_infer_model_provider(item, provider), _infer_model_provider(item, provider) or "Default"),
+                        "context_hint": _model_context_hint(item),
+                        "capabilities": _model_capabilities(item, _infer_model_provider(item, provider), agent_ok=True),
+                        "active": item == model,
+                    }
+                    for item in options
+                ],
+                "configured": bool(
+                    os.environ.get("HERMES_UI_MODELS")
+                    or os.environ.get("HERMES_MODEL_OPTIONS")
+                    or os.environ.get("HERMES_MODELS")
+                ),
+            })
         except Exception as e:
             self._json({"error": str(e)}, 500)
 
@@ -2300,34 +2409,127 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._json({"jobs": [], "error": str(e)})
 
     # ── Toolsets API (mirrors nesq webui /api/tools/toolsets) ──
+    def _collect_toolsets(self):
+        """Return per-toolset info matching nesq shape."""
+        from hermes_cli.tools_config import (
+            _get_effective_configurable_toolsets,
+            _get_platform_tools,
+            _toolset_has_keys,
+        )
+        from toolsets import resolve_toolset
+        from hermes_cli.config import load_config
+        cfg = load_config()
+        enabled = _get_platform_tools(cfg, "cli")
+        result = []
+        for name, label, desc in _get_effective_configurable_toolsets():
+            try:
+                tools = sorted(set(resolve_toolset(name)))
+            except Exception:
+                tools = []
+            is_enabled = name in enabled
+            result.append({
+                "name": name, "label": label, "description": desc,
+                "enabled": is_enabled, "available": is_enabled,
+                "configured": _toolset_has_keys(name, cfg),
+                "tools": tools,
+            })
+        mcp_servers = cfg.get("mcp_servers") or {}
+        try:
+            from tools.mcp_tool import discover_mcp_tools
+            discovered_mcp_tools = sorted(set(discover_mcp_tools()))
+        except Exception:
+            discovered_mcp_tools = []
+        for name, server_cfg in mcp_servers.items():
+            if not isinstance(server_cfg, dict):
+                continue
+            server_name = str(name)
+            slug = server_name.replace("-", "_")
+            tools = [tool for tool in discovered_mcp_tools if tool.startswith(f"mcp_{slug}_")]
+            is_enabled = server_name in enabled
+            result.append({
+                "name": server_name,
+                "label": f"MCP: {server_name.replace('-', ' ').title()}",
+                "description": f"{server_name} MCP server",
+                "enabled": is_enabled,
+                "available": bool(tools) or is_enabled,
+                "configured": True,
+                "tools": tools,
+            })
+        return result
+
     def _handle_toolsets(self):
         """GET /api/tools/toolsets — return per-toolset info matching nesq shape."""
         try:
-            from hermes_cli.tools_config import (
-                _get_effective_configurable_toolsets,
-                _get_platform_tools,
-                _toolset_has_keys,
-            )
-            from toolsets import resolve_toolset
-            from hermes_cli.config import load_config
-            cfg = load_config()
-            enabled = _get_platform_tools(cfg, "cli", include_default_mcp_servers=False)
-            result = []
-            for name, label, desc in _get_effective_configurable_toolsets():
-                try:
-                    tools = sorted(set(resolve_toolset(name)))
-                except Exception:
-                    tools = []
-                is_enabled = name in enabled
-                result.append({
-                    "name": name, "label": label, "description": desc,
-                    "enabled": is_enabled, "available": is_enabled,
-                    "configured": _toolset_has_keys(name, cfg),
-                    "tools": tools,
-                })
+            result = self._collect_toolsets()
             self._json(result)
         except Exception as e:
             self._json({"error": str(e)}, 500)
+
+    def _handle_web_extract_status(self):
+        """GET /api/tools/web-extract — detect Hermes web extraction support."""
+        toolsets = []
+        toolset_error = None
+        try:
+            toolsets = self._collect_toolsets()
+        except Exception as e:
+            toolset_error = str(e)
+
+        def mentions_scrapling(value):
+            if value is None:
+                return False
+            text = str(value).lower()
+            return "scrapling" in text
+
+        def mentions_web_extract(value):
+            if value is None:
+                return False
+            text = str(value).lower()
+            return (
+                "web_extract" in text
+                or "web extract" in text
+                or "scrape" in text
+                or "scraping" in text
+            )
+
+        web_extract_toolsets = []
+        scrapling_toolsets = []
+        for ts in toolsets:
+            fields = [ts.get("name"), ts.get("label"), ts.get("description")]
+            fields.extend(ts.get("tools") or [])
+            if any(mentions_scrapling(field) for field in fields):
+                scrapling_toolsets.append(ts)
+            if any(mentions_web_extract(field) for field in fields):
+                web_extract_toolsets.append(ts)
+
+        package_available = importlib.util.find_spec("scrapling") is not None
+        cli_available = shutil.which("scrapling") is not None
+        uvx_available = shutil.which("uvx") is not None
+        enabled = any(ts.get("enabled") for ts in web_extract_toolsets)
+        configured = bool(web_extract_toolsets)
+        scrapling_enabled = any(ts.get("enabled") for ts in scrapling_toolsets)
+        scrapling_configured = bool(scrapling_toolsets)
+        installed = package_available or cli_available
+        backend = "scrapling" if scrapling_enabled else ("hermes-web" if enabled else "none")
+        self._json({
+            "name": "web_extract",
+            "label": "Web Extract",
+            "description": "Web extraction status, including whether the preferred Scrapling backend is active.",
+            "available": configured or installed,
+            "enabled": enabled,
+            "configured": configured,
+            "installed": installed,
+            "backend": backend,
+            "scrapling_enabled": scrapling_enabled,
+            "scrapling_configured": scrapling_configured,
+            "package_available": package_available,
+            "cli_available": cli_available,
+            "uvx_available": uvx_available,
+            "toolsets": web_extract_toolsets,
+            "scrapling_toolsets": scrapling_toolsets,
+            "toolset_error": toolset_error,
+            "install_hint": "uvx scrapling mcp",
+            "docs_url": "https://github.com/D4Vinci/Scrapling",
+        })
 
     # ── Skills API ──
     def _handle_skills(self):
@@ -2455,6 +2657,10 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         current = __version__
         latest = None
         html_url = None
+        agent_installed = _get_installed_agent_version()
+        agent_latest = None
+        agent_latest_name = None
+        agent_html_url = None
         error = None
 
         try:
@@ -2482,6 +2688,29 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             error = str(e)
 
+        try:
+            now = _time.time()
+            cache = _agent_release_cache
+            if cache["data"] and (now - cache["ts"]) < 3600:
+                payload = cache["data"]
+            else:
+                req = _ur.Request(
+                    _HERMES_AGENT_RELEASES_API,
+                    headers={
+                        "User-Agent": f"hermes-ui/{current}",
+                        "Accept": "application/vnd.github+json",
+                    },
+                )
+                with _ur.urlopen(req, timeout=5) as resp:
+                    payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+                cache["ts"] = now
+                cache["data"] = payload
+            agent_latest = (payload or {}).get("tag_name") or None
+            agent_latest_name = (payload or {}).get("name") or None
+            agent_html_url = (payload or {}).get("html_url") or None
+        except Exception:
+            pass
+
         def _ver_tuple(v):
             try:
                 return tuple(int(x) for x in str(v).split("."))
@@ -2497,6 +2726,14 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             "latest": latest,
             "update_available": update_available,
             "html_url": html_url,
+            "agent": {
+                "installed": agent_installed,
+                "latest": agent_latest,
+                "latest_name": agent_latest_name,
+                "html_url": agent_html_url,
+                "update_available": bool(agent_installed and agent_latest and agent_installed not in str(agent_latest_name or agent_latest)),
+                "repo": "NousResearch/hermes-agent",
+            },
         }
         if error:
             out["error"] = error
@@ -2620,8 +2857,12 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_skills()
         elif self.path == "/api/tools/toolsets" or self.path.startswith("/api/tools/toolsets?"):
             self._handle_toolsets()
+        elif self.path == "/api/tools/web-extract" or self.path.startswith("/api/tools/web-extract?"):
+            self._handle_web_extract_status()
         elif self.path == "/api/providers":
             self._handle_providers()
+        elif self.path == "/api/models":
+            self._handle_models()
         elif self.path == "/cron/list":
             self._handle_cron_list()
         elif self.path == "/api/delegation/info":

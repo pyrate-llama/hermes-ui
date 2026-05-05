@@ -1050,6 +1050,146 @@
   .session-todos-empty {
     color: var(--text-muted); font-size: 12px; padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.055);
   }
+  .view-tasks { padding: 20px; overflow-y: auto; }
+  .tasks-overview {
+    display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(0, 2fr);
+    gap: 16px; align-items: stretch; margin-bottom: 16px;
+  }
+  .task-focus-card {
+    border: 1px solid var(--glass-border); border-radius: 14px; padding: 18px;
+    background:
+      linear-gradient(145deg, rgba(68,216,138,0.08), rgba(69,136,224,0.07) 52%, rgba(255,255,255,0.018)),
+      var(--glass);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+  }
+  .task-focus-label {
+    display: flex; align-items: center; gap: 8px;
+    color: var(--text-muted); font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;
+  }
+  .task-focus-title {
+    color: var(--text-primary); font-size: 20px; line-height: 1.18;
+    font-weight: 760; margin-bottom: 12px;
+  }
+  .task-progress-track {
+    height: 8px; border-radius: 99px; overflow: hidden;
+    background: rgba(255,255,255,0.07); border: 1px solid var(--glass-border);
+  }
+  .task-progress-fill {
+    height: 100%; border-radius: inherit;
+    background: linear-gradient(90deg, #44d88a, #6fb3c2);
+    box-shadow: 0 0 18px rgba(68,216,138,0.32);
+  }
+  .task-progress-meta {
+    margin-top: 8px; color: var(--text-secondary); font-size: 12px;
+    display: flex; justify-content: space-between; gap: 12px;
+  }
+  .task-board {
+    display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .task-column {
+    min-height: 260px; border: 1px solid var(--glass-border);
+    border-radius: 14px; background: rgba(255,255,255,0.025);
+    overflow: hidden;
+  }
+  .task-column-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 12px 12px 10px; border-bottom: 1px solid var(--glass-border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+  }
+  .task-column-name {
+    display: flex; align-items: center; gap: 8px;
+    color: var(--text-primary); font-size: 12px; font-weight: 700;
+  }
+  .task-column-count {
+    color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  .task-column-body {
+    padding: 10px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .task-card {
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    background: rgba(10,10,18,0.36); padding: 10px;
+    color: var(--text-primary); font-size: 12px; line-height: 1.35;
+    cursor: pointer; text-align: left; width: 100%; font-family: inherit;
+  }
+  .task-card:hover {
+    border-color: rgba(111,179,194,0.35);
+    background: rgba(111,179,194,0.065);
+  }
+  .task-card.completed { opacity: 0.72; }
+  .task-card-meta {
+    margin-top: 8px; display: flex; align-items: center; gap: 6px;
+    color: var(--text-muted); font-size: 10.5px; font-family: 'JetBrains Mono', monospace;
+  }
+  .task-column-empty {
+    padding: 14px 8px; color: var(--text-muted); font-size: 12px;
+    text-align: center;
+  }
+  .task-empty-state {
+    border: 1px dashed var(--glass-border); border-radius: 14px;
+    padding: 42px 18px; text-align: center; color: var(--text-secondary);
+    background: rgba(255,255,255,0.018);
+  }
+  .task-empty-state strong {
+    display: block; color: var(--text-primary); font-size: 16px; margin-bottom: 6px;
+  }
+  .tasks-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .tasks-toolbar-copy { max-width: 720px; }
+  .tasks-toolbar-title {
+    color: var(--text-primary); font-size: 18px; font-weight: 760;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+  }
+  .tasks-toolbar-subtitle {
+    color: var(--text-secondary); font-size: 12px; line-height: 1.45;
+  }
+  .tasks-filter {
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    background: rgba(255,255,255,0.035); color: var(--text-primary);
+    padding: 9px 11px; font: inherit; font-size: 12px; min-width: 220px;
+    outline: none;
+  }
+  .tasks-filter:focus { border-color: rgba(111,179,194,0.42); box-shadow: 0 0 0 2px rgba(111,179,194,0.08); }
+  .task-focus-card.secondary {
+    background:
+      linear-gradient(145deg, rgba(192,136,224,0.075), rgba(245,185,77,0.055) 52%, rgba(255,255,255,0.018)),
+      var(--glass);
+  }
+  .task-focus-stats {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px; margin-top: 12px;
+  }
+  .task-focus-stat {
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    background: rgba(255,255,255,0.026); padding: 10px;
+  }
+  .task-focus-stat span {
+    display: block; color: var(--text-muted); font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 4px;
+  }
+  .task-focus-stat strong {
+    display: block; color: var(--text-primary); font-size: 18px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .task-card-title { font-weight: 680; }
+  .task-card-source {
+    margin-top: 8px; color: var(--text-secondary); font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .task-card-tags {
+    display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px;
+  }
+  .task-tag {
+    border: 1px solid var(--glass-border); border-radius: 99px;
+    padding: 2px 6px; color: var(--text-muted); font-size: 9.5px;
+    background: rgba(255,255,255,0.025);
+  }
+  .task-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 
   .input-area {
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
@@ -1341,6 +1481,42 @@
   }
   .composer-chip-option.active::after {
     content: "✓"; color: var(--accent); font-weight: 800;
+  }
+  .composer-chip-input {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 6px 0 4px 0;
+    padding: 8px 9px;
+    border-radius: 9px;
+    border: 1px solid var(--glass-border);
+    background: rgba(0,0,0,0.18);
+    color: var(--text);
+    font: 12px 'JetBrains Mono', monospace;
+    outline: none;
+  }
+  .composer-chip-input:focus {
+    border-color: rgba(128,144,255,0.55);
+    box-shadow: 0 0 0 2px rgba(128,144,255,0.12);
+  }
+  .feedback-menu {
+    position: fixed; right: 16px; bottom: 38px;
+    z-index: 10004; min-width: 210px; padding: 8px;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    background: rgba(16,16,28,0.96);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    box-shadow: 0 14px 36px rgba(0,0,0,0.38);
+  }
+  .feedback-link {
+    width: 100%; border: 0; border-radius: 9px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 9px; background: transparent; color: var(--text-secondary);
+    cursor: pointer; font-size: 12px; text-decoration: none;
+  }
+  .feedback-link:hover {
+    background: rgba(128,144,255,0.12);
+    color: var(--text);
   }
 
   .slash-command-menu {
@@ -1654,6 +1830,42 @@
     display: inline-block; padding: 2px 8px; border-radius: 4px;
     font-size: 11px; font-weight: 500;
     background: rgba(85,192,136,0.15); color: var(--success);
+  }
+  .web-extract-card {
+    background:
+      radial-gradient(circle at 12% 0%, rgba(85,192,136,0.15), transparent 36%),
+      linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)),
+      var(--bg-tertiary);
+    border: 1px solid rgba(85,192,136,0.28);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .web-extract-card.disabled {
+    border-color: var(--border);
+    opacity: 0.82;
+  }
+  .web-extract-title {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    color: var(--text); font-weight: 700; margin-bottom: 6px;
+  }
+  .web-extract-status {
+    border-radius: 999px; padding: 3px 9px; font-size: 10.5px; font-weight: 700;
+    background: rgba(85,192,136,0.16); color: var(--success);
+  }
+  .web-extract-status.offline {
+    background: rgba(232,176,74,0.14); color: var(--warning);
+  }
+  .web-extract-desc {
+    color: var(--text-secondary); font-size: 12px; line-height: 1.45; margin-bottom: 10px;
+  }
+  .web-extract-actions {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  .web-extract-code {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary);
+    background: rgba(0,0,0,0.18); border: 1px solid var(--border);
+    border-radius: 7px; padding: 5px 7px;
   }
 
   /* Workspace split */
@@ -2075,18 +2287,23 @@
 
   /* ── Status Bar ── */
   .status-bar {
-    display: flex; align-items: center; gap: 12px;
+    position: relative;
+    display: flex; align-items: center; gap: 9px;
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid var(--glass-border);
-    padding: 6px 20px; font-size: 11px; color: var(--text-muted);
+    padding: 6px 16px; font-size: 11px; color: var(--text-muted);
     font-family: 'JetBrains Mono', 'Monaco', monospace;
-    height: 32px; flex-shrink: 0; z-index: 2; box-sizing: border-box;
-    overflow: hidden; white-space: nowrap;
+    height: 32px; flex-shrink: 0; z-index: 10000; box-sizing: border-box;
+    overflow: visible; white-space: nowrap;
   }
   .status-bar-item {
     display: flex; align-items: center; gap: 5px;
     transition: color 0.2s;
     flex: 0 0 auto;
+  }
+  .status-icon-btn {
+    width: 28px; height: 22px; padding: 0;
+    justify-content: center;
   }
   .context-meter {
     gap: 7px;
@@ -2158,7 +2375,7 @@
   }
 
   /* ── Smooth page transitions on all views ── */
-  .view-dashboard, .view-files, .view-terminal {
+  .view-dashboard, .view-files, .view-terminal, .view-tasks {
     animation: viewFade 0.25s ease;
   }
 
@@ -2497,9 +2714,17 @@
     box-shadow: 0 4px 16px rgba(124,111,224,0.22);
     transform: translateY(-1px);
   }
-  .floating-sidebar-btn svg { width: 16px; height: 16px; }
+	  .floating-sidebar-btn svg { width: 16px; height: 16px; }
+	  .update-notice {
+	    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+	    padding: 8px 16px; font-size: 12px;
+	    border-bottom: 1px solid var(--border); color: var(--text);
+	  }
+	  .update-notice-actions {
+	    display: flex; gap: 8px; align-items: center; flex-shrink: 0;
+	  }
 
-  /* Modal close button (X in top-right corner of modals) */
+	  /* Modal close button (X in top-right corner of modals) */
   .modal-close-btn {
     position: absolute; top: 14px; right: 14px;
     width: 32px; height: 32px; border-radius: 8px;
@@ -2584,6 +2809,8 @@
     .view-memory { flex-direction: column; }
     .memory-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 120px; }
     .skills-grid { grid-template-columns: 1fr; }
+    .tasks-overview { grid-template-columns: 1fr; }
+    .task-board { grid-template-columns: 1fr 1fr; }
     .input-wrapper { padding: 10px 12px; }
     .message-content { padding: 12px 14px; }
     /* Sidebar backdrop overlay */
@@ -2614,6 +2841,7 @@
     .app { padding-bottom: calc(env(safe-area-inset-bottom, 8px) + 60px); }
     .status-bar { display: none; }
     .stat-grid { grid-template-columns: 1fr; }
+    .task-board { grid-template-columns: 1fr; }
     .stat-value { font-size: 24px; }
     .message-header { gap: 6px; }
     .message-avatar { width: 28px; height: 28px; font-size: 12px; }
@@ -2627,10 +2855,22 @@
     .sidebar-close-btn { min-width: 40px !important; min-height: 40px !important; font-size: 18px !important; }
     /* Hide desktop-only controls on mobile */
     .hide-mobile { display: none !important; }
-    /* Add left padding to header so title clears the floating hamburger */
-    .header { padding-left: 52px; }
-    /* Slim down header controls */
-    .header-controls { gap: 2px; flex-wrap: nowrap; }
+	    /* Add left padding to header so title clears the floating hamburger */
+	    .header { padding-left: 52px; }
+	    .main > .update-notice {
+	      padding-left: 52px;
+	      align-items: flex-start;
+	    }
+	    .update-notice > span:first-child {
+	      min-width: 0;
+	    }
+	    .update-notice-actions {
+	      flex-direction: column;
+	      align-items: flex-end;
+	      gap: 4px;
+	    }
+	    /* Slim down header controls */
+	    .header-controls { gap: 2px; flex-wrap: nowrap; }
     .token-counter { display: none; }
     .theme-menu { display: none; }
     /* Hide input hint on mobile */
@@ -2828,6 +3068,7 @@ function Icon({ name, size, className, strokeWidth }) {
     case 'message-square': return (<svg {...common}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>);
     case 'mail': return (<svg {...common}><rect x="3" y="5" width="18" height="14" rx="2" ry="2"/><polyline points="3 7 12 13 21 7"/></svg>);
     case 'cog': return (<svg {...common}><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/></svg>);
+    case 'cpu': return (<svg {...common}><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>);
     case 'activity': return (<svg {...common}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>);
     case 'palette': return (<svg {...common}><circle cx="13.5" cy="6.5" r=".8" fill="currentColor" stroke="none"/><circle cx="17.5" cy="10.5" r=".8" fill="currentColor" stroke="none"/><circle cx="8.5" cy="7.5" r=".8" fill="currentColor" stroke="none"/><circle cx="6.5" cy="12.5" r=".8" fill="currentColor" stroke="none"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.96 0 1.75-.78 1.75-1.75 0-.45-.17-.86-.45-1.17-.27-.31-.45-.72-.45-1.17 0-.96.79-1.75 1.75-1.75H17c2.76 0 5-2.24 5-5C22 6.01 17.52 2 12 2z"/></svg>);
     case 'check': return (<svg {...common}><polyline points="20 6 9 17 4 12"/></svg>);
@@ -3158,6 +3399,15 @@ function modelNameAlreadyShowsProvider(modelName, providerName) {
   return false;
 }
 
+function modelProviderLabel(item) {
+  var provider = (item && (item.provider_label || item.provider)) || '';
+  return provider ? String(provider) : 'Default';
+}
+
+function modelContextLabel(item) {
+  return (item && item.context_hint) ? String(item.context_hint) : '';
+}
+
 function ModelCapabilityPills({ model, provider, capabilities, compact }) {
   var caps = inferModelCapabilities(model, provider, capabilities);
   var items = [];
@@ -3213,6 +3463,16 @@ function getConversationActivityTime(conv) {
   if (!raw) return 0;
   var ts = typeof raw === 'number' ? raw : Date.parse(raw);
   return Number.isFinite(ts) ? ts : 0;
+}
+
+function compareConversationsByActivity(a, b) {
+  var activityDelta = getConversationActivityTime(b) - getConversationActivityTime(a);
+  if (activityDelta) return activityDelta;
+  return String(b && b.id || '').localeCompare(String(a && a.id || ''));
+}
+
+function sortConversationsByActivity(list) {
+  return (Array.isArray(list) ? list : []).slice().sort(compareConversationsByActivity);
 }
 
 function formatConversationActivity(conv) {
@@ -3303,6 +3563,46 @@ function getStoredTheme() {
   try { return localStorage.getItem('hermes-theme') || 'midnight'; } catch(e) { return 'midnight'; }
 }
 
+function redactSensitiveText(value) {
+  if (value == null) return value;
+  var text = String(value);
+  [
+    /\bsk-[A-Za-z0-9_-]{16,}\b/g,
+    /\bAIza[0-9A-Za-z_-]{20,}\b/g,
+    /\b(xox[baprs]-[A-Za-z0-9-]{12,})\b/g,
+    /\b(gh[pousr]_[A-Za-z0-9_]{16,})\b/g
+  ].forEach(function(re) {
+    text = text.replace(re, '[REDACTED]');
+  });
+  [
+    /\b([A-Za-z0-9_]*API[_-]?KEY[A-Za-z0-9_]*\s*[:=]\s*)(["']?)[^"'\s,}]+/gi,
+    /\b((?:authorization|access_token|refresh_token|id_token|auth_token|bearer_token|token|secret|password)\s*[:=]\s*)(["']?)[^"'\s,}]+/gi
+  ].forEach(function(re) {
+    text = text.replace(re, function(match, prefix, quote) {
+      return prefix + (quote || '') + '[REDACTED]';
+    });
+  });
+  text = text.replace(/\b(Bearer\s+)[A-Za-z0-9._~+/-]{12,}/gi, '$1[REDACTED]');
+  return text;
+}
+
+function redactSensitiveValue(value) {
+  if (value == null) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return redactSensitiveText(value);
+  }
+  if (Array.isArray(value)) return value.map(redactSensitiveValue);
+  if (typeof value === 'object') {
+    var out = {};
+    Object.keys(value).forEach(function(key) {
+      if (/api[_-]?key|token|secret|password|authorization/i.test(key)) out[key] = '[REDACTED]';
+      else out[key] = redactSensitiveValue(value[key]);
+    });
+    return out;
+  }
+  return value;
+}
+
 /* ── Export chat as Markdown ── */
 function exportChatAsMarkdown(msgs, sessionTitle) {
   var title = sessionTitle || 'Chat Export';
@@ -3313,7 +3613,7 @@ function exportChatAsMarkdown(msgs, sessionTitle) {
     } else {
       lines.push('## Hermes', '');
     }
-    lines.push(msg.content || '', '');
+    lines.push(redactSensitiveText(msg.content || ''), '');
     lines.push('---', '');
   });
   var mdText = lines.join('\n');
@@ -3370,7 +3670,7 @@ function ShortcutsModal({ onClose }) {
 function generatePDF(msgs, sessionTitle) {
   var title = sessionTitle || 'Chat Export';
   var bodyHtml = msgs.map(function(msg) {
-    var safeContent = (msg.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    var safeContent = redactSensitiveText(msg.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     var roleLabel = msg.role === 'user' ? 'You' : 'Hermes';
     var roleClass = msg.role;
     return '<div class="message ' + roleClass + '"><div class="role">' + roleLabel + '</div><div>' + safeContent + '</div></div>';
@@ -3688,6 +3988,195 @@ function SessionTodosPanel({ todos, onClose, sidePanel }) {
   );
 }
 
+function taskStatusLabel(status) {
+  if (status === 'in_progress') return 'In progress';
+  if (status === 'completed') return 'Done';
+  if (status === 'cancelled') return 'Blocked';
+  return 'Backlog';
+}
+
+function taskStatusColumn(status) {
+  if (status === 'in_progress') return 'active';
+  if (status === 'completed') return 'done';
+  if (status === 'cancelled') return 'blocked';
+  return 'backlog';
+}
+
+function taskPreview(value, fallback) {
+  var text = String(value || fallback || '').replace(/\s+/g, ' ').trim();
+  if (!text) text = 'Untitled task';
+  return text.length > 130 ? text.slice(0, 127) + '...' : text;
+}
+
+function buildTaskBoardItems(conversations, streamingSessionIds, agentStateBySession, activeConvId) {
+  var items = [];
+  var source = Array.isArray(conversations) ? conversations : [];
+  source.forEach(function(conv) {
+    if (!conv || conv.archived) return;
+    var messages = Array.isArray(conv.messages) ? conv.messages : [];
+    var convTitle = taskPreview(conv.title || conv.preview, 'New Chat');
+    var isStreamingConv = streamingSessionIds.indexOf(conv.id) !== -1;
+    var agentState = agentStateBySession && agentStateBySession[conv.id];
+    var todos = getSessionTodos(messages);
+    if (isStreamingConv || agentState) {
+      items.push({
+        id: conv.id + ':agent',
+        column: isStreamingConv ? 'active' : 'backlog',
+        title: taskPreview((agentState && (agentState.detail || agentState.label)) || convTitle, convTitle),
+        source: convTitle,
+        sessionId: conv.id,
+        kind: 'Agent',
+        status: (agentState && agentState.label) || (isStreamingConv ? 'Running' : 'Ready'),
+        active: conv.id === activeConvId,
+        updated: conv.last_active_at || conv.created || '',
+      });
+    }
+    todos.forEach(function(todo, index) {
+      var normalized = normalizeTodoItem(todo, index);
+      items.push({
+        id: conv.id + ':todo:' + normalized.id + ':' + index,
+        column: taskStatusColumn(normalized.status),
+        title: taskPreview(normalized.content, 'Todo ' + (index + 1)),
+        source: convTitle,
+        sessionId: conv.id,
+        kind: 'Todo',
+        status: taskStatusLabel(normalized.status),
+        active: conv.id === activeConvId,
+        updated: conv.last_active_at || conv.created || '',
+      });
+    });
+    messages.forEach(function(msg, msgIndex) {
+      ((msg && msg.toolCalls) || []).forEach(function(tool, toolIndex) {
+        if (!isDelegationTool(tool)) return;
+        var tasks = getDelegationTasks(tool);
+        var title = tasks.length
+          ? taskPreview(getDelegationGoal(tasks[0]), getDelegationTitle(tool))
+          : taskPreview(getDelegationDetail(tool), getDelegationTitle(tool));
+        items.push({
+          id: conv.id + ':delegate:' + msgIndex + ':' + toolIndex,
+          column: tool.done ? 'done' : 'active',
+          title: title,
+          source: convTitle,
+          sessionId: conv.id,
+          kind: tasks.length > 1 ? (tasks.length + ' subagents') : getDelegationTitle(tool),
+          status: tool.done ? 'Done' : 'Running',
+          active: conv.id === activeConvId,
+          updated: conv.last_active_at || conv.created || '',
+        });
+      });
+    });
+  });
+  return items.sort(function(a, b) {
+    if (!!a.active !== !!b.active) return a.active ? -1 : 1;
+    return getConversationActivityTime({ last_active_at: b.updated }) - getConversationActivityTime({ last_active_at: a.updated });
+  });
+}
+
+function TasksView({ conversations, streamingSessionIds, agentStateBySession, activeConvId, onOpenConversation }) {
+  var [filter, setFilter] = useState('');
+  var items = useMemo(function() {
+    return buildTaskBoardItems(conversations, streamingSessionIds || [], agentStateBySession || {}, activeConvId);
+  }, [conversations, streamingSessionIds, agentStateBySession, activeConvId]);
+  var query = filter.trim().toLowerCase();
+  var visible = query ? items.filter(function(item) {
+    return [item.title, item.source, item.kind, item.status].join(' ').toLowerCase().indexOf(query) !== -1;
+  }) : items;
+  var columns = [
+    { id: 'backlog', label: 'Backlog', icon: 'list-todo' },
+    { id: 'active', label: 'Active', icon: 'activity' },
+    { id: 'blocked', label: 'Blocked', icon: 'circle-help' },
+    { id: 'done', label: 'Done', icon: 'check' },
+  ];
+  var counts = columns.reduce(function(acc, col) {
+    acc[col.id] = visible.filter(function(item) { return item.column === col.id; }).length;
+    return acc;
+  }, {});
+  var doneCount = items.filter(function(item) { return item.column === 'done'; }).length;
+  var activeCount = items.filter(function(item) { return item.column === 'active'; }).length;
+  var blockedCount = items.filter(function(item) { return item.column === 'blocked'; }).length;
+  var progress = items.length ? Math.round((doneCount / items.length) * 100) : 0;
+
+  function openTask(item) {
+    if (item && item.sessionId && onOpenConversation) onOpenConversation(item.sessionId);
+  }
+
+  return (
+    <div className="view-tasks">
+      <div className="tasks-toolbar">
+        <div className="tasks-toolbar-copy">
+          <div className="tasks-toolbar-title"><Icon name="list-todo" size={17}/> Tasks</div>
+          <div className="tasks-toolbar-subtitle">
+            Live board built from Hermes todos, subagents, and active chat work. Click any card to jump back to its source chat.
+          </div>
+        </div>
+        <input className="tasks-filter" value={filter} onChange={function(e){ setFilter(e.target.value); }} placeholder="Filter tasks..." />
+      </div>
+      <div className="tasks-overview">
+        <div className="task-focus-card">
+          <div className="task-focus-label"><Icon name="activity" size={13}/> Current Work</div>
+          <div className="task-focus-title">
+            {activeCount ? activeCount + ' active item' + (activeCount === 1 ? '' : 's') : (items.length ? 'No active tasks right now' : 'No tasks detected yet')}
+          </div>
+          <div className="task-progress-track"><div className="task-progress-fill" style={{width: progress + '%'}} /></div>
+          <div className="task-progress-meta"><span>{doneCount}/{items.length || 0} done</span><span>{progress}%</span></div>
+          <div className="task-actions">
+            <button className="spaces-btn" onClick={function(){ onOpenConversation && onOpenConversation(activeConvId); }} disabled={!activeConvId}>
+              Open current chat
+            </button>
+          </div>
+        </div>
+        <div className="task-focus-card secondary">
+          <div className="task-focus-label"><Icon name="layout-dashboard" size={13}/> Board Health</div>
+          <div className="task-focus-title">Agent work tracking</div>
+          <div className="task-focus-stats">
+            <div className="task-focus-stat"><span>Total</span><strong>{items.length}</strong></div>
+            <div className="task-focus-stat"><span>Active</span><strong>{activeCount}</strong></div>
+            <div className="task-focus-stat"><span>Blocked</span><strong>{blockedCount}</strong></div>
+            <div className="task-focus-stat"><span>Done</span><strong>{doneCount}</strong></div>
+          </div>
+        </div>
+      </div>
+      {items.length === 0 ? (
+        <div className="task-empty-state">
+          <strong>No task signals yet</strong>
+          Ask Hermes for a plan, checklist, or delegated agent work and this board will populate automatically.
+        </div>
+      ) : (
+        <div className="task-board">
+          {columns.map(function(column) {
+            var columnItems = visible.filter(function(item) { return item.column === column.id; });
+            return (
+              <div key={column.id} className="task-column">
+                <div className="task-column-header">
+                  <div className="task-column-name"><Icon name={column.icon} size={13}/>{column.label}</div>
+                  <div className="task-column-count">{counts[column.id] || 0}</div>
+                </div>
+                <div className="task-column-body">
+                  {columnItems.length ? columnItems.map(function(item) {
+                    return (
+                      <button key={item.id} className={"task-card " + (item.column === 'done' ? 'completed' : '')} onClick={function(){ openTask(item); }}>
+                        <div className="task-card-title">{item.title}</div>
+                        <div className="task-card-source">{item.source}</div>
+                        <div className="task-card-tags">
+                          <span className="task-tag">{item.kind}</span>
+                          <span className="task-tag">{item.status}</span>
+                          {item.active && <span className="task-tag">current</span>}
+                        </div>
+                      </button>
+                    );
+                  }) : (
+                    <div className="task-column-empty">Nothing here</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatToolDuration(ms) {
   var n = Number(ms);
   if (!Number.isFinite(n) || n <= 0) return '';
@@ -3772,6 +4261,7 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
 
   var formatResult = function(result) {
     if (!result) return '(no output)';
+    result = redactSensitiveValue(result);
     if (typeof result === 'string') {
       if (result.length > 2000) return result.slice(0, 2000) + '\n... (' + result.length + ' chars total)';
       return result;
@@ -4505,37 +4995,145 @@ function Lightbox({ src, onClose }) {
 }
 
 /* ── MCP Browser Modal ── */
-function MCPBrowserModal({ tools, onClose }) {
+function webExtractIsReady(info) {
+  return !!(info && (info.enabled || info.available || info.configured));
+}
+
+function WebExtractStatusCard({ info, compact }) {
+  var ready = webExtractIsReady(info);
+  var enabled = !!(info && info.enabled);
+  var installed = !!(info && info.installed);
+  var scraplingEnabled = !!(info && info.scrapling_enabled);
+  var scraplingConfigured = !!(info && info.scrapling_configured);
+  var backend = (info && info.backend) || 'none';
+  var toolsets = (info && Array.isArray(info.toolsets)) ? info.toolsets : [];
+  var scraplingToolsets = (info && Array.isArray(info.scrapling_toolsets)) ? info.scrapling_toolsets : [];
+  var status = scraplingEnabled ? 'Scrapling Active' : enabled ? 'Hermes Fallback' : installed ? 'Scrapling Installed' : ready ? 'Hermes Detected' : 'Optional';
+  var desc = scraplingEnabled
+    ? 'Scrapling is connected through Hermes MCP tools. This is the preferred high-quality extraction backend.'
+    : enabled
+      ? 'Hermes web_extract is available, but Scrapling is not active. Extraction can work, but it is using the built-in Hermes web extraction path, not Scrapling.'
+      : installed
+        ? 'Scrapling appears installed locally, but Hermes has not exposed a Scrapling MCP toolset yet.'
+        : 'Scrapling is not connected yet. Hermes can still show generic web extraction if available, but Scrapling needs its MCP server configured before it is used.';
+  var statusStyle = scraplingEnabled
+    ? {}
+    : enabled
+      ? {background:'rgba(245, 185, 77, 0.18)',color:'#f5d18a',border:'1px solid rgba(245,185,77,0.35)'}
+      : {};
+  return (
+    <div className={"web-extract-card " + (ready ? '' : 'disabled')}>
+      <div className="web-extract-title">
+        <span><Icon name="globe" size={15}/> Web Extract</span>
+        <span className={"web-extract-status " + (ready ? '' : 'offline')} style={statusStyle}>{status}</span>
+      </div>
+      <div className="web-extract-desc">{desc}</div>
+      {backend !== 'none' && (
+        <div style={{marginBottom:'8px',fontSize:'11px',color:'var(--text-muted)'}}>
+          Active backend: <span className="web-extract-code">{backend === 'scrapling' ? 'Scrapling' : 'Hermes web_extract'}</span>
+        </div>
+      )}
+      {scraplingConfigured && !scraplingEnabled && (
+        <div style={{marginBottom:'8px',fontSize:'11px',color:'#f5d18a'}}>
+          Scrapling is configured but currently disabled in Hermes tools.
+        </div>
+      )}
+      {toolsets.length > 0 && (
+        <div style={{marginBottom:'8px',display:'flex',flexWrap:'wrap',gap:'5px'}}>
+          {toolsets.map(function(ts, i) {
+            return <span key={i} className="web-extract-code">{ts.label || ts.name}</span>;
+          })}
+        </div>
+      )}
+      {scraplingToolsets.length > 0 && (
+        <div style={{marginBottom:'8px',display:'flex',flexWrap:'wrap',gap:'5px'}}>
+          {scraplingToolsets.map(function(ts, i) {
+            return <span key={'scrapling-' + i} className="web-extract-code">Scrapling: {ts.label || ts.name}</span>;
+          })}
+        </div>
+      )}
+      {!scraplingEnabled && !compact && (
+        <div className="web-extract-actions">
+          <span className="web-extract-code">{(info && info.install_hint) || 'uvx scrapling mcp'}</span>
+          <a href={(info && info.docs_url) || 'https://github.com/D4Vinci/Scrapling'} target="_blank" rel="noopener noreferrer" style={{color:'var(--accent)',fontSize:'12px',fontWeight:700,textDecoration:'none'}}>
+            Scrapling docs ↗
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MCPBrowserModal({ tools, webExtractInfo, onClose }) {
   // `tools` is nesq-shape: array of toolsets [{name,label,description,enabled,available,configured,tools:[string]}]
   var toolsets = Array.isArray(tools) ? tools : [];
+  var [query, setQuery] = useState('');
+  var q = query.trim().toLowerCase();
+  var filteredToolsets = toolsets.filter(function(ts) {
+    if (!q) return true;
+    var hay = [ts.name, ts.label, ts.description].concat(ts.tools || []).join(' ').toLowerCase();
+    return hay.indexOf(q) !== -1;
+  });
   var enabledToolsets = toolsets.filter(function(t) { return t.enabled; });
   var totalTools = toolsets.reduce(function(sum, t) { return sum + ((t.tools && t.tools.length) || 0); }, 0);
+  var grouped = filteredToolsets.reduce(function(acc, ts) {
+    var group = String(ts.name || '').indexOf('scrapling') !== -1 ? 'Preferred extraction' :
+      String(ts.name || '').indexOf('browser') !== -1 ? 'Browser and web' :
+      String(ts.name || '').indexOf('mcp') === 0 || String(ts.label || '').indexOf('MCP:') === 0 ? 'MCP servers' :
+      'Core tools';
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(ts);
+    return acc;
+  }, {});
+  var groupNames = ['Preferred extraction', 'MCP servers', 'Browser and web', 'Core tools'].filter(function(name) {
+    return grouped[name] && grouped[name].length;
+  });
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content mcp-browser-modal" onClick={e => e.stopPropagation()}>
         <h2 className="modal-title">{'🔧 Connected MCP Tools'}</h2>
+        <WebExtractStatusCard info={webExtractInfo} />
         {toolsets.length > 0 ? (
           <div>
-            <div style={{fontSize:'12px',color:'var(--text-muted)',marginBottom:'10px'}}>
-              {enabledToolsets.length + ' of ' + toolsets.length + ' toolsets enabled · ' + totalTools + ' tools total'}
+            <div style={{display:'flex',gap:'8px',alignItems:'center',marginBottom:'10px'}}>
+              <input
+                className="composer-chip-input"
+                value={query}
+                placeholder="Search tools, servers, or capabilities..."
+                onChange={function(e) { setQuery(e.target.value); }}
+                style={{flex:1,minWidth:0}}
+              />
+              <span style={{fontSize:'11px',color:'var(--text-muted)',whiteSpace:'nowrap'}}>
+                {enabledToolsets.length + '/' + toolsets.length + ' enabled · ' + totalTools + ' tools'}
+              </span>
             </div>
-            {toolsets.map(function(ts, idx) {
+            {groupNames.length === 0 && <p style={{color:'var(--text-secondary)',fontSize:'13px'}}>No tools match that search.</p>}
+            {groupNames.map(function(groupName) {
               return (
-                <div key={idx} className="mcp-tool-item" style={{opacity: ts.enabled ? 1 : 0.55}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px'}}>
-                    <div className="mcp-tool-name">{ts.label || ts.name}</div>
-                    <span className="mcp-tool-status" style={{background: ts.enabled ? 'var(--success)' : 'var(--bg-secondary)', color: ts.enabled ? 'white' : 'var(--text-muted)'}}>
-                      {ts.enabled ? '✓ Enabled' : 'Disabled'}
-                    </span>
+                <div key={groupName} style={{marginBottom:'12px'}}>
+                  <div style={{fontSize:'11px',fontWeight:800,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.08em',margin:'10px 0 6px'}}>
+                    {groupName}
                   </div>
-                  <div className="mcp-tool-desc">{ts.description || ''}</div>
-                  {ts.tools && ts.tools.length > 0 && (
-                    <div style={{marginTop:'6px',display:'flex',flexWrap:'wrap',gap:'4px'}}>
-                      {ts.tools.map(function(toolName, j) {
-                        return <span key={j} style={{background:'var(--bg-secondary)',color:'var(--text-secondary)',fontSize:'10px',padding:'2px 6px',borderRadius:'4px',fontFamily:'JetBrains Mono, monospace'}}>{toolName}</span>;
-                      })}
-                    </div>
-                  )}
+                  {grouped[groupName].map(function(ts, idx) {
+                    return (
+                      <div key={groupName + '-' + idx} className="mcp-tool-item" style={{opacity: ts.enabled ? 1 : 0.55}}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px'}}>
+                          <div className="mcp-tool-name">{ts.label || ts.name}</div>
+                          <span className="mcp-tool-status" style={{background: ts.enabled ? 'var(--success)' : 'var(--bg-secondary)', color: ts.enabled ? 'white' : 'var(--text-muted)'}}>
+                            {ts.enabled ? '✓ Enabled' : 'Disabled'}
+                          </span>
+                        </div>
+                        <div className="mcp-tool-desc">{ts.description || ''}</div>
+                        {ts.tools && ts.tools.length > 0 && (
+                          <div style={{marginTop:'6px',display:'flex',flexWrap:'wrap',gap:'4px'}}>
+                            {ts.tools.map(function(toolName, j) {
+                              return <span key={j} style={{background:'var(--bg-secondary)',color:'var(--text-secondary)',fontSize:'10px',padding:'2px 6px',borderRadius:'4px',fontFamily:'JetBrains Mono, monospace'}}>{toolName}</span>;
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -7007,6 +7605,8 @@ function DelegationChatView() {
 /* ── Status Bar ── */
 function StatusBar({ connected, conversations, messages, sessionTokens }) {
   var [stats, setStats] = useState({ model: '...', provider: '', capabilities: null, memory: 0, uptime: '' });
+  var [feedbackOpen, setFeedbackOpen] = useState(false);
+  var feedbackRef = useRef(null);
   // Derive sessions count reactively from props so it stays in sync as chats load.
   // (Previous version captured conversations in a stale closure inside useEffect[].)
   var sessionsCount = conversations ? conversations.length : 0;
@@ -7055,18 +7655,28 @@ function StatusBar({ connected, conversations, messages, sessionTokens }) {
     return function() { clearInterval(iv); };
   }, []);
 
+  useEffect(function() {
+    if (!feedbackOpen) return;
+    var closeOnOutsidePointer = function(e) {
+      if (feedbackRef.current && feedbackRef.current.contains(e.target)) return;
+      setFeedbackOpen(false);
+    };
+    var closeOnEscape = function(e) {
+      if (e.key === 'Escape') setFeedbackOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer, true);
+    document.addEventListener('keydown', closeOnEscape);
+    return function() {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [feedbackOpen]);
+
   return (
     <div className="status-bar">
       <div className="status-bar-item">
         <div className={connected === false ? 'status-dot-dead' : 'status-dot-live'}></div>
         <span>{connected === false ? 'Offline' : 'Connected'}</span>
-      </div>
-      <div className="status-bar-sep"></div>
-      <div className="status-bar-item" title="Model">
-        <span>{'🧠'}</span> <span>{stats.model}</span>
-      </div>
-      <div className="status-bar-caps">
-        <ModelCapabilityPills model={stats.model} provider={stats.provider} capabilities={stats.capabilities} compact={true} />
       </div>
       <div className="status-bar-sep"></div>
       <div className="status-bar-item" title="Memory entries">
@@ -7093,6 +7703,47 @@ function StatusBar({ connected, conversations, messages, sessionTokens }) {
         </React.Fragment>
       )}
       <div style={{flex:1}}></div>
+      <div className="status-bar-item" style={{position:'relative'}} ref={feedbackRef}>
+        <button
+          className={"composer-chip status-icon-btn " + (feedbackOpen ? 'active' : '')}
+          onClick={function(){ setFeedbackOpen(!feedbackOpen); }}
+          aria-label="Report a bug or request a feature on GitHub"
+          style={{height:'22px', fontSize:'11px'}}
+        >
+          <Icon name="message-square" size={12}/>
+        </button>
+        {feedbackOpen && (
+          <div className="feedback-menu">
+              <div className="composer-chip-menu-title">
+                <Icon name="message-square" size={13}/>
+                <span>GitHub feedback</span>
+              </div>
+              <div className="composer-chip-menu-note">
+                Opens the Hermes UI issue tracker in a new tab.
+              </div>
+              <a
+                className="feedback-link"
+                href="https://github.com/pyrate-llama/hermes-ui/issues/new?template=bug_report.md&labels=bug"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={function(){ setFeedbackOpen(false); }}
+              >
+                <span>Report a bug</span>
+                <span>↗</span>
+              </a>
+              <a
+                className="feedback-link"
+                href="https://github.com/pyrate-llama/hermes-ui/issues/new?template=feature_request.md&labels=enhancement"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={function(){ setFeedbackOpen(false); }}
+              >
+                <span>Request a feature</span>
+                <span>↗</span>
+              </a>
+            </div>
+        )}
+      </div>
       <div className="status-bar-item status-bar-version" style={{opacity:0.5}}>
         <span>Hermes UI v3.1</span>
       </div>
@@ -7628,6 +8279,13 @@ function App() {
   // to send pasted/dropped images via the native multimodal path (vision-
   // capable) or route through the Gemini-describe fallback (e.g. MiniMax).
   const [currentModel, setCurrentModel] = useState('');
+  const [selectedChatModel, setSelectedChatModel] = useState(function() {
+    try { return localStorage.getItem('hermes-chat-model') || ''; } catch(e) { return ''; }
+  });
+  const [modelOptions, setModelOptions] = useState([]);
+  const [showModelMenu, setShowModelMenu] = useState(false);
+  const [customModelDraft, setCustomModelDraft] = useState('');
+  const activeChatModel = selectedChatModel || currentModel;
   const [showSettings, setShowSettings] = useState(false);
   const [pendingImages, setPendingImages] = useState([]);
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -7723,6 +8381,7 @@ function App() {
     });
   };
   const [mcpTools, setMcpTools] = useState([]);
+  const [webExtractInfo, setWebExtractInfo] = useState(null);
   // Delegation model info — drives the "Ask <Model>" nav item label
   const [delegationInfo, setDelegationInfo] = useState({ configured: null, label: '' });
   useEffect(function() {
@@ -7751,8 +8410,15 @@ function App() {
       setVersionNoticeDismissed(versionInfo.latest);
     }
   };
+  const dismissAgentVersionNotice = function() {
+    var key = versionInfo && versionInfo.agent && versionInfo.agent.latest ? ('agent:' + versionInfo.agent.latest) : 'agent';
+    try { localStorage.setItem('hermes-ui-update-dismissed', key); } catch(e) {}
+    setVersionNoticeDismissed(key);
+  };
   const showVersionNotice = versionInfo && versionInfo.update_available &&
     versionInfo.latest && versionNoticeDismissed !== versionInfo.latest;
+  const showAgentVersionNotice = versionInfo && versionInfo.agent && versionInfo.agent.update_available &&
+    versionNoticeDismissed !== ('agent:' + versionInfo.agent.latest);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showReasoningMenu, setShowReasoningMenu] = useState(false);
@@ -7800,6 +8466,24 @@ function App() {
   useEffect(function() {
     try { localStorage.setItem('hermes-reasoning-effort', normalizeReasoningEffort(reasoningEffort)); } catch(e) {}
   }, [reasoningEffort]);
+
+  useEffect(function() {
+    try {
+      if (selectedChatModel) localStorage.setItem('hermes-chat-model', selectedChatModel);
+      else localStorage.removeItem('hermes-chat-model');
+    } catch(e) {}
+  }, [selectedChatModel]);
+
+  useEffect(function() {
+    fetch(API_BASE + '/api/models')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var models = (d && Array.isArray(d.models)) ? d.models : [];
+        setModelOptions(models);
+        if (!currentModel && d && d.current) setCurrentModel(String(d.current));
+      })
+      .catch(function() {});
+  }, []);
 
   useEffect(function() {
     try { localStorage.setItem('hermes-personality', normalizePersonality(personality)); } catch(e) {}
@@ -7946,6 +8630,15 @@ function App() {
       } catch (e) {
         console.error('Toolsets fetch failed:', e);
       }
+      try {
+        const r2 = await fetch(API_BASE + '/api/tools/web-extract');
+        if (r2.ok) {
+          const data2 = await r2.json();
+          setWebExtractInfo(data2 || null);
+        }
+      } catch (e) {
+        console.error('Web Extract status fetch failed:', e);
+      }
     };
     fetchToolsets();
   }, []);
@@ -8070,6 +8763,7 @@ function App() {
           apply_behavioral_guidelines: !!opts.applyBehavioralGuidelines,
           profile: normalizePersonality(opts.profile || 'default'),
           reasoning_effort: normalizeReasoningEffort(opts.reasoningEffort || ''),
+          model: opts.model || '',
           workspace: opts.workspace || '',
         }),
         signal: signal,
@@ -8476,7 +9170,7 @@ function App() {
   const processImages = async (files) => {
     var imageHelperMode = normalizeImageHelperMode(config && config.imageHelperMode);
     var imageHelperModel = normalizeImageHelperModel(config && config.imageHelperModel);
-    var canSeeDirectly = imageHelperMode === 'direct' || (imageHelperMode === 'auto' && isVisionModel(currentModel));
+    var canSeeDirectly = imageHelperMode === 'direct' || (imageHelperMode === 'auto' && isVisionModel(activeChatModel));
     // Native fast-path — skip Gemini entirely when the active model can
     // see the image itself. dataUrl gets forwarded as-is in sendMessage.
     if (canSeeDirectly) {
@@ -8765,12 +9459,13 @@ function App() {
         var toolCalls = cleaned.reduce(function(sum, m) { return sum + (m.toolCalls ? m.toolCalls.length : 0); }, 0);
         return { ...c, messages: cleaned, message_count: totalMsgs, user_prompt_count: userMsgs, tool_call_count: toolCalls };
       });
+      const sortedConvs = sortConversationsByActivity(cleanConvs);
 
-      if (cleanConvs.length > 0) {
-        setConversations(cleanConvs);
+      if (sortedConvs.length > 0) {
+        setConversations(sortedConvs);
         const savedId = localStorage.getItem('hermes-active-session');
         if (savedId) {
-          const conv = cleanConvs.find(c => c.id === savedId);
+          const conv = sortedConvs.find(c => c.id === savedId);
           if (conv) {
             _setActiveConvId(savedId);
             activeConvRef.current = savedId;
@@ -8786,7 +9481,7 @@ function App() {
   // Persist conversations to localStorage + server whenever they change
   useEffect(() => {
     if (conversations.length === 0) return;
-    const toSave = conversations.slice(0, 50);
+    const toSave = sortConversationsByActivity(conversations).slice(0, 50);
     // Save to localStorage
     try {
       localStorage.setItem('hermes-conversations', JSON.stringify(toSave));
@@ -9275,7 +9970,7 @@ function App() {
             toolCalls.push({
               toolName: toolEvent.toolName,
               label: toolEvent.label,
-              args: toolEvent.args || {},
+              args: redactSensitiveValue(toolEvent.args || {}),
               timestamp: new Date(),
               done: false,
             });
@@ -9299,7 +9994,7 @@ function App() {
             flushStreamContent();
             var resultPreview = '';
             if (toolEvent.result) {
-              var rs = typeof toolEvent.result === 'string' ? toolEvent.result : JSON.stringify(toolEvent.result);
+              var rs = typeof toolEvent.result === 'string' ? redactSensitiveText(toolEvent.result) : JSON.stringify(redactSensitiveValue(toolEvent.result));
               rs = rs.replace(/\\n/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
               if (rs.length > 200) rs = rs.slice(0, 200) + '...';
               resultPreview = ' => ' + rs;
@@ -9307,8 +10002,8 @@ function App() {
             addLocalLog('INFO  [tool] ' + (toolEvent.toolName || 'tool') + ' completed' + resultPreview);
             var lastTc = toolCalls[toolCalls.length - 1];
             if (lastTc) {
-              lastTc.result = toolEvent.result;
-              if (toolEvent.args) lastTc.args = toolEvent.args;
+              lastTc.result = redactSensitiveValue(toolEvent.result);
+              if (toolEvent.args) lastTc.args = redactSensitiveValue(toolEvent.args);
               if (toolEvent.duration != null) lastTc.duration = toolEvent.duration;
               lastTc.done = true;
             }
@@ -9362,6 +10057,7 @@ function App() {
           applyBehavioralGuidelines: !!(config && config.applyBehavioralGuidelines === true),
           profile: personality,
           reasoningEffort: reasoningEffort,
+          model: activeChatModel || '',
           workspace: activeWorkspace.path || '',
           // Native multimodal images for vision-capable models. Empty when
           // the active model routes through Gemini-describe (MiniMax, etc.).
@@ -9553,7 +10249,7 @@ function App() {
         id: 'retry-' + Date.now() + '-' + Math.random(),
         dataUrl: img.dataUrl,
         description: img.description || null,
-        native: !!(img.dataUrl && isVisionModel(currentModel)),
+        native: !!(img.dataUrl && isVisionModel(activeChatModel)),
         analyzing: false,
       };
     });
@@ -9745,7 +10441,7 @@ function App() {
     .slice()
     .sort(function(a, b) {
       if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-      return String(b.last_active_at || b.created || '').localeCompare(String(a.last_active_at || a.created || ''));
+      return compareConversationsByActivity(a, b);
     });
 
   // v0.7.x: Global search uses a command-palette modal (see SearchModal component)
@@ -9811,6 +10507,7 @@ function App() {
     { name: 'stop', icon: 'square', summary: 'Stop the active turn', disabled: !isStreaming, run: stopStreamingAction },
     { name: 'chat', icon: 'message-square', summary: 'Open chat', run: function() { setCurrentView('chat'); } },
     { name: 'dashboard', icon: 'layout-dashboard', summary: 'Open dashboard', run: function() { setCurrentView('dashboard'); } },
+    { name: 'tasks', icon: 'list-todo', summary: 'Open Tasks board', run: function() { setCurrentView('tasks'); } },
     { name: 'files', icon: 'folder', summary: 'Open files', run: function() { setCurrentView('files'); } },
     { name: 'spaces', icon: 'folder', summary: 'Open Spaces', run: function() { setCurrentView('spaces'); } },
     { name: 'workspace', icon: 'folder', usage: '[name or path]', summary: 'Switch active space', run: function(args) {
@@ -9928,7 +10625,7 @@ function App() {
     };
     document.addEventListener('paste', handlePaste);
     return () => document.removeEventListener('paste', handlePaste);
-  }, [config.geminiKey, config.imageHelperMode, config.imageHelperModel, currentModel]);
+  }, [config.geminiKey, config.imageHelperMode, config.imageHelperModel, activeChatModel]);
 
   // ── Render ──
   var latestUserForTodos = null;
@@ -10034,6 +10731,10 @@ function App() {
           <div className={"nav-item " + (currentView === 'chat' ? 'active' : '')} onClick={function() { setCurrentView('chat'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon" style={{color:'#7a9cc4'}}><Icon name="message-square" size={15}/></span>
             <span className="nav-item-label">Chat</span>
+          </div>
+          <div className={"nav-item " + (currentView === 'tasks' ? 'active' : '')} onClick={function() { setCurrentView('tasks'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
+            <span className="nav-item-icon" style={{color:'#6fb3c2'}}><Icon name="list-todo" size={15}/></span>
+            <span className="nav-item-label">Tasks</span>
           </div>
           {delegationInfo.configured !== false && (
             <div className={"nav-item " + (currentView === 'delegation' ? 'active' : '')} onClick={function() { setCurrentView('delegation'); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Chat directly with the delegation model (bypasses main agent loop)">
@@ -10161,18 +10862,15 @@ function App() {
       {/* Main panel */}
       <div className={"main " + (currentView !== 'chat' ? 'non-chat-view' : '')}>
         {showVersionNotice && (
-          <div style={{
-            display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',
-            padding:'8px 16px',fontSize:'12px',
+          <div className="update-notice" style={{
             background:'linear-gradient(90deg,rgba(123,131,184,0.12),rgba(165,137,197,0.12))',
-            borderBottom:'1px solid var(--border)',color:'var(--text)'
           }}>
             <span>
               <span style={{marginRight:'8px'}}>{'✨'}</span>
               Hermes UI <strong>v{versionInfo.latest}</strong> is available
               {versionInfo.current ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>(you're on v{versionInfo.current})</span> : null}
             </span>
-            <span style={{display:'flex',gap:'8px',alignItems:'center'}}>
+            <span className="update-notice-actions">
               {versionInfo.html_url && (
                 <a href={versionInfo.html_url} target="_blank" rel="noopener noreferrer"
                    style={{color:'var(--accent)',textDecoration:'none',fontWeight:'600'}}>
@@ -10180,6 +10878,31 @@ function App() {
                 </a>
               )}
               <button onClick={dismissVersionNotice} title="Dismiss until next release"
+                style={{background:'transparent',border:'1px solid var(--border)',color:'var(--text-secondary)',
+                        borderRadius:'4px',padding:'2px 8px',cursor:'pointer',fontSize:'11px'}}>
+                Dismiss
+              </button>
+            </span>
+          </div>
+        )}
+        {showAgentVersionNotice && (
+          <div className="update-notice" style={{
+            background:'linear-gradient(90deg,rgba(245,185,77,0.12),rgba(123,131,184,0.10))',
+          }}>
+            <span>
+              <span style={{marginRight:'8px'}}>{'⚕'}</span>
+              Hermes Agent update available
+              {versionInfo.agent.installed ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>(installed {versionInfo.agent.installed})</span> : null}
+              {versionInfo.agent.latest_name ? <span style={{color:'var(--text-secondary)',marginLeft:'6px'}}>latest: {versionInfo.agent.latest_name}</span> : null}
+            </span>
+            <span className="update-notice-actions">
+              {versionInfo.agent.html_url && (
+                <a href={versionInfo.agent.html_url} target="_blank" rel="noopener noreferrer"
+                   style={{color:'var(--accent)',textDecoration:'none',fontWeight:'600'}}>
+                  Official release →
+                </a>
+              )}
+              <button onClick={dismissAgentVersionNotice} title="Dismiss until next agent release"
                 style={{background:'transparent',border:'1px solid var(--border)',color:'var(--text-secondary)',
                         borderRadius:'4px',padding:'2px 8px',cursor:'pointer',fontSize:'11px'}}>
                 Dismiss
@@ -10479,17 +11202,111 @@ function App() {
                       <div className="input-hint-actions">
                         <div className="composer-chip-wrap">
                           <button
+                            className={"composer-chip " + (selectedChatModel ? 'active' : '')}
+                            onClick={function(){
+                              setCustomModelDraft(selectedChatModel || currentModel || '');
+                              setShowModelMenu(!showModelMenu);
+                            }}
+                            aria-label="Model for subsequent messages in this conversation"
+                          >
+                            <Icon name="cpu" size={13}/>
+                            <span>{activeChatModel ? activeChatModel.split('/').pop() : 'Model'}</span>
+                          </button>
+                          {showModelMenu && (
+                            <React.Fragment>
+                              <div onClick={function(){ setShowModelMenu(false); }} style={{position:'fixed', inset:0, zIndex:10003}} />
+                              <div className="composer-chip-menu" style={{minWidth:'260px', zIndex:10004}}>
+                                <div className="composer-chip-menu-title">
+                                  <Icon name="cpu" size={13}/>
+                                  <span>Chat model</span>
+                                </div>
+                                <div className="composer-chip-menu-note">
+                                  Changes apply to the next message. This keeps the same conversation context.
+                                </div>
+                                <button
+                                  className={"composer-chip-option " + (!selectedChatModel ? 'active' : '')}
+                                  onClick={function(){
+                                    setSelectedChatModel('');
+                                    setCustomModelDraft(currentModel || '');
+                                    setShowModelMenu(false);
+                                  }}
+                                >
+                                  <span>Auto default</span>
+                                </button>
+                                {modelOptions.concat(selectedChatModel && !modelOptions.some(function(m) { return m.id === selectedChatModel; }) ? [{ id: selectedChatModel, label: selectedChatModel.split('/').pop() }] : []).map(function(item) {
+                                  var id = item.id || '';
+                                  if (!id) return null;
+                                  var active = selectedChatModel === id;
+                                  var providerLabel = modelProviderLabel(item);
+                                  var contextLabel = modelContextLabel(item);
+                                  return (
+                                    <button
+                                      key={id}
+                                      className={"composer-chip-option " + (active ? 'active' : '')}
+                                      title={id}
+                                      onClick={function(){
+                                        setSelectedChatModel(id);
+                                        setCustomModelDraft(id);
+                                        setShowModelMenu(false);
+                                      }}
+                                    >
+                                      <span style={{display:'flex',flexDirection:'column',gap:'3px',minWidth:0}}>
+                                        <span>{item.label || id}</span>
+                                        <span style={{display:'flex',gap:'5px',alignItems:'center',flexWrap:'wrap',fontSize:'10px',color:'var(--text-muted)'}}>
+                                          <span>{providerLabel}</span>
+                                          {contextLabel && <span>{contextLabel}</span>}
+                                          {item.capabilities && item.capabilities.vision && <span>Vision</span>}
+                                          {item.capabilities && item.capabilities.reasoning && <span>Reasoning</span>}
+                                        </span>
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                                <input
+                                  className="composer-chip-input"
+                                  value={customModelDraft}
+                                  placeholder="provider/model or model id"
+                                  onChange={function(e){ setCustomModelDraft(e.target.value); }}
+                                  onKeyDown={function(e){
+                                    if (e.key === 'Enter') {
+                                      var next = customModelDraft.trim();
+                                      if (next) setSelectedChatModel(next);
+                                      setShowModelMenu(false);
+                                    }
+                                  }}
+                                />
+                                <button
+                                  className="composer-chip-option"
+                                  onClick={function(){
+                                    var next = customModelDraft.trim();
+                                    if (next) {
+                                      setSelectedChatModel(next);
+                                      setModelOptions(function(prev) {
+                                        return prev.some(function(m) { return m.id === next; }) ? prev : prev.concat([{ id: next, label: next.split('/').pop() }]);
+                                      });
+                                    }
+                                    setShowModelMenu(false);
+                                  }}
+                                >
+                                  <span>Use custom model</span>
+                                </button>
+                              </div>
+                            </React.Fragment>
+                          )}
+                        </div>
+                        <div className="composer-chip-wrap">
+                          <button
                             className={"composer-chip " + (reasoningEffort ? 'active' : '')}
                             onClick={function(){ setShowReasoningMenu(!showReasoningMenu); }}
-                            title="Reasoning effort for new messages"
+                            aria-label="Reasoning effort for new messages"
                           >
                             <Icon name="brain" size={13}/>
                             <span>{reasoningEffortLabel(reasoningEffort)}</span>
                           </button>
                           {showReasoningMenu && (
                             <React.Fragment>
-                              <div onClick={function(){ setShowReasoningMenu(false); }} style={{position:'fixed', inset:0, zIndex:19}} />
-                              <div className="composer-chip-menu">
+                              <div onClick={function(){ setShowReasoningMenu(false); }} style={{position:'fixed', inset:0, zIndex:10003}} />
+                              <div className="composer-chip-menu" style={{zIndex:10004}}>
                                 <div className="composer-chip-menu-title">
                                   <Icon name="brain" size={13}/>
                                   <span>Reasoning effort</span>
@@ -10562,7 +11379,7 @@ function App() {
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">
-                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
+                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'tasks' ? 'Tasks' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
               </div>
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
@@ -10573,6 +11390,7 @@ function App() {
               </div>
             </div>
             {currentView === 'dashboard' && <DashboardView />}
+            {currentView === 'tasks' && <TasksView conversations={conversations} streamingSessionIds={streamingSessionIds} agentStateBySession={agentStateBySession} activeConvId={activeConvId} onOpenConversation={function(id){ if (id) selectConversation(id); setCurrentView('chat'); }} />}
             {currentView === 'files' && <FilesView activeWorkspace={activeWorkspace} />}
             {currentView === 'spaces' && <SpacesView workspaces={workspaces} activeWorkspace={activeWorkspace} onSwitch={switchWorkspace} onRefresh={refreshWorkspaces} />}
             {currentView === 'terminal' && <TerminalView />}
@@ -10611,7 +11429,7 @@ function App() {
       {/* Modals */}
       {showSettings && <SettingsModal config={config} onSave={setConfig} onClose={() => setShowSettings(false)} mcpToolCount={mcpTools.length} />}
       {lightboxSrc && <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
-      {showMCPBrowser && <MCPBrowserModal tools={mcpTools} onClose={() => setShowMCPBrowser(false)} />}
+      {showMCPBrowser && <MCPBrowserModal tools={mcpTools} webExtractInfo={webExtractInfo} onClose={() => setShowMCPBrowser(false)} />}
       {showShortcuts && <ShortcutsModal onClose={function(){ setShowShortcuts(false); }} />}
       <SearchModal open={showSearchModal} onClose={function(){ setShowSearchModal(false); }} conversations={conversations} onSelectConversation={function(id, options){ selectConversation(id, options); }} />
       {showWelcome && <WelcomePopup onClose={function(){ setShowWelcome(false); try { localStorage.setItem('hermes-ui-welcomed', '1'); } catch(e){} }} onOpenRemoteSetup={function(){ setShowSettings(true); }} />}
@@ -10625,9 +11443,9 @@ function App() {
       {[
         { view: 'dashboard', icon: '📊', label: 'Home' },
         { view: 'chat', icon: '💬', label: 'Chat' },
+        { view: 'tasks', icon: '✓', label: 'Tasks' },
         { view: 'skills', icon: '✨', label: 'Skills' },
         { view: 'memory', icon: '🧠', label: 'Memory' },
-        { view: 'terminal', icon: '⚡', label: 'More' },
       ].map(function(item) {
         return (
           <button key={item.view} className={"mobile-nav-item " + (currentView === item.view ? 'active' : '')}
