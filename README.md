@@ -6,7 +6,7 @@ The command center for [Hermes Agent](https://github.com/pyrate-llama/hermes-age
 
 Built as a single-file HTML application with React 18, Hermes UI provides a full-featured chat interface, real-time log streaming, file browsing, memory inspection, and more — all through a lightweight Python proxy server.
 
-![v3.1](https://img.shields.io/badge/version-3.1-ef4444?style=for-the-badge)
+![v3.2](https://img.shields.io/badge/version-3.2-ef4444?style=for-the-badge)
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
@@ -34,7 +34,9 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 
 ---
 
-## Unreleased
+## What's new in v3.2
+
+Hermes UI 3.2 turns the project into a stronger multi-work command center, pairing the v3.1 workspace foundation with live task tracking, GitHub workflow polish, and Hermes Agent 0.12 validation.
 
 **Tasks / Kanban board**
 - **Tasks screen** — live Kanban-style board with Backlog, Active, Blocked, and Done columns
@@ -43,6 +45,15 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 - **Board filtering** — quickly narrow visible work by task text, source chat, kind, or status
 - **`/tasks` slash command** — open the Tasks board from the composer
 - **Hermes Agent 0.12 validation** — tested against official Hermes Agent v0.12.0 while keeping the board independent of unreleased upstream Kanban APIs
+
+**GitHub / release workflow**
+- **GitHub issue shortcuts** — status-bar feedback links open bug reports and feature requests directly
+- **Issue templates** — GitHub now has dedicated bug report and feature request templates
+- **Version/update health** — Hermes UI and Hermes Agent update status are surfaced in-app
+
+**Deployment safety**
+- **Optional LAN password auth** — set `HERMES_UI_PASSWORD` before exposing Hermes UI beyond localhost
+- **Local artifact protection** — personal launchers and local agent state stay out of releases
 
 ## What's new in v3.1
 
