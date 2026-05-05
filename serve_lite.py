@@ -948,6 +948,20 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             print(f"[serve] WARNING: toolset resolution fallback ({_e})", flush=True)
             toolsets = ["hermes-cli"]
 
+        if "scrapling" in toolsets:
+            scrapling_guidance = (
+                "Web extraction routing: Scrapling MCP tools are available. "
+                "For URL extraction, page summarization, article reading, or structured data collection, "
+                "use Scrapling first, preferably a single mcp_scrapling_fetch or mcp_scrapling_get call. "
+                "Do not also use browser navigation/snapshot tools for the same URL unless Scrapling fails, "
+                "the page requires interactive browser state, or the user explicitly asks for browser testing. "
+                "If Scrapling cannot retrieve the needed content, fall back to Hermes web/browser tools and "
+                "briefly say that a fallback was needed."
+            )
+            _separator = "\n\n---\n\n" if base_system_prompt else ""
+            base_system_prompt = (base_system_prompt + _separator + scrapling_guidance).strip()
+            print("[serve] Scrapling-first web extraction guidance appended", flush=True)
+
         full_text = ""
         _token_sent = False
 
