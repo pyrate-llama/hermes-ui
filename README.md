@@ -6,7 +6,7 @@ The command center for [Hermes Agent](https://github.com/pyrate-llama/hermes-age
 
 Built as a single-file HTML application with React 18, Hermes UI provides a full-featured chat interface, real-time log streaming, file browsing, memory inspection, and more — all through a lightweight Python proxy server.
 
-![v3.2](https://img.shields.io/badge/version-3.2-ef4444?style=for-the-badge)
+![v3.3](https://img.shields.io/badge/version-3.3-ef4444?style=for-the-badge)
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
@@ -33,6 +33,26 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 ![Built-in terminal area with Hermes and Claude Code tabs](screenshots/terminal.png)
 
 ---
+
+## What's new in v3.3
+
+Hermes UI 3.3 is a polish and durability release. It makes the app easier to read at a glance, steadier on long-running work, and better at showing you what Hermes is doing without turning the interface into clutter.
+
+**Health + operational visibility**
+- **Health screen** — consolidated Hermes heartbeat, agent/model/provider status, Scrapling/web extraction status, and redacted recent log snippets
+- **Recent log safety** — logs shown in the UI are allowlisted and redacted so tokens and API keys do not leak into the app surface
+- **Version/update awareness** — Hermes UI and Hermes Agent update status stay visible in-app without taking over the main workspace
+
+**Chat performance + usability**
+- **Long-chat smoothing** — very large conversations render the newest messages first with a load-older control to reduce browser memory pressure
+- **Improved conversation ordering** — recent chats stay easier to scan and recover during active work
+- **Pinned chat cleanup** — pinned sessions keep a clear single-star indicator instead of duplicate pin markers
+
+**UI cleanup + branding**
+- **Focused sidebar** — the left rail defaults to core work areas first, with secondary tools tucked behind a clearer expander
+- **Cleaner composer/footer** — bottom controls are condensed so the message box gets more space
+- **Space/profile cleanup** — duplicate workspace controls were removed and the active space now lives in a more sensible spot
+- **Hermes Agent branding** — refreshed wordmark/avatar treatment gives the app a more intentional identity
 
 ## What's new in v3.2
 
