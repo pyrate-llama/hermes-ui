@@ -24,6 +24,7 @@ import threading
 import subprocess
 import time
 import pathlib
+import re
 import secrets
 import tempfile
 import uuid
@@ -2113,6 +2114,67 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(open(fpath, "rb").read())
 
     # ── Log streaming ──
+    _LOG_TAIL_ALLOWLIST = {
+        "agent": "agent.log",
+        "errors": "errors.log",
+        "gateway": "gateway.log",
+        "mcp": "mcp.log",
+        "mcp-stderr": "mcp-stderr.log",
+        "server": "server.log",
+    }
+    _SECRET_PATTERNS = [
+        re.compile(r"(?i)(authorization:\s*bearer\s+)[^\s\"']+"),
+        re.compile(r"(?i)(api[_-]?key['\"]?\s*[:=]\s*['\"]?)[^'\"\s,}]+"),
+        re.compile(r"(?i)(token['\"]?\s*[:=]\s*['\"]?)[^'\"\s,}]+"),
+        re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
+        re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b"),
+        re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
+    ]
+
+    def _redact_log_line(self, line):
+        text = str(line or "").rstrip()
+        for pattern in self._SECRET_PATTERNS:
+            text = pattern.sub(lambda m: (m.group(1) if m.groups() else "") + "[redacted]", text)
+        return text
+
+    def _read_recent_logs(self, log_names, tail):
+        try:
+            tail = max(1, min(int(tail), 200))
+        except Exception:
+            tail = 80
+        log_dir = os.path.join(HERMES_HOME, "logs")
+        result = {}
+        for name in log_names:
+            safe_name = str(name or "").strip()
+            filename = self._LOG_TAIL_ALLOWLIST.get(safe_name)
+            if not filename:
+                continue
+            fpath = os.path.join(log_dir, filename)
+            entry = {"name": safe_name, "exists": os.path.isfile(fpath), "lines": [], "size": 0, "updated": None}
+            if os.path.isfile(fpath):
+                try:
+                    entry["size"] = os.path.getsize(fpath)
+                    entry["updated"] = int(os.path.getmtime(fpath))
+                    with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+                        entry["lines"] = [self._redact_log_line(line) for line in f.readlines()[-tail:]]
+                except Exception as e:
+                    entry["error"] = str(e)
+            result[safe_name] = entry
+        return result
+
+    def _handle_recent_logs(self):
+        qs = urllib.parse.urlparse(self.path).query
+        params = urllib.parse.parse_qs(qs)
+        logs_str = params.get("logs", ["errors,gateway,agent,mcp,mcp-stderr"])[0]
+        tail = params.get("tail", ["80"])[0]
+        log_names = [n.strip() for n in logs_str.split(",") if n.strip()]
+        if not log_names:
+            log_names = ["errors", "gateway", "agent", "mcp", "mcp-stderr"]
+        self._json({
+            "logs": self._read_recent_logs(log_names, tail),
+            "allowlist": sorted(self._LOG_TAIL_ALLOWLIST.keys()),
+        })
+
     def _stream_logs(self):
         qs = urllib.parse.urlparse(self.path).query
         params = urllib.parse.parse_qs(qs)
@@ -2839,6 +2901,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._workspace_browse()
         elif self.path.startswith("/logs/stream"):
             self._stream_logs()
+        elif self.path.startswith("/api/logs/recent"):
+            self._handle_recent_logs()
         elif self.path.startswith("/browse"):
             self._browse_dir()
         elif self.path.startswith("/readfile"):

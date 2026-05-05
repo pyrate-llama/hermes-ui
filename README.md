@@ -51,6 +51,10 @@ Hermes UI 3.2 turns the project into a stronger multi-work command center, pairi
 - **Issue templates** — GitHub now has dedicated bug report and feature request templates
 - **Version/update health** — Hermes UI and Hermes Agent update status are surfaced in-app
 
+**Operations + performance follow-up**
+- **Health screen** — consolidated Hermes heartbeat, agent/model/provider status, Scrapling/web extraction status, and redacted recent log snippets
+- **Long-chat smoothing** — very large conversations render the newest messages first with a load-older control to reduce browser memory pressure
+
 **Deployment safety**
 - **Optional LAN password auth** — set `HERMES_UI_PASSWORD` before exposing Hermes UI beyond localhost
 - **Local artifact protection** — personal launchers and local agent state stay out of releases
@@ -114,6 +118,11 @@ Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily com
 - Live auto-refreshing stats (sessions, messages, tools, tokens)
 - System info panel (model, provider, uptime, capabilities)
 - Hermes configuration overview
+
+**Health**
+- One-screen status for Hermes UI, Hermes Agent, configured model/provider, Scrapling/web extraction, and recent local logs
+- Recent log snippets are served from an allowlist and redacted before they reach the browser
+- Quick links back to Terminal logs and MCP Tools for deeper inspection
 
 **Spaces / Workspaces**
 - Save multiple workspace roots and switch between them from the sidebar or Spaces screen

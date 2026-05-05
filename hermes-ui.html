@@ -1155,6 +1155,92 @@
     outline: none;
   }
   .tasks-filter:focus { border-color: rgba(111,179,194,0.42); box-shadow: 0 0 0 2px rgba(111,179,194,0.08); }
+  .view-health { padding: 20px; overflow-y: auto; }
+  .health-hero {
+    border: 1px solid var(--glass-border); border-radius: 18px; padding: 20px;
+    background:
+      radial-gradient(circle at 8% 0%, rgba(111,179,194,0.16), transparent 34%),
+      linear-gradient(135deg, rgba(68,216,138,0.075), rgba(69,136,224,0.055) 58%, rgba(255,255,255,0.018)),
+      var(--glass);
+    box-shadow: 0 12px 36px rgba(0,0,0,0.22); margin-bottom: 16px;
+  }
+  .health-hero-top {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  }
+  .health-title {
+    color: var(--text-primary); font-size: 20px; font-weight: 780;
+    display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+  }
+  .health-subtitle { color: var(--text-secondary); font-size: 12px; line-height: 1.5; max-width: 740px; }
+  .health-status-pill {
+    display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 8px 12px;
+    border: 1px solid rgba(68,216,138,0.35); background: rgba(68,216,138,0.12);
+    color: #9bf0bd; font-size: 12px; font-weight: 760; white-space: nowrap;
+  }
+  .health-status-pill.warn {
+    border-color: rgba(245,185,77,0.38); background: rgba(245,185,77,0.12); color: #f5d18a;
+  }
+  .health-card-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px;
+  }
+  .health-card {
+    border: 1px solid var(--glass-border); border-radius: 14px; padding: 15px;
+    background: rgba(255,255,255,0.026); min-height: 126px;
+  }
+  .health-card-label {
+    color: var(--text-muted); font-size: 10.5px; font-weight: 760;
+    text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 9px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .health-card-value { color: var(--text-primary); font-size: 17px; font-weight: 760; margin-bottom: 5px; }
+  .health-card-detail { color: var(--text-secondary); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+  .health-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .health-chip {
+    border: 1px solid var(--glass-border); border-radius: 999px; padding: 4px 8px;
+    color: var(--text-secondary); background: rgba(255,255,255,0.032);
+    font-size: 11px; font-family: 'JetBrains Mono', monospace;
+  }
+  .health-panels {
+    display: grid; grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.15fr); gap: 14px;
+  }
+  .health-panel {
+    border: 1px solid var(--glass-border); border-radius: 14px;
+    background: rgba(255,255,255,0.022); overflow: hidden;
+  }
+  .health-panel-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 13px 14px; border-bottom: 1px solid var(--glass-border);
+    color: var(--text-primary); font-size: 13px; font-weight: 760;
+  }
+  .health-panel-body { padding: 12px 14px; }
+  .health-log-list { display: grid; gap: 8px; }
+  .health-log-line {
+    color: var(--text-secondary); font-size: 11px; line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace; padding: 8px 9px; border-radius: 8px;
+    background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.045);
+    overflow-wrap: anywhere;
+  }
+  .health-provider-row {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.055);
+    color: var(--text-secondary); font-size: 12px;
+  }
+  .health-provider-row:last-child { border-bottom: none; }
+  .health-provider-name { color: var(--text-primary); font-weight: 650; }
+  .health-provider-status { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+  .health-provider-status.ok { color: var(--success); }
+  .message-window-notice {
+    margin: 0 auto 14px; max-width: 780px; width: 100%;
+    border: 1px solid var(--glass-border); border-radius: 12px; padding: 10px 12px;
+    background: rgba(111,179,194,0.06); color: var(--text-secondary);
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    font-size: 12px;
+  }
+  .message-window-notice button {
+    border: 1px solid rgba(111,179,194,0.35); border-radius: 999px;
+    background: rgba(111,179,194,0.12); color: var(--text-primary);
+    padding: 6px 10px; font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap;
+  }
   .task-focus-card.secondary {
     background:
       linear-gradient(145deg, rgba(192,136,224,0.075), rgba(245,185,77,0.055) 52%, rgba(255,255,255,0.018)),
@@ -2375,7 +2461,7 @@
   }
 
   /* ── Smooth page transitions on all views ── */
-  .view-dashboard, .view-files, .view-terminal, .view-tasks {
+  .view-dashboard, .view-files, .view-terminal, .view-tasks, .view-health {
     animation: viewFade 0.25s ease;
   }
 
@@ -2811,6 +2897,7 @@
     .skills-grid { grid-template-columns: 1fr; }
     .tasks-overview { grid-template-columns: 1fr; }
     .task-board { grid-template-columns: 1fr 1fr; }
+    .health-panels { grid-template-columns: 1fr; }
     .input-wrapper { padding: 10px 12px; }
     .message-content { padding: 12px 14px; }
     /* Sidebar backdrop overlay */
@@ -2842,6 +2929,9 @@
     .status-bar { display: none; }
     .stat-grid { grid-template-columns: 1fr; }
     .task-board { grid-template-columns: 1fr; }
+    .health-card-grid { grid-template-columns: 1fr; }
+    .health-hero, .health-card, .health-panel-body { padding: 14px; }
+    .message-window-notice { align-items: flex-start; flex-direction: column; }
     .stat-value { font-size: 24px; }
     .message-header { gap: 6px; }
     .message-avatar { width: 28px; height: 28px; font-size: 12px; }
@@ -5060,6 +5150,160 @@ function WebExtractStatusCard({ info, compact }) {
           </a>
         </div>
       )}
+    </div>
+  );
+}
+
+function HealthView({ onOpenTerminal, onOpenMCP }) {
+  const [health, setHealth] = useState(null);
+  const [version, setVersion] = useState(null);
+  const [providers, setProviders] = useState(null);
+  const [webExtract, setWebExtract] = useState(null);
+  const [logs, setLogs] = useState(null);
+  const [lastRefresh, setLastRefresh] = useState(null);
+
+  function formatUptimeSeconds(s) {
+    s = Number(s || 0);
+    var d = Math.floor(s / 86400);
+    var h = Math.floor((s % 86400) / 3600);
+    var m = Math.floor((s % 3600) / 60);
+    if (d > 0) return d + 'd ' + h + 'h';
+    if (h > 0) return h + 'h ' + m + 'm';
+    return Math.max(0, m) + 'm';
+  }
+  function fetchJson(path) {
+    return fetch(API_BASE + path, { cache: 'no-store' }).then(function(r) {
+      if (!r.ok) throw new Error(path + ' failed');
+      return r.json();
+    });
+  }
+  async function refresh() {
+    var results = await Promise.allSettled([
+      fetchJson('/health'),
+      fetchJson('/api/version'),
+      fetchJson('/api/providers'),
+      fetchJson('/api/tools/web-extract'),
+      fetchJson('/api/logs/recent?logs=errors,gateway,agent,mcp,mcp-stderr&tail=30'),
+    ]);
+    if (results[0].status === 'fulfilled') setHealth(results[0].value);
+    if (results[1].status === 'fulfilled') setVersion(results[1].value);
+    if (results[2].status === 'fulfilled') setProviders(results[2].value);
+    if (results[3].status === 'fulfilled') setWebExtract(results[3].value);
+    if (results[4].status === 'fulfilled') setLogs(results[4].value.logs || {});
+    setLastRefresh(new Date());
+  }
+  useEffect(function() {
+    refresh();
+    var iv = setInterval(refresh, 15000);
+    return function() { clearInterval(iv); };
+  }, []);
+
+  var agentOk = !!(health && health.agent);
+  var scraplingActive = !!(webExtract && webExtract.scrapling_enabled);
+  var webReady = webExtractIsReady(webExtract);
+  var activeProvider = providers && (providers.providers || []).find(function(p) { return p.active; });
+  var configuredProviders = providers && (providers.providers || []).filter(function(p) { return p.has_key; });
+  var errorLines = logs && logs.errors && logs.errors.lines ? logs.errors.lines.slice(-6).reverse() : [];
+  var recentLogKeys = ['gateway', 'agent', 'mcp', 'mcp-stderr'];
+
+  return (
+    <div className="view-health">
+      <div className="health-hero">
+        <div className="health-hero-top">
+          <div>
+            <div className="health-title"><Icon name="activity" size={18}/> Health</div>
+            <div className="health-subtitle">
+              A simple operator view for the same things the reference UI surfaces: heartbeat, model/provider status, Scrapling/web extraction, and recent safe log snippets.
+            </div>
+          </div>
+          <div className={"health-status-pill " + (agentOk ? '' : 'warn')}>
+            <span className={"status-dot " + (agentOk ? '' : 'disconnected')}></span>
+            {agentOk ? 'Hermes connected' : 'Needs attention'}
+          </div>
+        </div>
+        <div className="health-chip-row">
+          <span className="health-chip">UI v{(version && version.current) || '...'}</span>
+          <span className="health-chip">Agent {(health && health.agent_version) || (version && version.agent && version.agent.installed) || '...'}</span>
+          <span className="health-chip">Updated {lastRefresh ? lastRefresh.toLocaleTimeString() : '...'}</span>
+        </div>
+      </div>
+
+      <div className="health-card-grid">
+        <div className="health-card">
+          <div className="health-card-label"><Icon name="terminal" size={13}/> Server</div>
+          <div className="health-card-value">{health ? (health.status === 'ok' ? 'Online' : 'Degraded') : 'Checking...'}</div>
+          <div className="health-card-detail">Uptime {health ? formatUptimeSeconds(health.uptime) : '--'} on port {window.location.port || '3333'}.</div>
+        </div>
+        <div className="health-card">
+          <div className="health-card-label"><Icon name="cpu" size={13}/> Agent</div>
+          <div className="health-card-value">{agentOk ? 'Connected' : 'Offline'}</div>
+          <div className="health-card-detail">{(health && health.model) || 'No model reported'}{health && health.provider ? ' via ' + health.provider : ''}</div>
+        </div>
+        <div className="health-card">
+          <div className="health-card-label"><Icon name="globe" size={13}/> Scrapling</div>
+          <div className="health-card-value">{scraplingActive ? 'Active' : webReady ? 'Fallback Ready' : 'Not Active'}</div>
+          <div className="health-card-detail">{scraplingActive ? 'Hermes can use Scrapling MCP for web extraction.' : webReady ? 'Hermes web extraction is available, but Scrapling is not the active backend.' : 'No web extraction backend is currently exposed.'}</div>
+        </div>
+        <div className="health-card">
+          <div className="health-card-label"><Icon name="key-round" size={13}/> Provider</div>
+          <div className="health-card-value">{activeProvider ? activeProvider.display_name : ((providers && providers.active_provider) || 'Auto')}</div>
+          <div className="health-card-detail">{configuredProviders ? configuredProviders.length + ' provider credential' + (configuredProviders.length === 1 ? '' : 's') + ' configured' : 'Checking provider keys...'}</div>
+        </div>
+      </div>
+
+      <div className="health-panels">
+        <div className="health-panel">
+          <div className="health-panel-header">
+            <span>Provider Status</span>
+            <button className="spaces-btn" onClick={refresh}>Refresh</button>
+          </div>
+          <div className="health-panel-body">
+            {(providers && providers.providers && providers.providers.length) ? providers.providers.map(function(p) {
+              return (
+                <div className="health-provider-row" key={p.id}>
+                  <span className="health-provider-name">{p.display_name}{p.active ? ' · active' : ''}</span>
+                  <span className={"health-provider-status " + (p.has_key ? 'ok' : '')}>{p.key_source === 'oauth' ? 'OAuth' : p.has_key ? 'configured' : 'not set'}</span>
+                </div>
+              );
+            }) : <div className="health-card-detail">Provider status is loading.</div>}
+          </div>
+        </div>
+        <div className="health-panel">
+          <div className="health-panel-header">
+            <span>Recent Errors</span>
+            <button className="spaces-btn" onClick={onOpenTerminal}><Icon name="terminal" size={13}/> Open Logs</button>
+          </div>
+          <div className="health-panel-body">
+            {errorLines.length ? (
+              <div className="health-log-list">
+                {errorLines.map(function(line, i) { return <div className="health-log-line" key={i}>{line}</div>; })}
+              </div>
+            ) : <div className="health-card-detail">No recent error lines found in the local Hermes logs.</div>}
+          </div>
+        </div>
+        <div className="health-panel">
+          <div className="health-panel-header">
+            <span>Web Extract</span>
+            <button className="spaces-btn" onClick={onOpenMCP}><Icon name="wrench" size={13}/> MCP Tools</button>
+          </div>
+          <div className="health-panel-body">
+            <WebExtractStatusCard info={webExtract} compact={true} />
+          </div>
+        </div>
+        <div className="health-panel">
+          <div className="health-panel-header"><span>Log Pointers</span></div>
+          <div className="health-panel-body">
+            <div className="health-log-list">
+              {recentLogKeys.map(function(key) {
+                var entry = logs && logs[key];
+                var count = entry && entry.lines ? entry.lines.length : 0;
+                var last = count ? entry.lines[count - 1] : (entry && entry.exists ? 'No recent lines.' : 'Log file not found yet.');
+                return <div className="health-log-line" key={key}>{key}: {last}</div>;
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -8104,6 +8348,7 @@ function App() {
     try { if (id) localStorage.setItem('hermes-active-session', id); else localStorage.removeItem('hermes-active-session'); } catch(e) {}
   };
   const [messages, _setMessages] = useState([]);
+  const [messageRenderLimit, setMessageRenderLimit] = useState(220);
   const setMessages = (val) => {
     if (typeof val === 'function') {
       _setMessages(prev => { const next = val(prev); messagesRef.current = next; return next; });
@@ -8504,6 +8749,10 @@ function App() {
   const [highlightedMessageIndex, setHighlightedMessageIndex] = useState(null);
   const [searchJumpNonce, setSearchJumpNonce] = useState(0);
 
+  useEffect(function() {
+    setMessageRenderLimit(220);
+  }, [activeConvId]);
+
   // Health check
   useEffect(() => {
     const checkHealth = async () => {
@@ -8572,6 +8821,11 @@ function App() {
   useEffect(() => {
     var jump = pendingSearchJumpRef.current;
     if (!jump || currentView !== 'chat') return;
+    var firstRendered = Math.max(0, messages.length - messageRenderLimit);
+    if (jump.messageIndex < firstRendered) {
+      setMessageRenderLimit(Math.min(messages.length, messages.length - jump.messageIndex + 20));
+      return;
+    }
     var raf = window.requestAnimationFrame(function() {
       var el = document.querySelector('[data-message-index="' + jump.messageIndex + '"]');
       if (el && typeof el.scrollIntoView === 'function') {
@@ -8586,7 +8840,7 @@ function App() {
       pendingSearchJumpRef.current = null;
     });
     return function() { window.cancelAnimationFrame(raf); };
-  }, [messages, currentView, searchJumpNonce]);
+  }, [messages, currentView, searchJumpNonce, messageRenderLimit]);
 
   // Auto-scroll activity log
   useEffect(() => {
@@ -10508,6 +10762,7 @@ function App() {
     { name: 'chat', icon: 'message-square', summary: 'Open chat', run: function() { setCurrentView('chat'); } },
     { name: 'dashboard', icon: 'layout-dashboard', summary: 'Open dashboard', run: function() { setCurrentView('dashboard'); } },
     { name: 'tasks', icon: 'list-todo', summary: 'Open Tasks board', run: function() { setCurrentView('tasks'); } },
+    { name: 'health', icon: 'activity', summary: 'Open Health screen', run: function() { setCurrentView('health'); } },
     { name: 'files', icon: 'folder', summary: 'Open files', run: function() { setCurrentView('files'); } },
     { name: 'spaces', icon: 'folder', summary: 'Open Spaces', run: function() { setCurrentView('spaces'); } },
     { name: 'workspace', icon: 'folder', usage: '[name or path]', summary: 'Switch active space', run: function(args) {
@@ -10663,6 +10918,9 @@ function App() {
   var rightColumnOpen = showTerminal || showTodosPanel;
   var todoOnlyPanel = showTodosPanel && !showTerminal;
   var rightColumnRenderWidth = todoOnlyPanel ? 340 : rightColumnWidth;
+  var firstRenderedMessageIndex = Math.max(0, messages.length - messageRenderLimit);
+  var visibleMessages = messages.slice(firstRenderedMessageIndex);
+  var hiddenMessageCount = firstRenderedMessageIndex;
   var sidebarStyle = isDesktopLayout
     ? {
         width: sidebarWidth + 'px',
@@ -10735,6 +10993,10 @@ function App() {
           <div className={"nav-item " + (currentView === 'tasks' ? 'active' : '')} onClick={function() { setCurrentView('tasks'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon" style={{color:'#6fb3c2'}}><Icon name="list-todo" size={15}/></span>
             <span className="nav-item-label">Tasks</span>
+          </div>
+          <div className={"nav-item " + (currentView === 'health' ? 'active' : '')} onClick={function() { setCurrentView('health'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
+            <span className="nav-item-icon" style={{color:'#69a68a'}}><Icon name="activity" size={15}/></span>
+            <span className="nav-item-label">Health</span>
           </div>
           {delegationInfo.configured !== false && (
             <div className={"nav-item " + (currentView === 'delegation' ? 'active' : '')} onClick={function() { setCurrentView('delegation'); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Chat directly with the delegation model (bypasses main agent loop)">
@@ -10945,7 +11207,15 @@ function App() {
                 </div>
               ) : (
                 <div className="messages-container">
-                  {messages.map((msg, idx) => (
+                  {hiddenMessageCount > 0 && (
+                    <div className="message-window-notice">
+                      <span>Showing the latest {visibleMessages.length} of {messages.length} messages to keep long chats smooth.</span>
+                      <button onClick={function(){ setMessageRenderLimit(function(limit) { return Math.min(messages.length, limit + 220); }); }}>Load older</button>
+                    </div>
+                  )}
+                  {visibleMessages.map((msg, visibleIdx) => {
+                    var idx = firstRenderedMessageIndex + visibleIdx;
+                    return (
                     msg.role === 'compaction' ? (
                       <div key={msg.id} className="compaction-marker" data-message-index={idx}>
                         <div className="compaction-line" />
@@ -10984,7 +11254,7 @@ function App() {
                         onRetry={retryFromMessage}
                       />
                     )
-                  ))}
+                  ); })}
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -11379,7 +11649,7 @@ function App() {
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">
-                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'tasks' ? 'Tasks' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
+                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'tasks' ? 'Tasks' : currentView === 'health' ? 'Health' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
               </div>
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
@@ -11391,6 +11661,7 @@ function App() {
             </div>
             {currentView === 'dashboard' && <DashboardView />}
             {currentView === 'tasks' && <TasksView conversations={conversations} streamingSessionIds={streamingSessionIds} agentStateBySession={agentStateBySession} activeConvId={activeConvId} onOpenConversation={function(id){ if (id) selectConversation(id); setCurrentView('chat'); }} />}
+            {currentView === 'health' && <HealthView onOpenTerminal={function(){ setCurrentView('terminal'); }} onOpenMCP={function(){ setShowMCPBrowser(true); }} />}
             {currentView === 'files' && <FilesView activeWorkspace={activeWorkspace} />}
             {currentView === 'spaces' && <SpacesView workspaces={workspaces} activeWorkspace={activeWorkspace} onSwitch={switchWorkspace} onRefresh={refreshWorkspaces} />}
             {currentView === 'terminal' && <TerminalView />}
