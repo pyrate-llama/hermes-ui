@@ -34,6 +34,16 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 
 ---
 
+## Unreleased
+
+**Tasks / Kanban board**
+- **Tasks screen** — live Kanban-style board with Backlog, Active, Blocked, and Done columns
+- **Automatic task detection** — board cards are derived from Hermes todos, delegated subagent work, and active chat state
+- **Source chat jump-back** — click any task card to return to the chat where that work came from
+- **Board filtering** — quickly narrow visible work by task text, source chat, kind, or status
+- **`/tasks` slash command** — open the Tasks board from the composer
+- **Hermes Agent 0.12 validation** — tested against official Hermes Agent v0.12.0 while keeping the board independent of unreleased upstream Kanban APIs
+
 ## What's new in v3.1
 
 Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily command center for real projects instead of a single chat surface.
@@ -74,6 +84,7 @@ Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily com
 - Tool call visualization with expandable results
 - Message editing and re-sending
 - Composer slash commands for common actions
+- `/tasks` command for opening the live task board
 - Retry / redo from older prompts without deleting later messages
 - Session search across titles and message content
 - Image paste/drop with native vision passthrough for supported models, plus Gemini fallback when needed
@@ -98,6 +109,12 @@ Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily com
 - Add spaces with a cross-platform folder picker instead of typing paths manually
 - New chats, side questions, and Files view inherit the active workspace
 - `/workspace [name or path]` command for fast switching
+
+**Tasks / Kanban**
+- Live board generated from existing Hermes chat signals, not a separate manual task database
+- Tracks todos, delegated subagent work, active agent turns, blocked items, and completed work
+- Opens source chats from task cards so users can continue the original work
+- Works with Hermes Agent v0.12.0 without depending on the upstream Kanban experiment that was reverted before the 0.12 stable release
 
 **Artifact Panel**
 - Dedicated tab in the live right panel (alongside Errors, Web UI, All)

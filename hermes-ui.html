@@ -1050,6 +1050,146 @@
   .session-todos-empty {
     color: var(--text-muted); font-size: 12px; padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.055);
   }
+  .view-tasks { padding: 20px; overflow-y: auto; }
+  .tasks-overview {
+    display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(0, 2fr);
+    gap: 16px; align-items: stretch; margin-bottom: 16px;
+  }
+  .task-focus-card {
+    border: 1px solid var(--glass-border); border-radius: 14px; padding: 18px;
+    background:
+      linear-gradient(145deg, rgba(68,216,138,0.08), rgba(69,136,224,0.07) 52%, rgba(255,255,255,0.018)),
+      var(--glass);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+  }
+  .task-focus-label {
+    display: flex; align-items: center; gap: 8px;
+    color: var(--text-muted); font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;
+  }
+  .task-focus-title {
+    color: var(--text-primary); font-size: 20px; line-height: 1.18;
+    font-weight: 760; margin-bottom: 12px;
+  }
+  .task-progress-track {
+    height: 8px; border-radius: 99px; overflow: hidden;
+    background: rgba(255,255,255,0.07); border: 1px solid var(--glass-border);
+  }
+  .task-progress-fill {
+    height: 100%; border-radius: inherit;
+    background: linear-gradient(90deg, #44d88a, #6fb3c2);
+    box-shadow: 0 0 18px rgba(68,216,138,0.32);
+  }
+  .task-progress-meta {
+    margin-top: 8px; color: var(--text-secondary); font-size: 12px;
+    display: flex; justify-content: space-between; gap: 12px;
+  }
+  .task-board {
+    display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .task-column {
+    min-height: 260px; border: 1px solid var(--glass-border);
+    border-radius: 14px; background: rgba(255,255,255,0.025);
+    overflow: hidden;
+  }
+  .task-column-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 12px 12px 10px; border-bottom: 1px solid var(--glass-border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+  }
+  .task-column-name {
+    display: flex; align-items: center; gap: 8px;
+    color: var(--text-primary); font-size: 12px; font-weight: 700;
+  }
+  .task-column-count {
+    color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  .task-column-body {
+    padding: 10px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .task-card {
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    background: rgba(10,10,18,0.36); padding: 10px;
+    color: var(--text-primary); font-size: 12px; line-height: 1.35;
+    cursor: pointer; text-align: left; width: 100%; font-family: inherit;
+  }
+  .task-card:hover {
+    border-color: rgba(111,179,194,0.35);
+    background: rgba(111,179,194,0.065);
+  }
+  .task-card.completed { opacity: 0.72; }
+  .task-card-meta {
+    margin-top: 8px; display: flex; align-items: center; gap: 6px;
+    color: var(--text-muted); font-size: 10.5px; font-family: 'JetBrains Mono', monospace;
+  }
+  .task-column-empty {
+    padding: 14px 8px; color: var(--text-muted); font-size: 12px;
+    text-align: center;
+  }
+  .task-empty-state {
+    border: 1px dashed var(--glass-border); border-radius: 14px;
+    padding: 42px 18px; text-align: center; color: var(--text-secondary);
+    background: rgba(255,255,255,0.018);
+  }
+  .task-empty-state strong {
+    display: block; color: var(--text-primary); font-size: 16px; margin-bottom: 6px;
+  }
+  .tasks-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .tasks-toolbar-copy { max-width: 720px; }
+  .tasks-toolbar-title {
+    color: var(--text-primary); font-size: 18px; font-weight: 760;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+  }
+  .tasks-toolbar-subtitle {
+    color: var(--text-secondary); font-size: 12px; line-height: 1.45;
+  }
+  .tasks-filter {
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    background: rgba(255,255,255,0.035); color: var(--text-primary);
+    padding: 9px 11px; font: inherit; font-size: 12px; min-width: 220px;
+    outline: none;
+  }
+  .tasks-filter:focus { border-color: rgba(111,179,194,0.42); box-shadow: 0 0 0 2px rgba(111,179,194,0.08); }
+  .task-focus-card.secondary {
+    background:
+      linear-gradient(145deg, rgba(192,136,224,0.075), rgba(245,185,77,0.055) 52%, rgba(255,255,255,0.018)),
+      var(--glass);
+  }
+  .task-focus-stats {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px; margin-top: 12px;
+  }
+  .task-focus-stat {
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    background: rgba(255,255,255,0.026); padding: 10px;
+  }
+  .task-focus-stat span {
+    display: block; color: var(--text-muted); font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 4px;
+  }
+  .task-focus-stat strong {
+    display: block; color: var(--text-primary); font-size: 18px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .task-card-title { font-weight: 680; }
+  .task-card-source {
+    margin-top: 8px; color: var(--text-secondary); font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .task-card-tags {
+    display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px;
+  }
+  .task-tag {
+    border: 1px solid var(--glass-border); border-radius: 99px;
+    padding: 2px 6px; color: var(--text-muted); font-size: 9.5px;
+    background: rgba(255,255,255,0.025);
+  }
+  .task-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 
   .input-area {
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
@@ -2235,7 +2375,7 @@
   }
 
   /* ── Smooth page transitions on all views ── */
-  .view-dashboard, .view-files, .view-terminal {
+  .view-dashboard, .view-files, .view-terminal, .view-tasks {
     animation: viewFade 0.25s ease;
   }
 
@@ -2669,6 +2809,8 @@
     .view-memory { flex-direction: column; }
     .memory-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 120px; }
     .skills-grid { grid-template-columns: 1fr; }
+    .tasks-overview { grid-template-columns: 1fr; }
+    .task-board { grid-template-columns: 1fr 1fr; }
     .input-wrapper { padding: 10px 12px; }
     .message-content { padding: 12px 14px; }
     /* Sidebar backdrop overlay */
@@ -2699,6 +2841,7 @@
     .app { padding-bottom: calc(env(safe-area-inset-bottom, 8px) + 60px); }
     .status-bar { display: none; }
     .stat-grid { grid-template-columns: 1fr; }
+    .task-board { grid-template-columns: 1fr; }
     .stat-value { font-size: 24px; }
     .message-header { gap: 6px; }
     .message-avatar { width: 28px; height: 28px; font-size: 12px; }
@@ -3841,6 +3984,195 @@ function SessionTodosPanel({ todos, onClose, sidePanel }) {
           );
         }) : <div className="session-todos-empty">Waiting for todo details...</div>}
       </div>
+    </div>
+  );
+}
+
+function taskStatusLabel(status) {
+  if (status === 'in_progress') return 'In progress';
+  if (status === 'completed') return 'Done';
+  if (status === 'cancelled') return 'Blocked';
+  return 'Backlog';
+}
+
+function taskStatusColumn(status) {
+  if (status === 'in_progress') return 'active';
+  if (status === 'completed') return 'done';
+  if (status === 'cancelled') return 'blocked';
+  return 'backlog';
+}
+
+function taskPreview(value, fallback) {
+  var text = String(value || fallback || '').replace(/\s+/g, ' ').trim();
+  if (!text) text = 'Untitled task';
+  return text.length > 130 ? text.slice(0, 127) + '...' : text;
+}
+
+function buildTaskBoardItems(conversations, streamingSessionIds, agentStateBySession, activeConvId) {
+  var items = [];
+  var source = Array.isArray(conversations) ? conversations : [];
+  source.forEach(function(conv) {
+    if (!conv || conv.archived) return;
+    var messages = Array.isArray(conv.messages) ? conv.messages : [];
+    var convTitle = taskPreview(conv.title || conv.preview, 'New Chat');
+    var isStreamingConv = streamingSessionIds.indexOf(conv.id) !== -1;
+    var agentState = agentStateBySession && agentStateBySession[conv.id];
+    var todos = getSessionTodos(messages);
+    if (isStreamingConv || agentState) {
+      items.push({
+        id: conv.id + ':agent',
+        column: isStreamingConv ? 'active' : 'backlog',
+        title: taskPreview((agentState && (agentState.detail || agentState.label)) || convTitle, convTitle),
+        source: convTitle,
+        sessionId: conv.id,
+        kind: 'Agent',
+        status: (agentState && agentState.label) || (isStreamingConv ? 'Running' : 'Ready'),
+        active: conv.id === activeConvId,
+        updated: conv.last_active_at || conv.created || '',
+      });
+    }
+    todos.forEach(function(todo, index) {
+      var normalized = normalizeTodoItem(todo, index);
+      items.push({
+        id: conv.id + ':todo:' + normalized.id + ':' + index,
+        column: taskStatusColumn(normalized.status),
+        title: taskPreview(normalized.content, 'Todo ' + (index + 1)),
+        source: convTitle,
+        sessionId: conv.id,
+        kind: 'Todo',
+        status: taskStatusLabel(normalized.status),
+        active: conv.id === activeConvId,
+        updated: conv.last_active_at || conv.created || '',
+      });
+    });
+    messages.forEach(function(msg, msgIndex) {
+      ((msg && msg.toolCalls) || []).forEach(function(tool, toolIndex) {
+        if (!isDelegationTool(tool)) return;
+        var tasks = getDelegationTasks(tool);
+        var title = tasks.length
+          ? taskPreview(getDelegationGoal(tasks[0]), getDelegationTitle(tool))
+          : taskPreview(getDelegationDetail(tool), getDelegationTitle(tool));
+        items.push({
+          id: conv.id + ':delegate:' + msgIndex + ':' + toolIndex,
+          column: tool.done ? 'done' : 'active',
+          title: title,
+          source: convTitle,
+          sessionId: conv.id,
+          kind: tasks.length > 1 ? (tasks.length + ' subagents') : getDelegationTitle(tool),
+          status: tool.done ? 'Done' : 'Running',
+          active: conv.id === activeConvId,
+          updated: conv.last_active_at || conv.created || '',
+        });
+      });
+    });
+  });
+  return items.sort(function(a, b) {
+    if (!!a.active !== !!b.active) return a.active ? -1 : 1;
+    return getConversationActivityTime({ last_active_at: b.updated }) - getConversationActivityTime({ last_active_at: a.updated });
+  });
+}
+
+function TasksView({ conversations, streamingSessionIds, agentStateBySession, activeConvId, onOpenConversation }) {
+  var [filter, setFilter] = useState('');
+  var items = useMemo(function() {
+    return buildTaskBoardItems(conversations, streamingSessionIds || [], agentStateBySession || {}, activeConvId);
+  }, [conversations, streamingSessionIds, agentStateBySession, activeConvId]);
+  var query = filter.trim().toLowerCase();
+  var visible = query ? items.filter(function(item) {
+    return [item.title, item.source, item.kind, item.status].join(' ').toLowerCase().indexOf(query) !== -1;
+  }) : items;
+  var columns = [
+    { id: 'backlog', label: 'Backlog', icon: 'list-todo' },
+    { id: 'active', label: 'Active', icon: 'activity' },
+    { id: 'blocked', label: 'Blocked', icon: 'circle-help' },
+    { id: 'done', label: 'Done', icon: 'check' },
+  ];
+  var counts = columns.reduce(function(acc, col) {
+    acc[col.id] = visible.filter(function(item) { return item.column === col.id; }).length;
+    return acc;
+  }, {});
+  var doneCount = items.filter(function(item) { return item.column === 'done'; }).length;
+  var activeCount = items.filter(function(item) { return item.column === 'active'; }).length;
+  var blockedCount = items.filter(function(item) { return item.column === 'blocked'; }).length;
+  var progress = items.length ? Math.round((doneCount / items.length) * 100) : 0;
+
+  function openTask(item) {
+    if (item && item.sessionId && onOpenConversation) onOpenConversation(item.sessionId);
+  }
+
+  return (
+    <div className="view-tasks">
+      <div className="tasks-toolbar">
+        <div className="tasks-toolbar-copy">
+          <div className="tasks-toolbar-title"><Icon name="list-todo" size={17}/> Tasks</div>
+          <div className="tasks-toolbar-subtitle">
+            Live board built from Hermes todos, subagents, and active chat work. Click any card to jump back to its source chat.
+          </div>
+        </div>
+        <input className="tasks-filter" value={filter} onChange={function(e){ setFilter(e.target.value); }} placeholder="Filter tasks..." />
+      </div>
+      <div className="tasks-overview">
+        <div className="task-focus-card">
+          <div className="task-focus-label"><Icon name="activity" size={13}/> Current Work</div>
+          <div className="task-focus-title">
+            {activeCount ? activeCount + ' active item' + (activeCount === 1 ? '' : 's') : (items.length ? 'No active tasks right now' : 'No tasks detected yet')}
+          </div>
+          <div className="task-progress-track"><div className="task-progress-fill" style={{width: progress + '%'}} /></div>
+          <div className="task-progress-meta"><span>{doneCount}/{items.length || 0} done</span><span>{progress}%</span></div>
+          <div className="task-actions">
+            <button className="spaces-btn" onClick={function(){ onOpenConversation && onOpenConversation(activeConvId); }} disabled={!activeConvId}>
+              Open current chat
+            </button>
+          </div>
+        </div>
+        <div className="task-focus-card secondary">
+          <div className="task-focus-label"><Icon name="layout-dashboard" size={13}/> Board Health</div>
+          <div className="task-focus-title">Agent work tracking</div>
+          <div className="task-focus-stats">
+            <div className="task-focus-stat"><span>Total</span><strong>{items.length}</strong></div>
+            <div className="task-focus-stat"><span>Active</span><strong>{activeCount}</strong></div>
+            <div className="task-focus-stat"><span>Blocked</span><strong>{blockedCount}</strong></div>
+            <div className="task-focus-stat"><span>Done</span><strong>{doneCount}</strong></div>
+          </div>
+        </div>
+      </div>
+      {items.length === 0 ? (
+        <div className="task-empty-state">
+          <strong>No task signals yet</strong>
+          Ask Hermes for a plan, checklist, or delegated agent work and this board will populate automatically.
+        </div>
+      ) : (
+        <div className="task-board">
+          {columns.map(function(column) {
+            var columnItems = visible.filter(function(item) { return item.column === column.id; });
+            return (
+              <div key={column.id} className="task-column">
+                <div className="task-column-header">
+                  <div className="task-column-name"><Icon name={column.icon} size={13}/>{column.label}</div>
+                  <div className="task-column-count">{counts[column.id] || 0}</div>
+                </div>
+                <div className="task-column-body">
+                  {columnItems.length ? columnItems.map(function(item) {
+                    return (
+                      <button key={item.id} className={"task-card " + (item.column === 'done' ? 'completed' : '')} onClick={function(){ openTask(item); }}>
+                        <div className="task-card-title">{item.title}</div>
+                        <div className="task-card-source">{item.source}</div>
+                        <div className="task-card-tags">
+                          <span className="task-tag">{item.kind}</span>
+                          <span className="task-tag">{item.status}</span>
+                          {item.active && <span className="task-tag">current</span>}
+                        </div>
+                      </button>
+                    );
+                  }) : (
+                    <div className="task-column-empty">Nothing here</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -10175,6 +10507,7 @@ function App() {
     { name: 'stop', icon: 'square', summary: 'Stop the active turn', disabled: !isStreaming, run: stopStreamingAction },
     { name: 'chat', icon: 'message-square', summary: 'Open chat', run: function() { setCurrentView('chat'); } },
     { name: 'dashboard', icon: 'layout-dashboard', summary: 'Open dashboard', run: function() { setCurrentView('dashboard'); } },
+    { name: 'tasks', icon: 'list-todo', summary: 'Open Tasks board', run: function() { setCurrentView('tasks'); } },
     { name: 'files', icon: 'folder', summary: 'Open files', run: function() { setCurrentView('files'); } },
     { name: 'spaces', icon: 'folder', summary: 'Open Spaces', run: function() { setCurrentView('spaces'); } },
     { name: 'workspace', icon: 'folder', usage: '[name or path]', summary: 'Switch active space', run: function(args) {
@@ -10398,6 +10731,10 @@ function App() {
           <div className={"nav-item " + (currentView === 'chat' ? 'active' : '')} onClick={function() { setCurrentView('chat'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
             <span className="nav-item-icon" style={{color:'#7a9cc4'}}><Icon name="message-square" size={15}/></span>
             <span className="nav-item-label">Chat</span>
+          </div>
+          <div className={"nav-item " + (currentView === 'tasks' ? 'active' : '')} onClick={function() { setCurrentView('tasks'); if(window.innerWidth<=768) setSidebarCollapsed(true); }}>
+            <span className="nav-item-icon" style={{color:'#6fb3c2'}}><Icon name="list-todo" size={15}/></span>
+            <span className="nav-item-label">Tasks</span>
           </div>
           {delegationInfo.configured !== false && (
             <div className={"nav-item " + (currentView === 'delegation' ? 'active' : '')} onClick={function() { setCurrentView('delegation'); if(window.innerWidth<=768) setSidebarCollapsed(true); }} title="Chat directly with the delegation model (bypasses main agent loop)">
@@ -11042,7 +11379,7 @@ function App() {
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">
-                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
+                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'tasks' ? 'Tasks' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
               </div>
               <div className="header-controls">
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
@@ -11053,6 +11390,7 @@ function App() {
               </div>
             </div>
             {currentView === 'dashboard' && <DashboardView />}
+            {currentView === 'tasks' && <TasksView conversations={conversations} streamingSessionIds={streamingSessionIds} agentStateBySession={agentStateBySession} activeConvId={activeConvId} onOpenConversation={function(id){ if (id) selectConversation(id); setCurrentView('chat'); }} />}
             {currentView === 'files' && <FilesView activeWorkspace={activeWorkspace} />}
             {currentView === 'spaces' && <SpacesView workspaces={workspaces} activeWorkspace={activeWorkspace} onSwitch={switchWorkspace} onRefresh={refreshWorkspaces} />}
             {currentView === 'terminal' && <TerminalView />}
@@ -11105,9 +11443,9 @@ function App() {
       {[
         { view: 'dashboard', icon: '📊', label: 'Home' },
         { view: 'chat', icon: '💬', label: 'Chat' },
+        { view: 'tasks', icon: '✓', label: 'Tasks' },
         { view: 'skills', icon: '✨', label: 'Skills' },
         { view: 'memory', icon: '🧠', label: 'Memory' },
-        { view: 'terminal', icon: '⚡', label: 'More' },
       ].map(function(item) {
         return (
           <button key={item.view} className={"mobile-nav-item " + (currentView === item.view ? 'active' : '')}
