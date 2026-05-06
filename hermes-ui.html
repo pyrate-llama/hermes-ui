@@ -8055,7 +8055,7 @@ function StatusBar({ connected, conversations, messages, sessionTokens, versionI
         )}
       </div>
       <div className="status-bar-item status-bar-version" style={{opacity:0.5}}>
-        <span>Hermes UI v3.3</span>
+        <span>Hermes UI v3.3.1</span>
       </div>
     </div>
   );
@@ -9100,9 +9100,16 @@ function App() {
       }
       const startData = await startResp.json();
       const streamId = startData.stream_id;
+      var activeSessionId = startData.session_id || sessionId;
+      if (activeSessionId !== sessionId && typeof opts.onSessionChanged === 'function') {
+        try { opts.onSessionChanged(sessionId, activeSessionId); } catch(e) { console.warn('[stream] onSessionChanged threw:', e); }
+      }
       // Register streamId so Stop/Pause can call /api/chat/cancel directly
       // without relying on the AbortController listener race.
-      try { attachStreamId(sessionId, streamId); } catch(e) {}
+      try { attachStreamId(activeSessionId, streamId); } catch(e) {}
+      if (activeSessionId !== sessionId) {
+        try { attachStreamId(sessionId, streamId); } catch(e) {}
+      }
       var _httpMs = Date.now() - _streamStart;
       console.log('[stream] chat/start returned stream_id in ' + _httpMs + 'ms');
       if (onThinking) onThinking('[timing] Stream started in ' + (_httpMs < 1000 ? _httpMs + 'ms' : Math.round(_httpMs/1000) + 's'));
@@ -9221,7 +9228,7 @@ function App() {
             // Also tell backend to cancel
             fetch(API_BASE + '/api/chat/cancel?stream_id=' + encodeURIComponent(streamId)).catch(function(){});
             wrappedOnDone(fullContent);
-            resolve({ content: fullContent, usage: streamUsage });
+            resolve({ content: fullContent, usage: streamUsage, session: { session_id: activeSessionId } });
           });
         }
 
@@ -9263,7 +9270,7 @@ function App() {
           fetch(API_BASE + '/api/approval/respond', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId, approved: true }),
+            body: JSON.stringify({ session_id: activeSessionId, approved: true }),
           }).catch(function(err) { console.warn('[stream] Auto-approve failed:', err); });
         });
 
@@ -9281,7 +9288,7 @@ function App() {
           emitStatus({ kind: 'compressed', label: 'Context compressed', detail: msg });
           if (onThinking) onThinking('[compressed] ' + msg);
           if (opts.onCompressed) {
-            try { opts.onCompressed(msg, d.session_id || null); } catch(err) { console.warn('[compressed] onCompressed threw:', err); }
+            try { opts.onCompressed(msg, d.session_id || activeSessionId || null); } catch(err) { console.warn('[compressed] onCompressed threw:', err); }
           }
         });
 
@@ -9331,6 +9338,8 @@ function App() {
             if (lastAssistant && lastAssistant.trim()) fullContent = lastAssistant;
           }
           wrappedOnDone(fullContent);
+          if (!d.session) d.session = { session_id: activeSessionId };
+          else if (!d.session.session_id) d.session.session_id = activeSessionId;
           resolve({ content: fullContent, usage: streamUsage, session: d.session });
         });
 
@@ -9344,7 +9353,7 @@ function App() {
           fullContent = '**Error:** ' + errMsg;
           onChunk(fullContent);
           wrappedOnDone(fullContent);
-          resolve({ content: fullContent, usage: streamUsage });
+          resolve({ content: fullContent, usage: streamUsage, session: { session_id: activeSessionId } });
         });
 
         source.addEventListener('cancel', function(e) {
@@ -9409,6 +9418,8 @@ function App() {
                   emitStatus({ kind: 'finished', label: 'Finished', detail: 'Reply complete' });
                   if (d2.usage) streamUsage = d2.usage;
                   wrappedOnDone(fullContent);
+                  if (!d2.session) d2.session = { session_id: activeSessionId };
+                  else if (!d2.session.session_id) d2.session.session_id = activeSessionId;
                   resolve({ content: fullContent, usage: streamUsage, session: d2.session });
                 });
                 source2.addEventListener('token', function(e2) {
@@ -11496,7 +11507,7 @@ function App() {
                         <button className="status-mini-dismiss" onClick={dismissAgentVersionNotice} title="Dismiss agent update notice">×</button>
                       </span>
                     )}
-                    <span className="status-bar-item status-bar-version">Hermes UI v3.3</span>
+                    <span className="status-bar-item status-bar-version">Hermes UI v3.3.1</span>
                     <a className="composer-chip status-icon-btn" href="https://github.com/pyrate-llama/hermes-ui/issues" target="_blank" rel="noopener noreferrer" title="Open Hermes UI issues on GitHub">
                       <Icon name="message-square" size={12}/>
                     </a>

@@ -782,15 +782,67 @@ STREAM_STEER_STATE = {}  # stream_id -> {"next_id": int, "pending": [steer_recor
 # session_id -> dict (in-memory cache, persisted to disk like webui)
 SESSIONS = {}
 SESSIONS_LOCK = threading.Lock()
+SESSION_ALIASES = {}
 
 # Disk persistence — matches webui SESSION_DIR pattern
 SESSION_DIR = os.path.join(HERMES_HOME, "hermes-ui", "sessions")
 os.makedirs(SESSION_DIR, exist_ok=True)
+SESSION_ALIASES_FILE = os.path.join(HERMES_HOME, "hermes-ui", "session-aliases.json")
+
+
+def _load_session_aliases():
+    """Load old->new session id redirects created by context compression."""
+    try:
+        if not os.path.exists(SESSION_ALIASES_FILE):
+            return
+        with open(SESSION_ALIASES_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            SESSION_ALIASES.update({
+                str(k): str(v)
+                for k, v in data.items()
+                if isinstance(k, str) and isinstance(v, str)
+            })
+    except Exception as e:
+        print(f"[serve] WARNING: Failed to load session aliases: {e}", flush=True)
+
+
+def _save_session_aliases():
+    """Persist compression redirects so a proxy restart does not revive stale ids."""
+    try:
+        with open(SESSION_ALIASES_FILE, "w", encoding="utf-8") as f:
+            json.dump(SESSION_ALIASES, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[serve] WARNING: Failed to save session aliases: {e}", flush=True)
+
+
+def _resolve_session_id(session_id):
+    """Resolve a possibly-stale session id to its compression-rotated canonical id."""
+    sid = str(session_id or "")
+    seen = set()
+    while sid in SESSION_ALIASES and sid not in seen:
+        seen.add(sid)
+        sid = SESSION_ALIASES[sid]
+    return sid
+
+
+def _alias_session_id(old_sid, new_sid):
+    """Remember that an older compressed session id should now use new_sid."""
+    old_sid = str(old_sid or "")
+    new_sid = str(new_sid or "")
+    if not old_sid or not new_sid or old_sid == new_sid:
+        return
+    SESSION_ALIASES[old_sid] = new_sid
+    _save_session_aliases()
+
+
+_load_session_aliases()
 
 
 def _save_session(session_id, session_data):
     """Persist session to disk as JSON (matches webui Session.save())."""
     try:
+        session_id = _resolve_session_id(session_id)
         path = os.path.join(SESSION_DIR, f"{session_id}.json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump(session_data, f, ensure_ascii=False)
@@ -844,6 +896,7 @@ def _drain_stream_steers(stream_id):
 
 def _load_session(session_id):
     """Load session from disk (matches webui Session.load())."""
+    session_id = _resolve_session_id(session_id)
     if not session_id or not all(c in "0123456789abcdefghijklmnopqrstuvwxyz_" for c in session_id):
         return None
     path = os.path.join(SESSION_DIR, f"{session_id}.json")
@@ -876,6 +929,7 @@ def _flush_all_sessions():
 
 def _get_or_create_session(session_id):
     """Get or create session — checks memory first, then disk (matches webui get_session())."""
+    session_id = _resolve_session_id(session_id)
     with SESSIONS_LOCK:
         if session_id in SESSIONS:
             return SESSIONS[session_id]
@@ -1221,21 +1275,27 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             "explicitly asks for that broader scope."
         )
 
-        # Build conversation history from SERVER-SIDE session only — always.
-        # Matches the reference UI api/streaming.py:1109-1118:
-        #   conversation_history=_sanitize_messages_for_api(s.messages)
-        #
-        # We previously had a frontend-fallback branch ("prefer frontend when it
-        # has more user messages") to handle server-side compaction/restart edge
-        # cases, but frontend messages only carry {role, content} pairs. Selecting
-        # them permanently strips tool_calls/tool_result from the saved session
-        # once result.get('messages') gets written back. MiniMax (and any weak
-        # tool-caller) then loses all tool-use precedent and falls into narration
-        # mode for the rest of the session. Always using server history prevents
-        # that cascade.
+        # Prefer the server-side session because it preserves tool_calls/tool
+        # results. However, context compression/session-id rotation can leave
+        # the server file shorter than the UI transcript. In that drift case,
+        # use the frontend transcript for this turn so Hermes does not "forget"
+        # most of the visible conversation.
         session = _get_or_create_session(session_id)
         _previous_messages = list(session.get("messages") or [])
-        clean_history = _sanitize_messages_for_api(_previous_messages)
+        _server_user_count = sum(1 for _m in _previous_messages if _m.get("role") == "user")
+        _client_user_count = sum(1 for _m in messages if isinstance(_m, dict) and _m.get("role") == "user")
+        _use_client_history = _client_user_count > (_server_user_count + 3)
+        if _use_client_history:
+            print(
+                f"[serve] /api/chat/start history drift for {session_id}: "
+                f"client_users={_client_user_count} server_users={_server_user_count}; "
+                "repairing server transcript from frontend",
+                flush=True,
+            )
+            clean_history = _sanitize_messages_for_api(messages)
+            _previous_messages = list(clean_history)
+        else:
+            clean_history = _sanitize_messages_for_api(_previous_messages)
         # Remove the last user message — it goes in user_message param instead
         if clean_history and clean_history[-1].get("role") == "user":
             clean_history.pop()
@@ -1379,6 +1439,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         _compressed = False
         if _agent_sid and _agent_sid != session_id:
             old_sid, new_sid = session_id, _agent_sid
+            _alias_session_id(old_sid, new_sid)
             old_path = os.path.join(SESSION_DIR, f"{old_sid}.json")
             new_path = os.path.join(SESSION_DIR, f"{new_sid}.json")
             with SESSIONS_LOCK:
@@ -1396,7 +1457,10 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             if _compressor and getattr(_compressor, "compression_count", 0) > 0:
                 _compressed = True
         if _compressed:
-            put("compressed", {"message": "Context auto-compressed to continue the conversation"})
+            put("compressed", {
+                "message": "Context auto-compressed to continue the conversation",
+                "session_id": session_id,
+            })
 
         # Gather usage stats
         input_tokens = getattr(agent, "session_prompt_tokens", 0) or 0
@@ -1642,7 +1706,14 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         """Start agent in background thread, return stream_id."""
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
         messages = body.get("messages", [])
-        session_id = body.get("session_id") or self.headers.get("X-Hermes-Session-Id") or f"web_{uuid.uuid4().hex[:12]}"
+        requested_session_id = body.get("session_id") or self.headers.get("X-Hermes-Session-Id") or f"web_{uuid.uuid4().hex[:12]}"
+        session_id = _resolve_session_id(requested_session_id)
+        if requested_session_id != session_id:
+            print(
+                f"[serve] /api/chat/start resolved session alias: "
+                f"{requested_session_id}->{session_id}",
+                flush=True,
+            )
         try:
             workspace = _resolve_workspace(body.get("workspace"))
             _set_last_workspace(workspace)
