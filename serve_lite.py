@@ -269,7 +269,7 @@ def _set_last_workspace(path):
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
 # GitHub. Keep in sync with the git tag (e.g. "3.3" corresponds to v3.3).
-__version__ = "3.3"
+__version__ = "3.3.1"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
 _HERMES_AGENT_RELEASES_API = "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest"
 
@@ -1272,7 +1272,9 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             "file operations. For code searches, stay inside this workspace and "
             "prefer ripgrep-style targeted searches. Do not recursively search "
             "the user's home directory or parent directories unless the user "
-            "explicitly asks for that broader scope."
+            "explicitly asks for that broader scope. If you start background "
+            "jobs, poll or inspect them before ending the turn and report the "
+            "final result instead of saying you will check back later."
         )
 
         # Prefer the server-side session because it preserves tool_calls/tool
