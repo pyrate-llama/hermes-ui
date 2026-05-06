@@ -7921,6 +7921,10 @@ function StatusBar({ connected, conversations, messages, sessionTokens, versionI
   // (Previous version captured conversations in a stale closure inside useEffect[].)
   var sessionsCount = conversations ? conversations.length : 0;
   var contextPressure = getContextPressure(messages, sessionTokens);
+  var agentInstalledVersion = versionInfo && versionInfo.agent && versionInfo.agent.installed;
+  var agentLatestVersion = versionInfo && versionInfo.agent && versionInfo.agent.latest
+    ? String(versionInfo.agent.latest).replace(/^v/i, '')
+    : '';
 
   useEffect(function() {
     var fetchStats = async function() {
@@ -8008,9 +8012,14 @@ function StatusBar({ connected, conversations, messages, sessionTokens, versionI
       {showAgentVersionNotice && (
         <div className="status-bar-item">
           <a className="status-update-pill" href={(versionInfo && versionInfo.agent && versionInfo.agent.html_url) || 'https://github.com/pyrate-llama/hermes-agent/releases'} target="_blank" rel="noopener noreferrer" title="Hermes Agent update available">
-            Agent update
+            Agent v{agentLatestVersion || 'latest'} available
           </a>
           <button className="status-mini-dismiss" onClick={onDismissAgentVersion} title="Dismiss agent update notice">×</button>
+        </div>
+      )}
+      {agentInstalledVersion && (
+        <div className="status-bar-item status-bar-version" style={{opacity:0.5}}>
+          <span>Hermes Agent v{agentInstalledVersion}</span>
         </div>
       )}
       <div className="status-bar-item" style={{position:'relative'}} ref={feedbackRef}>
@@ -8736,6 +8745,10 @@ function App() {
     versionInfo.latest && versionNoticeDismissed !== versionInfo.latest;
   const showAgentVersionNotice = versionInfo && versionInfo.agent && versionInfo.agent.update_available &&
     versionNoticeDismissed !== ('agent:' + versionInfo.agent.latest);
+  const agentInstalledVersion = versionInfo && versionInfo.agent && versionInfo.agent.installed;
+  const agentLatestVersion = versionInfo && versionInfo.agent && versionInfo.agent.latest
+    ? String(versionInfo.agent.latest).replace(/^v/i, '')
+    : '';
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showReasoningMenu, setShowReasoningMenu] = useState(false);
@@ -11503,9 +11516,12 @@ function App() {
                     )}
                     {showAgentVersionNotice && (
                       <span className="status-bar-item">
-                        <a className="status-update-pill" href={(versionInfo && versionInfo.agent && versionInfo.agent.html_url) || 'https://github.com/pyrate-llama/hermes-agent/releases'} target="_blank" rel="noopener noreferrer">Agent update</a>
+                        <a className="status-update-pill" href={(versionInfo && versionInfo.agent && versionInfo.agent.html_url) || 'https://github.com/pyrate-llama/hermes-agent/releases'} target="_blank" rel="noopener noreferrer">Agent v{agentLatestVersion || 'latest'} available</a>
                         <button className="status-mini-dismiss" onClick={dismissAgentVersionNotice} title="Dismiss agent update notice">×</button>
                       </span>
+                    )}
+                    {agentInstalledVersion && (
+                      <span className="status-bar-item status-bar-version">Hermes Agent v{agentInstalledVersion}</span>
                     )}
                     <span className="status-bar-item status-bar-version">Hermes UI v3.3.1</span>
                     <a className="composer-chip status-icon-btn" href="https://github.com/pyrate-llama/hermes-ui/issues" target="_blank" rel="noopener noreferrer" title="Open Hermes UI issues on GitHub">
