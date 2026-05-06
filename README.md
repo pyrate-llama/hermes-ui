@@ -6,13 +6,16 @@ The command center for [Hermes Agent](https://github.com/pyrate-llama/hermes-age
 
 Built as a single-file HTML application with React 18, Hermes UI provides a full-featured chat interface, real-time log streaming, file browsing, memory inspection, and more — all through a lightweight Python proxy server.
 
-![v3.3.1](https://img.shields.io/badge/version-3.3.1-ef4444?style=for-the-badge)
+![v3.3.2](https://img.shields.io/badge/version-3.3.2-ef4444?style=for-the-badge)
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
 ### Chat
 ![Chat with inline image generation and live terminal panel](screenshots/chat.png)
 ![Chat with split log panel and streaming response visibility](screenshots/chat-logs.png)
+
+### Tasks / Live Work
+![Tasks board showing active tool work and background follow-up tracking](screenshots/tasks.png)
 
 ### Dashboard
 ![Dashboard with live stats, recent activity, and installed skills](screenshots/dashboard.png)
@@ -34,6 +37,15 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 
 ---
 
+## What's new in v3.3.2
+
+Hermes UI 3.3.2 is a live-work reliability patch. It makes background/process work harder to miss, flags local-work claims when no tool ran, and keeps task status visible near the composer instead of letting it scroll away.
+
+**Live work visibility**
+- **Composer work banner** — active Hermes work and task follow-ups now stay visible directly above the message box with a quick Open Tasks action
+- **Tool honesty guard** — local file/process claims with no tool call are flagged in chat so users do not mistake narrated work for completed work
+- **Tasks screenshot** — README now shows the Tasks board and live work tracking flow
+
 ## What's new in v3.3.1
 
 Hermes UI 3.3.1 is a session-memory hotfix. It aligns the chat stream lifecycle more closely with the reference UI so context compression and session rotation do not leave the visible UI chat attached to a stale shorter backend session.
@@ -51,6 +63,8 @@ Hermes UI 3.3 is a polish and durability release. It makes the app easier to rea
 - **Health screen** — consolidated Hermes heartbeat, agent/model/provider status, Scrapling/web extraction status, and redacted recent log snippets
 - **Recent log safety** — logs shown in the UI are allowlisted and redacted so tokens and API keys do not leak into the app surface
 - **Version/update awareness** — Hermes UI and Hermes Agent update status stay visible in-app without taking over the main workspace
+- **Background work monitor** — active tools and "check back later" background work surface in Tasks and show a compact chat notice so users know where to continue
+- **Tool honesty guard** — local file/process claims with no tool call are flagged in chat so users do not mistake narrated work for completed work
 
 **Chat performance + usability**
 - **Long-chat smoothing** — very large conversations render the newest messages first with a load-older control to reduce browser memory pressure
@@ -161,7 +175,7 @@ Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily com
 
 **Tasks / Kanban**
 - Live board generated from existing Hermes chat signals, not a separate manual task database
-- Tracks todos, delegated subagent work, active agent turns, blocked items, and completed work
+- Tracks todos, delegated subagent work, active agent turns, running tool calls, background follow-ups, blocked items, and completed work
 - Opens source chats from task cards so users can continue the original work
 - Works with Hermes Agent v0.12.0 without depending on the upstream Kanban experiment that was reverted before the 0.12 stable release
 
@@ -200,7 +214,8 @@ Hermes UI 3.1 is a workflow release: it makes the app feel more like a daily com
 - Search and browse all installed Hermes skills
 - Sort by newest, oldest, or name — see what Hermes has been creating
 - Relative timestamps on each skill (e.g. "2h ago", "3d ago")
-- Edit and delete installed skills from the UI
+- Edit installed skills from the UI
+- Move skills to local trash instead of hard-deleting them, with restore controls in Skills Safety
 - View skill descriptions, tags, and trigger phrases
 
 **Jobs Monitor**

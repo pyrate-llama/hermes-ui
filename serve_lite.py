@@ -269,7 +269,7 @@ def _set_last_workspace(path):
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
 # GitHub. Keep in sync with the git tag (e.g. "3.3" corresponds to v3.3).
-__version__ = "3.3.1"
+__version__ = "3.3.2"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
 _HERMES_AGENT_RELEASES_API = "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest"
 
@@ -1272,9 +1272,20 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             "file operations. For code searches, stay inside this workspace and "
             "prefer ripgrep-style targeted searches. Do not recursively search "
             "the user's home directory or parent directories unless the user "
-            "explicitly asks for that broader scope. If you start background "
-            "jobs, poll or inspect them before ending the turn and report the "
-            "final result instead of saying you will check back later."
+            "explicitly asks for that broader scope.\n"
+            "Tool honesty rule: never claim that you created, edited, cut, "
+            "cropped, uploaded, downloaded, moved, deleted, ran, checked, "
+            "inspected, generated, transcribed, or otherwise changed a local "
+            "file or process unless you actually used a tool in this turn and "
+            "observed the result. If you need to do local/process work, use the "
+            "appropriate file, terminal, process, browser, or MCP tool first. If "
+            "no tool was used, say you have not done it yet and describe the "
+            "tool action needed. If you start background jobs, poll or inspect "
+            "them before ending the turn and report the final result instead of "
+            "saying you will check back later. After a tool result, if your next "
+            "sentence says you need to run, caption, render, upload, check, or "
+            "otherwise perform another local action, call the needed tool in the "
+            "same turn instead of ending with a promise to do it."
         )
 
         # Prefer the server-side session because it preserves tool_calls/tool
@@ -2694,7 +2705,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._json({"error": str(e)}, 500)
 
     def _handle_skill_delete(self):
-        """POST /api/skills/delete — remove a skill directory tree."""
+        """POST /api/skills/delete — move a skill directory tree into local trash."""
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
         except Exception:
@@ -2720,8 +2731,83 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             if target is None:
                 return self._json({"error": "Skill not found", "name": name}, 404)
             target.resolve().relative_to(SKILLS_DIR.resolve())
-            shutil.rmtree(target)
-            self._json({"success": True, "name": name, "path": str(target)})
+            trash_root = pathlib.Path.home() / ".hermes-ui" / "skill-trash"
+            trash_root.mkdir(parents=True, exist_ok=True)
+            rel_parent = target.parent.resolve().relative_to(SKILLS_DIR.resolve())
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            trash_id = f"{stamp}-{target.name}-{uuid.uuid4().hex[:8]}"
+            trash_entry = trash_root / trash_id
+            trash_entry.mkdir(parents=True, exist_ok=False)
+            trashed_skill = trash_entry / target.name
+            shutil.move(str(target), str(trashed_skill))
+            metadata = {
+                "id": trash_id,
+                "name": name,
+                "folder_name": target.name,
+                "deleted_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "original_parent": "." if str(rel_parent) == "." else str(rel_parent),
+                "original_path": str(target),
+                "trash_path": str(trashed_skill),
+            }
+            (trash_entry / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+            self._json({"success": True, "name": name, "trashed": True, "trash_id": trash_id, "path": str(trashed_skill)})
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+
+    def _handle_skills_trash(self):
+        """GET /api/skills/trash — list locally trashed skills that can be restored."""
+        trash_root = pathlib.Path.home() / ".hermes-ui" / "skill-trash"
+        entries = []
+        try:
+            if trash_root.exists():
+                for child in sorted(trash_root.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+                    if not child.is_dir():
+                        continue
+                    meta_file = child / "metadata.json"
+                    if not meta_file.exists():
+                        continue
+                    try:
+                        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                        skill_path = child / meta.get("folder_name", meta.get("name", ""))
+                        if skill_path.exists():
+                            entries.append(meta)
+                    except Exception:
+                        continue
+            self._json({"trash": entries})
+        except Exception as e:
+            self._json({"error": str(e), "trash": []}, 500)
+
+    def _handle_skill_restore(self):
+        """POST /api/skills/restore — restore a skill moved to local trash."""
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+        except Exception:
+            return self._json({"error": "Invalid JSON body"}, 400)
+        trash_id = (body.get("id") or "").strip()
+        if not trash_id or "/" in trash_id or ".." in trash_id:
+            return self._json({"error": "Invalid trash id"}, 400)
+        try:
+            from tools.skills_tool import SKILLS_DIR
+            trash_root = pathlib.Path.home() / ".hermes-ui" / "skill-trash"
+            trash_entry = trash_root / trash_id
+            meta_file = trash_entry / "metadata.json"
+            if not meta_file.exists():
+                return self._json({"error": "Trashed skill not found"}, 404)
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+            folder_name = meta.get("folder_name") or meta.get("name")
+            original_parent = meta.get("original_parent") or "."
+            source = trash_entry / folder_name
+            dest_parent = (SKILLS_DIR / original_parent).resolve()
+            dest_parent.relative_to(SKILLS_DIR.resolve())
+            dest = dest_parent / folder_name
+            if not source.exists():
+                return self._json({"error": "Trashed skill folder is missing"}, 404)
+            if dest.exists():
+                return self._json({"error": f"Cannot restore: {dest} already exists"}, 409)
+            dest_parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(source), str(dest))
+            shutil.rmtree(trash_entry, ignore_errors=True)
+            self._json({"success": True, "name": meta.get("name") or folder_name, "path": str(dest)})
         except Exception as e:
             self._json({"error": str(e)}, 500)
 
@@ -2988,6 +3074,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_memory()
         elif self.path == "/skills/dates" or self.path.startswith("/skills/dates?"):
             self._handle_skills_dates()
+        elif self.path == "/api/skills/trash":
+            self._handle_skills_trash()
         elif self.path.startswith("/api/skills/content"):
             self._handle_skill_content()
         elif self.path == "/api/skills" or self.path.startswith("/api/skills?"):
@@ -3054,6 +3142,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_skill_save()
         elif self.path == "/api/skills/delete":
             self._handle_skill_delete()
+        elif self.path == "/api/skills/restore":
+            self._handle_skill_restore()
         elif self.path.startswith("/server/pull-full-restart"):
             self._server_pull_full_restart()
         elif self.path.startswith("/server/full-restart"):

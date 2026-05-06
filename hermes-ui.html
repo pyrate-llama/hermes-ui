@@ -627,6 +627,23 @@
     font-family: 'Monaco', 'Menlo', monospace; font-size: 11px; line-height: 1.5;
     white-space: pre-wrap;
   }
+  .toolless-work-warning {
+    margin: 0 0 10px 0;
+    border: 1px solid rgba(232,176,74,0.34);
+    background: linear-gradient(135deg, rgba(232,176,74,0.14), rgba(232,176,74,0.04));
+    color: var(--text-secondary);
+    border-radius: 10px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .toolless-work-warning strong {
+    color: var(--warning);
+    font-weight: 800;
+  }
   .tool-call-row {
     display: flex; align-items: center; gap: 10px;
     font-family: 'Monaco', 'Menlo', monospace; font-size: 12px;
@@ -1290,6 +1307,11 @@
     margin-top: 8px; color: var(--text-secondary); font-size: 11px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  .task-card-detail {
+    margin-top: 7px; color: var(--text-muted); font-size: 11px; line-height: 1.35;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
   .task-card-tags {
     display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px;
   }
@@ -1299,6 +1321,24 @@
     background: rgba(255,255,255,0.025);
   }
   .task-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .skills-safety-card {
+    border: 1px solid rgba(245,185,77,0.26); border-radius: 12px;
+    background: linear-gradient(135deg, rgba(245,185,77,0.08), rgba(124,111,224,0.045));
+    padding: 12px 14px; margin-bottom: 14px;
+  }
+  .skills-safety-title {
+    display: flex; align-items: center; gap: 8px; color: var(--text-primary);
+    font-size: 13px; font-weight: 760; margin-bottom: 4px;
+  }
+  .skills-safety-copy { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+  .skills-trash-list { display: grid; gap: 8px; margin-top: 10px; }
+  .skills-trash-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    border: 1px solid var(--glass-border); border-radius: 9px;
+    background: rgba(0,0,0,0.12); padding: 8px 10px;
+  }
+  .skills-trash-name { color: var(--text-primary); font-size: 12px; font-weight: 680; }
+  .skills-trash-meta { color: var(--text-muted); font-size: 10px; font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
 
   .input-area {
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
@@ -1307,6 +1347,37 @@
   }
 
   .input-container { display: flex; flex-direction: column; gap: 4px; }
+  .composer-work-banner {
+    width: 100%;
+    border: 1px solid rgba(232,176,74,0.40);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(232,176,74,0.16), rgba(124,111,224,0.08));
+    color: var(--text-primary);
+    padding: 8px 12px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    cursor: pointer; box-shadow: 0 10px 30px rgba(232,176,74,0.08);
+    transition: border-color .16s ease, background .16s ease, transform .16s ease;
+  }
+  .composer-work-banner:hover {
+    transform: translateY(-1px);
+    border-color: rgba(232,176,74,0.58);
+    background: linear-gradient(135deg, rgba(232,176,74,0.20), rgba(124,111,224,0.11));
+  }
+  .composer-work-banner-main {
+    min-width: 0; display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 750;
+  }
+  .composer-work-banner-main .status-dot-live {
+    width: 8px; height: 8px; background: var(--warning);
+    box-shadow: 0 0 10px rgba(232,176,74,0.55);
+  }
+  .composer-work-banner-detail {
+    min-width: 0; color: var(--text-secondary); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600;
+  }
+  .composer-work-banner-action {
+    flex: 0 0 auto; color: #f5d18a; font-size: 11px; font-weight: 800;
+  }
 
   .image-preview-strip {
     display: flex; gap: 8px; overflow-x: auto; padding: 4px 0;
@@ -3212,6 +3283,7 @@ function Icon({ name, size, className, strokeWidth }) {
     case 'settings': return (<svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>);
     case 'list-todo': return (<svg {...common}><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>);
     case 'circle-help': return (<svg {...common}><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.7 1.4c-.9 1.2-2.8 1.4-2.8 3.1"/><path d="M12 17h.01"/></svg>);
+    case 'circle-alert': return (<svg {...common}><circle cx="12" cy="12" r="10"/><path d="M12 8v5"/><path d="M12 17h.01"/></svg>);
     case 'rotate-ccw': return (<svg {...common}><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>);
     case 'menu': return (<svg {...common}><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>);
     case 'x': return (<svg {...common}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>);
@@ -4045,6 +4117,17 @@ function applyTextTodoCompletion(todos, text) {
   });
 }
 
+function messageClaimsLocalWorkWithoutTools(message) {
+  if (!message || message.role !== 'assistant') return false;
+  if (message.streaming || message.thinking || message.error) return false;
+  if ((message.toolCalls || []).length > 0) return false;
+  var text = String(message.content || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!text) return false;
+  var localNoun = /(file|folder|directory|path|video|image|audio|caption|thumbnail|script|command|terminal|process|upload|download|ffmpeg|python|crop|cut|render|transcrib|generate|saved?|created?|deleted?|moved?|copied?)/;
+  var workClaim = /\b(i(?:'m| am|’m)?\s+(?:still\s+)?(?:cutting|cropping|rendering|uploading|downloading|saving|writing|creating|deleting|moving|copying|running|executing|checking|inspecting|generating|transcribing)|(?:cutting|cropping|rendering|uploading|downloading|saving|writing|creating|deleting|moving|copying|running|executing|checking|inspecting|generating|transcribing)\s+now|still\s+(?:cutting|cropping|rendering|uploading|downloading|running|generating|transcribing)|let\s+me\s+(?:run|cut|crop|render|upload|download|save|write|create|delete|move|copy|check|inspect|generate|transcribe)|i(?:'ll| will|’ll)\s+(?:run|cut|crop|render|upload|download|save|write|create|delete|move|copy|check|inspect|generate|transcribe)|(?:has been|is|are)\s+(?:cut|cropped|rendered|uploaded|downloaded|saved|written|created|deleted|moved|copied|checked|inspected|generated|transcribed))\b/;
+  return localNoun.test(text) && workClaim.test(text);
+}
+
 function getSessionTodos(messages) {
   var source = messages || [];
   var latestUserIndex = -1;
@@ -4164,6 +4247,26 @@ function taskPreview(value, fallback) {
   return text.length > 130 ? text.slice(0, 127) + '...' : text;
 }
 
+function toolTaskLabel(tool) {
+  var label = String((tool && (tool.label || tool.toolName)) || 'Tool call').replace(/\s+/g, ' ').trim();
+  return taskPreview(label, 'Tool call');
+}
+
+function toolTaskDetail(tool) {
+  if (!tool) return '';
+  var result = tool.result;
+  if (result && typeof result !== 'string') {
+    try { result = JSON.stringify(result); } catch(e) { result = ''; }
+  }
+  var text = String(result || tool.args || '').replace(/\s+/g, ' ').trim();
+  return text ? taskPreview(text, '') : '';
+}
+
+function contentSuggestsBackgroundFollowup(content) {
+  var text = String(content || '').toLowerCase();
+  return /(running in (the )?background|check back|i.ll check|i will check|wait for them to complete|background job|background process|(?:let me|i(?:'ll| will|’ll)|i need to)\s+(?:run|cut|crop|caption|render|upload|download|save|write|create|delete|move|copy|check|inspect|generate|transcribe)|(?:capturing|rendering|uploading|downloading|cutting|cropping|saving|writing|creating|moving|copying|checking|inspecting|generating|transcribing)\b.*\bnow\b)/.test(text);
+}
+
 function buildTaskBoardItems(conversations, streamingSessionIds, agentStateBySession, activeConvId) {
   var items = [];
   var source = Array.isArray(conversations) ? conversations : [];
@@ -4174,6 +4277,13 @@ function buildTaskBoardItems(conversations, streamingSessionIds, agentStateBySes
     var isStreamingConv = streamingSessionIds.indexOf(conv.id) !== -1;
     var agentState = agentStateBySession && agentStateBySession[conv.id];
     var todos = getSessionTodos(messages);
+    var latestAssistant = null;
+    for (var latestIndex = messages.length - 1; latestIndex >= 0; latestIndex--) {
+      if (messages[latestIndex] && messages[latestIndex].role === 'assistant') {
+        latestAssistant = messages[latestIndex];
+        break;
+      }
+    }
     if (isStreamingConv || agentState) {
       items.push({
         id: conv.id + ':agent',
@@ -4184,6 +4294,22 @@ function buildTaskBoardItems(conversations, streamingSessionIds, agentStateBySes
         kind: 'Agent',
         status: (agentState && agentState.label) || (isStreamingConv ? 'Running' : 'Ready'),
         active: conv.id === activeConvId,
+        detail: agentState && agentState.detail ? taskPreview(agentState.detail, '') : '',
+        updated: conv.last_active_at || conv.created || '',
+      });
+    }
+    if (!isStreamingConv && latestAssistant && contentSuggestsBackgroundFollowup(latestAssistant.content)) {
+      var promisedToolWork = messageClaimsLocalWorkWithoutTools(latestAssistant);
+      items.push({
+        id: conv.id + ':background-followup',
+        column: 'blocked',
+        title: promisedToolWork ? 'Promised work needs a real tool' : 'Background work needs a final check',
+        source: convTitle,
+        sessionId: conv.id,
+        kind: promisedToolWork ? 'Tool needed' : 'Background',
+        status: 'Needs follow-up',
+        active: conv.id === activeConvId,
+        detail: taskPreview(latestAssistant.content, ''),
         updated: conv.last_active_at || conv.created || '',
       });
     }
@@ -4198,12 +4324,28 @@ function buildTaskBoardItems(conversations, streamingSessionIds, agentStateBySes
         kind: 'Todo',
         status: taskStatusLabel(normalized.status),
         active: conv.id === activeConvId,
+        detail: '',
         updated: conv.last_active_at || conv.created || '',
       });
     });
     messages.forEach(function(msg, msgIndex) {
       ((msg && msg.toolCalls) || []).forEach(function(tool, toolIndex) {
-        if (!isDelegationTool(tool)) return;
+        if (!isDelegationTool(tool)) {
+          if (!tool || tool.done || (!isStreamingConv && !msg.streaming)) return;
+          items.push({
+            id: conv.id + ':tool:' + msgIndex + ':' + toolIndex,
+            column: 'active',
+            title: toolTaskLabel(tool),
+            source: convTitle,
+            sessionId: conv.id,
+            kind: 'Tool',
+            status: 'Running',
+            active: conv.id === activeConvId,
+            detail: toolTaskDetail(tool),
+            updated: conv.last_active_at || conv.created || '',
+          });
+          return;
+        }
         var tasks = getDelegationTasks(tool);
         var title = tasks.length
           ? taskPreview(getDelegationGoal(tasks[0]), getDelegationTitle(tool))
@@ -4217,6 +4359,7 @@ function buildTaskBoardItems(conversations, streamingSessionIds, agentStateBySes
           kind: tasks.length > 1 ? (tasks.length + ' subagents') : getDelegationTitle(tool),
           status: tool.done ? 'Done' : 'Running',
           active: conv.id === activeConvId,
+          detail: toolTaskDetail(tool),
           updated: conv.last_active_at || conv.created || '',
         });
       });
@@ -4238,9 +4381,9 @@ function TasksView({ conversations, streamingSessionIds, agentStateBySession, ac
     return [item.title, item.source, item.kind, item.status].join(' ').toLowerCase().indexOf(query) !== -1;
   }) : items;
   var columns = [
-    { id: 'backlog', label: 'Backlog', icon: 'list-todo' },
-    { id: 'active', label: 'Active', icon: 'activity' },
-    { id: 'blocked', label: 'Blocked', icon: 'circle-help' },
+    { id: 'backlog', label: 'Triage', icon: 'list-todo' },
+    { id: 'active', label: 'Running', icon: 'activity' },
+    { id: 'blocked', label: 'Needs You', icon: 'circle-help' },
     { id: 'done', label: 'Done', icon: 'check' },
   ];
   var counts = columns.reduce(function(acc, col) {
@@ -4262,7 +4405,7 @@ function TasksView({ conversations, streamingSessionIds, agentStateBySession, ac
         <div className="tasks-toolbar-copy">
           <div className="tasks-toolbar-title"><Icon name="list-todo" size={17}/> Tasks</div>
           <div className="tasks-toolbar-subtitle">
-            Live board built from Hermes todos, subagents, and active chat work. Click any card to jump back to its source chat.
+            Live board built from Hermes todos, active tools, background follow-ups, subagents, and chat work. Click any card to jump back to its source chat.
           </div>
         </div>
         <input className="tasks-filter" value={filter} onChange={function(e){ setFilter(e.target.value); }} placeholder="Filter tasks..." />
@@ -4313,6 +4456,7 @@ function TasksView({ conversations, streamingSessionIds, agentStateBySession, ac
                       <button key={item.id} className={"task-card " + (item.column === 'done' ? 'completed' : '')} onClick={function(){ openTask(item); }}>
                         <div className="task-card-title">{item.title}</div>
                         <div className="task-card-source">{item.source}</div>
+                        {item.detail && <div className="task-card-detail">{item.detail}</div>}
                         <div className="task-card-tags">
                           <span className="task-tag">{item.kind}</span>
                           <span className="task-tag">{item.status}</span>
@@ -4435,6 +4579,7 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
   var reasoningText = reasoningItems.map(function(item) {
     return typeof item === 'string' ? item : (item && item.text) || '';
   }).filter(Boolean).join('\n');
+  var showToollessWorkWarning = messageClaimsLocalWorkWithoutTools(message);
 
   useEffect(() => {
     if (!contentRef.current) return;
@@ -4527,6 +4672,13 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
           <summary>Reasoning notes</summary>
           <div className="reasoning-card-body">{reasoningText}</div>
         </details>
+      )}
+
+      {showToollessWorkWarning && (
+        <div className="toolless-work-warning">
+          <Icon name="circle-alert" size={14}/>
+          <span><strong>No tool ran.</strong> Hermes described local work, but this reply has no tool call attached. Treat it as not done until a tool result appears.</span>
+        </div>
       )}
 
       {message.content && (
@@ -6687,6 +6839,8 @@ function SkillsView() {
   var [editingSkill, setEditingSkill] = useState(null);
   var [editContent, setEditContent] = useState('');
   var [saving, setSaving] = useState(false);
+  var [deletedSkills, setDeletedSkills] = useState([]);
+  var [restoringSkill, setRestoringSkill] = useState(null);
 
   useEffect(function() {
     var fetchSkills = async function() {
@@ -6712,8 +6866,18 @@ function SkillsView() {
         }
       } catch (e) { /* ignore */ }
     };
+    var fetchTrash = async function() {
+      try {
+        var r = await fetch(API_BASE + '/api/skills/trash');
+        if (r.ok) {
+          var data = await r.json();
+          setDeletedSkills(data.trash || []);
+        }
+      } catch (e) { /* ignore */ }
+    };
     fetchSkills();
     fetchDates();
+    fetchTrash();
   }, []);
 
   var fetchSkillDetails = async function(skillName) {
@@ -6756,7 +6920,7 @@ function SkillsView() {
   };
 
   var handleDeleteClick = async function(skillName) {
-    if (!window.confirm('Delete skill "' + skillName + '"? This permanently removes the skill directory and cannot be undone.')) return;
+    if (!window.confirm('Move skill "' + skillName + '" to local trash? You can restore it from the Skills Safety panel.')) return;
     try {
       var r = await fetch(API_BASE + '/api/skills/delete', {
         method: 'POST',
@@ -6767,6 +6931,13 @@ function SkillsView() {
       try { data = await r.json(); } catch (e) {}
       if (r.ok && data.success) {
         setSkills(function(prev) { return prev.filter(function(s) { return s.name !== skillName; }); });
+        try {
+          var trashResp = await fetch(API_BASE + '/api/skills/trash');
+          if (trashResp.ok) {
+            var trashData = await trashResp.json();
+            setDeletedSkills(trashData.trash || []);
+          }
+        } catch (e) {}
         if (expandedSkillName === skillName) { setExpandedSkillName(null); setExpandedSkillDetails(null); }
         if (editingSkill === skillName) { setEditingSkill(null); setEditContent(''); }
       } else {
@@ -6775,6 +6946,37 @@ function SkillsView() {
     } catch (e) {
       alert('Delete error: ' + e.message);
     }
+  };
+
+  var handleRestoreSkill = async function(entry) {
+    if (!entry || !entry.id) return;
+    setRestoringSkill(entry.id);
+    try {
+      var r = await fetch(API_BASE + '/api/skills/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: entry.id }),
+      });
+      var data = {};
+      try { data = await r.json(); } catch (e) {}
+      if (!r.ok || !data.success) {
+        alert('Restore failed: ' + (data.error || 'HTTP ' + r.status));
+      } else {
+        var skillsResp = await fetch(API_BASE + '/api/skills');
+        if (skillsResp.ok) {
+          var skillsData = await skillsResp.json();
+          setSkills(skillsData.skills || []);
+        }
+        var trashResp = await fetch(API_BASE + '/api/skills/trash');
+        if (trashResp.ok) {
+          var trashData = await trashResp.json();
+          setDeletedSkills(trashData.trash || []);
+        }
+      }
+    } catch (e) {
+      alert('Restore error: ' + e.message);
+    }
+    setRestoringSkill(null);
   };
 
   var handleEditClick = function(skillName) {
@@ -6910,6 +7112,30 @@ function SkillsView() {
           value={searchTerm} onChange={function(e) { setSearchTerm(e.target.value); }}
           style={{flex:'1 1 200px',minWidth:'140px',maxWidth:'320px'}} />
       </div>
+      <div className="skills-safety-card">
+        <div className="skills-safety-title"><Icon name="shield" size={14}/> Skills Safety</div>
+        <div className="skills-safety-copy">
+          Deletes now move skills into local trash first, so accidental cleanup can be reversed before anything important disappears.
+        </div>
+        {deletedSkills.length > 0 && (
+          <div className="skills-trash-list">
+            {deletedSkills.slice(0, 5).map(function(entry) {
+              return (
+                <div key={entry.id} className="skills-trash-row">
+                  <div style={{minWidth:0}}>
+                    <div className="skills-trash-name">{entry.name || entry.folder_name}</div>
+                    <div className="skills-trash-meta">{entry.deleted_at || 'Recently deleted'} · {entry.original_parent || '.'}</div>
+                  </div>
+                  <button className="skill-btn" onClick={function(){ handleRestoreSkill(entry); }} disabled={restoringSkill === entry.id}
+                    style={{background:'var(--bg-secondary)',color:'var(--accent)',borderColor:'var(--border)',flexShrink:0}}>
+                    {restoringSkill === entry.id ? 'Restoring...' : 'Restore'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
       {activeTab === 'installed' ? (
         <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
           {filtered.map(function(skill, i) {
@@ -6935,7 +7161,7 @@ function SkillsView() {
                     <button className="skill-btn" onClick={function() { handleDetailsClick(skill.name); }} style={{background:isExpanded ? 'var(--accent)' : 'var(--bg-secondary)',color:isExpanded ? 'white' : 'var(--text-secondary)',borderColor:isExpanded ? 'var(--accent)' : 'var(--border)'}}>Details</button>
                     <button className="skill-btn" onClick={function() { handleEditClick(skill.name); }} style={{background:editingSkill === skill.name ? 'var(--warning)' : 'var(--bg-secondary)',color:editingSkill === skill.name ? 'white' : 'var(--text-secondary)',borderColor:editingSkill === skill.name ? 'var(--warning)' : 'var(--border)'}}>Edit</button>
                     <button className="skill-btn" onClick={function() { handleEnabledToggle(skill.name); }} style={{background:isEnabled ? 'var(--success)' : 'var(--bg-secondary)',color:isEnabled ? 'white' : 'var(--text-secondary)',borderColor:isEnabled ? 'var(--success)' : 'var(--border)'}}>{isEnabled ? 'Enabled' : 'Disabled'}</button>
-                    <button className="skill-btn" onClick={function() { handleDeleteClick(skill.name); }} title={'Delete ' + skill.name} style={{background:'var(--bg-secondary)',color:'var(--danger, #dc2626)',borderColor:'var(--border)',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'6px'}}><Icon name="trash" size={13} />Delete</button>
+                    <button className="skill-btn" onClick={function() { handleDeleteClick(skill.name); }} title={'Move ' + skill.name + ' to local trash'} style={{background:'var(--bg-secondary)',color:'var(--danger, #dc2626)',borderColor:'var(--border)',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'6px'}}><Icon name="trash" size={13} />Trash</button>
                   </div>
                 </div>
                 {isExpanded && (
@@ -8064,7 +8290,7 @@ function StatusBar({ connected, conversations, messages, sessionTokens, versionI
         )}
       </div>
       <div className="status-bar-item status-bar-version" style={{opacity:0.5}}>
-        <span>Hermes UI v3.3.1</span>
+        <span>Hermes UI v3.3.2</span>
       </div>
     </div>
   );
@@ -11018,6 +11244,23 @@ function App() {
   var visibleMessages = messages.slice(firstRenderedMessageIndex);
   var hiddenMessageCount = firstRenderedMessageIndex;
   var extraNavActive = ['dashboard','delegation','spaces','terminal','jobs','memory','skills'].indexOf(currentView) !== -1;
+  var activeWorkItems = activeConvId ? buildTaskBoardItems(
+    conversations.filter(function(c) { return c.id === activeConvId; }),
+    streamingSessionIds || [],
+    agentStateBySession || {},
+    activeConvId
+  ).filter(function(item) { return item.column === 'active' || item.column === 'blocked'; }).slice(0, 3) : [];
+  var showWorkStatusPill = currentView === 'chat' && (isStreaming || activeWorkItems.length > 0 || !!activeAgentState);
+  var workStatusLabel = activeWorkItems.length
+    ? (activeWorkItems[0].kind + ': ' + activeWorkItems[0].status)
+    : (visibleAgentState && visibleAgentState.label)
+      ? visibleAgentState.label
+      : (isStreaming ? 'Working' : 'Tasks');
+  var workStatusDetail = activeWorkItems.length
+    ? activeWorkItems[0].title
+    : (visibleAgentState && visibleAgentState.detail)
+      ? visibleAgentState.detail
+      : 'Open Tasks for live progress';
   var composerContextPressure = getContextPressure(messages, sessionTokens);
   var sidebarStyle = isDesktopLayout
     ? {
@@ -11253,6 +11496,15 @@ function App() {
                       <button onClick={function(){ setMessageRenderLimit(function(limit) { return Math.min(messages.length, limit + 220); }); }}>Load older</button>
                     </div>
                   )}
+                  {activeWorkItems.length > 0 && (
+                    <div className="message-window-notice">
+                      <span>
+                        {activeWorkItems.length === 1 ? activeWorkItems[0].title : activeWorkItems.length + ' work items are active or need follow-up'}
+                        {activeWorkItems[0] && activeWorkItems[0].status ? ' · ' + activeWorkItems[0].status : ''}
+                      </span>
+                      <button onClick={function(){ setCurrentView('tasks'); }}>Open Tasks</button>
+                    </div>
+                  )}
                   {visibleMessages.map((msg, visibleIdx) => {
                     var idx = firstRenderedMessageIndex + visibleIdx;
                     return (
@@ -11359,6 +11611,21 @@ function App() {
                     }} style={{background:'var(--accent)',color:'white',border:'none',borderRadius:'6px',padding:'4px 12px',fontSize:'12px',cursor:'pointer',fontWeight:600}}>Resume</button>
                     <button className="cancel-resume" onClick={cancelPause}>Dismiss</button>
                   </div>
+                )}
+                {showWorkStatusPill && (
+                  <button
+                    className="composer-work-banner"
+                    onClick={function(){ setCurrentView('tasks'); }}
+                    title="Open Tasks to see what Hermes is doing"
+                  >
+                    <span className="composer-work-banner-main">
+                      <span className="status-dot-live"></span>
+                      <Icon name="list-todo" size={14}/>
+                      <span>{workStatusLabel}</span>
+                    </span>
+                    <span className="composer-work-banner-detail">{workStatusDetail}</span>
+                    <span className="composer-work-banner-action">Open Tasks</span>
+                  </button>
                 )}
 
                 <div className="input-wrapper" style={{position:'relative'}} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleFileDrop}>
@@ -11523,7 +11790,7 @@ function App() {
                     {agentInstalledVersion && (
                       <span className="status-bar-item status-bar-version">Hermes Agent v{agentInstalledVersion}</span>
                     )}
-                    <span className="status-bar-item status-bar-version">Hermes UI v3.3.1</span>
+                    <span className="status-bar-item status-bar-version">Hermes UI v3.3.2</span>
                     <a className="composer-chip status-icon-btn" href="https://github.com/pyrate-llama/hermes-ui/issues" target="_blank" rel="noopener noreferrer" title="Open Hermes UI issues on GitHub">
                       <Icon name="message-square" size={12}/>
                     </a>
