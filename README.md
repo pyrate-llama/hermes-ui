@@ -6,7 +6,7 @@ The command center for [Hermes Agent](https://github.com/pyrate-llama/hermes-age
 
 Built as a single-file HTML application with React 18, Hermes UI provides a full-featured chat interface, real-time log streaming, file browsing, memory inspection, and more — all through a lightweight Python proxy server.
 
-![v3.3.8](https://img.shields.io/badge/version-3.3.8-ef4444?style=for-the-badge)
+![v3.3.9](https://img.shields.io/badge/version-3.3.9-ef4444?style=for-the-badge)
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
@@ -36,6 +36,15 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 ![Built-in terminal area with Hermes and Claude Code tabs](screenshots/terminal.png)
 
 ---
+
+## What's new in v3.3.9
+
+Hermes UI 3.3.9 adds video uploads for local/video-capable model workflows such as Kimi.
+
+**Video uploads**
+- **Composer video attach** — the file attachment button and drag/drop now accept common video formats
+- **Workspace upload path** — videos are saved into the active workspace's `uploads/` folder and attached to the prompt by local path
+- **Binary-safe prompts** — video bytes are not inlined into chat history; Hermes receives the saved file path, MIME type, and size
 
 ## What's new in v3.3.8
 

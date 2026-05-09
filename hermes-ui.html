@@ -8472,7 +8472,7 @@ function StatusBar({ connected, conversations, messages, sessionTokens, versionI
         )}
       </div>
       <div className="status-bar-item status-bar-version" style={{opacity:0.5}}>
-        <span>Hermes UI v3.3.8</span>
+        <span>Hermes UI v3.3.9</span>
       </div>
     </div>
   );
@@ -10111,11 +10111,18 @@ function App() {
 
   // ── File attachment helpers (matching webui pattern) ──
   var TEXT_EXTENSIONS = { md: 'text/markdown', txt: 'text/plain', json: 'application/json', csv: 'text/csv', ts: 'text/plain', tsx: 'text/plain', js: 'text/plain', py: 'text/plain', pdf: 'application/pdf', rtf: 'application/rtf' };
+  var VIDEO_EXTENSIONS = { mp4: true, mov: true, webm: true, m4v: true, mkv: true, avi: true };
   function isTextFile(file) {
     var mime = (file.type || '').toLowerCase();
     if (mime.startsWith('text/') || mime === 'application/json') return true;
     var ext = (file.name || '').split('.').pop().toLowerCase();
     return !!TEXT_EXTENSIONS[ext];
+  }
+  function isVideoFile(file) {
+    var mime = (file.type || '').toLowerCase();
+    if (mime.startsWith('video/')) return true;
+    var ext = (file.name || '').split('.').pop().toLowerCase();
+    return !!VIDEO_EXTENSIONS[ext];
   }
   function formatFileSize(bytes) {
     if (!bytes || bytes <= 0) return '';
@@ -10125,18 +10132,41 @@ function App() {
     return (u === 0 ? v : v.toFixed(1)) + ' ' + units[u];
   }
   var MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  var MAX_VIDEO_UPLOAD_SIZE = 750 * 1024 * 1024; // 750MB
 
   const addFiles = async (fileList) => {
-    var files = Array.from(fileList).filter(function(f) { return isTextFile(f); });
+    var files = Array.from(fileList).filter(function(f) { return isTextFile(f) || isVideoFile(f); });
     if (!files.length) return;
     var results = [];
     for (var i = 0; i < files.length; i++) {
       var file = files[i];
-      if (file.size > MAX_FILE_SIZE) { continue; }
+      var isVideo = isVideoFile(file);
+      if (!isVideo && file.size > MAX_FILE_SIZE) { continue; }
+      if (isVideo && file.size > MAX_VIDEO_UPLOAD_SIZE) { continue; }
       var ext = (file.name || '').split('.').pop().toLowerCase();
       try {
         var content, displayName = file.name, displaySize = file.size;
-        if (ext === 'rtf') {
+        if (isVideo) {
+          var form = new FormData();
+          form.append('file', file, file.name);
+          form.append('workspace', activeWorkspace.path || '');
+          var upResp = await fetch('/api/upload', { method: 'POST', body: form });
+          if (!upResp.ok) {
+            console.error('Video upload failed:', upResp.status, await upResp.text());
+            continue;
+          }
+          var upData = await upResp.json();
+          var saved = upData && upData.files && upData.files[0];
+          if (!upData || !upData.ok || !saved || !saved.path) {
+            console.error('Video upload error:', upData && upData.error);
+            continue;
+          }
+          content = 'Video file uploaded to local workspace path: ' + saved.path + '\nMIME type: ' + (saved.type || file.type || 'video/*') + '\nSize: ' + formatFileSize(saved.size || file.size) + '\nUse local file tools, ffmpeg, or video-capable model workflows to inspect this file.';
+          displayName = saved.name || file.name;
+          displaySize = saved.size || file.size;
+          results.push({ id: Date.now() + '-' + i, name: displayName, size: displaySize, content: content, path: saved.path, mime: saved.type || file.type || 'video/*', kind: 'video' });
+          continue;
+        } else if (ext === 'rtf') {
           // Convert RTF → plain text via server (macOS textutil).
           // Rename to .txt so Hermes reads it as plain text.
           var resp = await fetch('/api/convert/rtf-to-txt', {
@@ -10164,7 +10194,7 @@ function App() {
             reader.readAsText(file);
           });
         }
-        results.push({ id: Date.now() + '-' + i, name: displayName, size: displaySize, content: content });
+        results.push({ id: Date.now() + '-' + i, name: displayName, size: displaySize, content: content, kind: 'file' });
       } catch (e) { console.error('Failed to read file:', file.name, e); }
     }
     if (results.length) setPendingFiles(function(prev) { return prev.concat(results); });
@@ -10186,7 +10216,7 @@ function App() {
       var textFiles = [];
       Array.from(e.dataTransfer.files).forEach(function(f) {
         if (f.type.startsWith('image/')) imageFiles.push(f);
-        else if (isTextFile(f)) textFiles.push(f);
+        else if (isTextFile(f) || isVideoFile(f)) textFiles.push(f);
       });
       if (imageFiles.length) processImages(imageFiles);
       if (textFiles.length) addFiles(textFiles);
@@ -11879,7 +11909,7 @@ function App() {
                   <div className="file-chips-strip">
                     {pendingFiles.map(function(f) { return (
                       <div key={f.id} className="file-chip">
-                        <span className="file-chip-icon">{'\uD83D\uDCC4'}</span>
+                        <span className="file-chip-icon">{f.kind === 'video' ? '\uD83C\uDFA5' : '\uD83D\uDCC4'}</span>
                         <span className="file-chip-name">{f.name}</span>
                         <span className="file-chip-size">{formatFileSize(f.size)}</span>
                         <button className="file-chip-remove" onClick={function() { removeFile(f.id); }}>{'×'}</button>
@@ -12027,7 +12057,7 @@ function App() {
                     </div>
                   )}
                   <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { if (e.target.files.length) processImages(e.target.files); e.target.value = ''; }} />
-                  <input ref={fileInputRef2} type="file" accept=".md,.txt,.json,.csv,.ts,.tsx,.js,.py,.pdf,.rtf" multiple style={{ display: 'none' }} onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value = ''; }} />
+                  <input ref={fileInputRef2} type="file" accept=".md,.txt,.json,.csv,.ts,.tsx,.js,.py,.pdf,.rtf,video/*,.mp4,.mov,.webm,.m4v,.mkv,.avi" multiple style={{ display: 'none' }} onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value = ''; }} />
                   <div className="input-btn-group">
                     <button className={"attach-btn " + (asideMode ? 'active' : '')} onClick={function(){ setAsideMode(function(v) { return !v; }); }} title="Ask aside">
                       <Icon name="circle-help" size={16}/>
@@ -12093,7 +12123,7 @@ function App() {
                     {agentInstalledVersion && (
                       <span className="status-bar-item status-bar-version">Hermes Agent v{agentInstalledVersion}</span>
                     )}
-                    <span className="status-bar-item status-bar-version">Hermes UI v3.3.8</span>
+                    <span className="status-bar-item status-bar-version">Hermes UI v3.3.9</span>
                     <a className="composer-chip status-icon-btn" href="https://github.com/pyrate-llama/hermes-ui/issues" target="_blank" rel="noopener noreferrer" title="Open Hermes UI issues on GitHub">
                       <Icon name="message-square" size={12}/>
                     </a>

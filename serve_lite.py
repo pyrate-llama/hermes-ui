@@ -30,8 +30,11 @@ import tempfile
 import uuid
 import traceback
 import urllib.parse
+import mimetypes
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
+UPLOAD_MAX_BYTES = 750 * 1024 * 1024
+UPLOAD_DIR_NAME = "uploads"
 
 # ── Python interpreter sanity check ─────────────────────────────────────────
 # serve_lite.py depends on hermes-agent's compiled C extensions (pydantic_core
@@ -269,7 +272,7 @@ def _set_last_workspace(path):
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
 # GitHub. Keep in sync with the git tag (e.g. "3.3" corresponds to v3.3).
-__version__ = "3.3.8"
+__version__ = "3.3.9"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
 _HERMES_AGENT_RELEASES_API = "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest"
 
@@ -3139,6 +3142,66 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(open(fpath, "rb").read())
 
+    def _safe_upload_filename(self, name):
+        base = os.path.basename(str(name or "upload"))
+        base = re.sub(r"[^A-Za-z0-9._ -]+", "_", base).strip(" .")
+        return base[:180] or f"upload-{uuid.uuid4().hex[:8]}"
+
+    def _handle_upload(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except Exception:
+            length = 0
+        if length <= 0:
+            return self._json({"ok": False, "error": "empty upload"}, 400)
+        if length > UPLOAD_MAX_BYTES:
+            return self._json({"ok": False, "error": "upload too large"}, 413)
+        content_type = self.headers.get("Content-Type", "")
+        if "multipart/form-data" not in content_type:
+            return self._json({"ok": False, "error": "multipart/form-data required"}, 400)
+        try:
+            import cgi
+            form = cgi.FieldStorage(
+                fp=self.rfile,
+                headers=self.headers,
+                environ={
+                    "REQUEST_METHOD": "POST",
+                    "CONTENT_TYPE": content_type,
+                    "CONTENT_LENGTH": str(length),
+                },
+                keep_blank_values=True,
+            )
+            workspace = _resolve_workspace(form.getfirst("workspace"))
+            upload_dir = os.path.join(workspace, UPLOAD_DIR_NAME)
+            os.makedirs(upload_dir, exist_ok=True)
+            saved = []
+            items = form["file"] if "file" in form else []
+            if not isinstance(items, list):
+                items = [items]
+            for item in items:
+                if not getattr(item, "filename", None) or not getattr(item, "file", None):
+                    continue
+                filename = self._safe_upload_filename(item.filename)
+                stem, ext = os.path.splitext(filename)
+                target = os.path.join(upload_dir, filename)
+                n = 1
+                while os.path.exists(target):
+                    target = os.path.join(upload_dir, f"{stem}-{n}{ext}")
+                    n += 1
+                with open(target, "wb") as f:
+                    shutil.copyfileobj(item.file, f)
+                saved.append({
+                    "name": filename,
+                    "path": str(pathlib.Path(target).resolve()),
+                    "size": os.path.getsize(target),
+                    "type": item.type or mimetypes.guess_type(filename)[0] or "application/octet-stream",
+                })
+            if not saved:
+                return self._json({"ok": False, "error": "file field required"}, 400)
+            self._json({"ok": True, "files": saved})
+        except Exception as e:
+            self._json({"ok": False, "error": str(e)}, 400)
+
     # ── Log streaming ──
     _LOG_TAIL_ALLOWLIST = {
         "agent": "agent.log",
@@ -4086,6 +4149,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._file_delete()
         elif self.path == "/api/convert/rtf-to-txt":
             self._handle_rtf_to_txt()
+        elif self.path == "/api/upload":
+            self._handle_upload()
         elif self.path == "/api/memory":
             self._handle_memory_write()
         elif self.path == "/api/skills/save":
