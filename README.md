@@ -6,7 +6,7 @@ The command center for [Hermes Agent](https://github.com/pyrate-llama/hermes-age
 
 Built as a single-file HTML application with React 18, Hermes UI provides a full-featured chat interface, real-time log streaming, file browsing, memory inspection, and more — all through a lightweight Python proxy server.
 
-![v3.3.7](https://img.shields.io/badge/version-3.3.7-ef4444?style=for-the-badge)
+![v3.3.8](https://img.shields.io/badge/version-3.3.8-ef4444?style=for-the-badge)
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
@@ -36,6 +36,15 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 ![Built-in terminal area with Hermes and Claude Code tabs](screenshots/terminal.png)
 
 ---
+
+## What's new in v3.3.8
+
+Hermes UI 3.3.8 fixes silent context narrowing in short chats with large tool receipts.
+
+**Reference-aligned context selection**
+- **Full transcript first** — chats under 40 user prompts rebuild model context from the full backend transcript instead of stale `context_messages`
+- **No silent compaction** — bulky tool/output blobs are truncated for provider safety, but user/project turns stay in context unless real compaction happens
+- **Detour recovery** — after side quests like skill edits, Hermes keeps the original project prompts in model context
 
 ## What's new in v3.3.7
 

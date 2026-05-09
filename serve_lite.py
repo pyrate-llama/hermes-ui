@@ -269,7 +269,7 @@ def _set_last_workspace(path):
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
 # GitHub. Keep in sync with the git tag (e.g. "3.3" corresponds to v3.3).
-__version__ = "3.3.7"
+__version__ = "3.3.8"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
 _HERMES_AGENT_RELEASES_API = "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest"
 
@@ -706,6 +706,10 @@ _API_SAFE_MSG_KEYS = {"role", "content", "tool_calls", "tool_call_id", "name", "
 _FALLBACK_CONTEXT_MESSAGE_LIMIT = 80
 _MODEL_CONTEXT_MESSAGE_LIMIT = 60
 _MODEL_CONTEXT_CHAR_LIMIT = 35000
+_FULL_TRANSCRIPT_USER_CONTEXT_LIMIT = 40
+_FULL_TRANSCRIPT_CHAR_LIMIT = 115000
+_CONTEXT_TOOL_CONTENT_LIMIT = 2400
+_CONTEXT_ASSISTANT_CONTENT_LIMIT = 12000
 
 
 def _sanitize_messages_for_api(messages):
@@ -770,6 +774,124 @@ def _message_context_size(msg):
         return len(json.dumps(msg.get("content", ""), ensure_ascii=False))
     except Exception:
         return len(str(msg.get("content", "")))
+
+
+def _truncate_context_content(content, limit):
+    if limit <= 0:
+        return content
+    if isinstance(content, str):
+        if len(content) <= limit:
+            return content
+        return (
+            content[:limit]
+            + f"\n\n[...truncated {len(content) - limit} chars for model context; full text remains in visible transcript...]"
+        )
+    if isinstance(content, list):
+        out = []
+        remaining = limit
+        for item in content:
+            if remaining <= 0:
+                out.append({
+                    "type": "text",
+                    "text": "[...additional content truncated for model context; full text remains in visible transcript...]",
+                })
+                break
+            if isinstance(item, dict):
+                next_item = dict(item)
+                text = next_item.get("text") or next_item.get("content")
+                if isinstance(text, str) and len(text) > remaining:
+                    truncated = (
+                        text[:remaining]
+                        + f"\n\n[...truncated {len(text) - remaining} chars for model context; full text remains in visible transcript...]"
+                    )
+                    if "text" in next_item:
+                        next_item["text"] = truncated
+                    else:
+                        next_item["content"] = truncated
+                    out.append(next_item)
+                    remaining = 0
+                    continue
+                if isinstance(text, str):
+                    remaining -= len(text)
+                out.append(next_item)
+            else:
+                s = str(item)
+                if len(s) > remaining:
+                    out.append(s[:remaining] + "\n\n[...truncated for model context...]")
+                    remaining = 0
+                else:
+                    out.append(item)
+                    remaining -= len(s)
+        return out
+    return content
+
+
+def _compact_message_for_full_context(msg):
+    if not isinstance(msg, dict):
+        return None
+    clean = {k: v for k, v in msg.items() if k in _API_SAFE_MSG_KEYS}
+    role = clean.get("role")
+    if not role:
+        return None
+    content = clean.get("content", "")
+    if role == "tool":
+        clean["content"] = _truncate_context_content(content, _CONTEXT_TOOL_CONTENT_LIMIT)
+    elif role == "assistant":
+        text = _message_text(content)
+        if _is_recovered_ui_tool_receipt(clean):
+            clean["content"] = _truncate_context_content(content, _CONTEXT_TOOL_CONTENT_LIMIT)
+        elif len(text) > _CONTEXT_ASSISTANT_CONTENT_LIMIT:
+            clean["content"] = _truncate_context_content(content, _CONTEXT_ASSISTANT_CONTENT_LIMIT)
+    return clean
+
+
+def _full_transcript_context(messages, current_user_msg=""):
+    """Reference-style: prefer full backend transcript when small enough.
+
+    Heavy tool/output blobs are compacted, but user/assistant turn continuity is
+    preserved. This is not compaction; it is provider-safe projection.
+    """
+    cleaned = _remove_promise_only_tail(_remove_contradicted_tool_denials(messages or []))
+    cleaned = _drop_checkpointed_current_user_from_context(cleaned, current_user_msg)
+    compacted = []
+    valid_tool_call_ids = set()
+    for raw in cleaned:
+        msg = _compact_message_for_full_context(raw)
+        if not msg:
+            continue
+        if msg.get("role") == "assistant":
+            for tc in msg.get("tool_calls") or []:
+                if isinstance(tc, dict):
+                    tid = tc.get("id") or tc.get("call_id") or ""
+                    if tid:
+                        valid_tool_call_ids.add(tid)
+        compacted.append(msg)
+
+    safe = []
+    for msg in compacted:
+        if msg.get("role") == "tool":
+            tid = msg.get("tool_call_id") or ""
+            if not tid or tid not in valid_tool_call_ids:
+                continue
+        safe.append(msg)
+    return _sanitize_messages_for_api(safe)
+
+
+def _context_char_size(messages):
+    return sum(_message_context_size(msg) for msg in (messages or []))
+
+
+def _should_use_full_transcript_context(messages):
+    user_count = _count_role_messages(messages, "user")
+    compacted_size = 0
+    for raw in _remove_contradicted_tool_denials(messages or []):
+        msg = _compact_message_for_full_context(raw)
+        if msg:
+            compacted_size += _message_context_size(msg)
+    return (
+        user_count <= _FULL_TRANSCRIPT_USER_CONTEXT_LIMIT
+        and compacted_size <= _FULL_TRANSCRIPT_CHAR_LIMIT
+    )
 
 
 def _message_text(content):
@@ -1943,9 +2065,11 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             "claiming final status."
         )
 
-        # Prefer the model-facing context when available. The UI transcript can
-        # grow very large, so browser-history repair is capped and only used as
-        # a last resort, matching Reference's display-vs-context split.
+        # the reference UI keeps backend session messages authoritative and only
+        # switches to compact context after real compression. Our single-file UI
+        # keeps a separate compact context too, but for ordinary-sized chats we
+        # rebuild from the full backend transcript so side quests do not erase
+        # the project thread without a visible compaction event.
         session = _get_or_create_session(session_id)
         _previous_messages = list(session.get("messages") or [])
         _previous_context_messages = _drop_checkpointed_current_user_from_context(
@@ -1964,15 +2088,20 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
                 flush=True,
             )
             _previous_messages = _merge_browser_repair_messages(_previous_messages, messages)
-            # The browser-visible transcript is ahead, so the persisted
-            # compact context may be stale. Rebuild the model-facing tail from
-            # the repaired transcript for this turn; the final result will
-            # compact it again after the agent returns.
-            _previous_context_messages = _drop_checkpointed_current_user_from_context(
-                _trim_model_history(_remove_contradicted_tool_denials(_previous_messages)),
-                user_msg,
-            )
+            _previous_context_messages = _full_transcript_context(_previous_messages, user_msg)
             clean_history = list(_previous_context_messages)
+        elif _should_use_full_transcript_context(_previous_messages):
+            clean_history = _full_transcript_context(_previous_messages, user_msg)
+            _previous_context_messages = list(clean_history)
+            if _has_context_messages:
+                _ctx_users = _count_role_messages(_context_messages_for_session(session), "user")
+                _full_users = _count_role_messages(clean_history, "user")
+                if _full_users > _ctx_users:
+                    print(
+                        f"[serve] /api/chat/start using full transcript context for {session_id}: "
+                        f"users={_full_users} compact_users={_ctx_users}",
+                        flush=True,
+                    )
         else:
             clean_history = (
                 _trim_model_history(_previous_context_messages)
@@ -1981,7 +2110,8 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             )
         # Remove the last user message — it goes in user_message param instead
         clean_history = _remove_promise_only_tail(clean_history)
-        clean_history = _trim_model_history(clean_history)
+        if not _should_use_full_transcript_context(clean_history):
+            clean_history = _trim_model_history(clean_history)
         if clean_history and clean_history[-1].get("role") == "user":
             clean_history.pop()
 
@@ -2067,15 +2197,19 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         # partial/empty run_conversation result (reference #893 companion fix).
         if not cancel_event.is_set():
             _result_messages = result.get("messages") or session.get("messages") or []
-            session["context_messages"] = _restore_reasoning_metadata(
-                _previous_context_messages,
-                _trim_model_history(_remove_contradicted_tool_denials(_remove_promise_only_tail(_result_messages))),
-            )
             _merged = _merge_display_messages_after_agent_result(
                 _previous_messages,
                 _previous_context_messages,
                 _restore_reasoning_metadata(_previous_messages, _result_messages),
                 user_msg,
+            )
+            session["context_messages"] = _restore_reasoning_metadata(
+                _previous_context_messages,
+                (
+                    _full_transcript_context(_merged, "")
+                    if _should_use_full_transcript_context(_merged)
+                    else _trim_model_history(_remove_contradicted_tool_denials(_remove_promise_only_tail(_result_messages)))
+                ),
             )
             # Collapse any multimodal user content back to plain text before
             # persisting. The agent saw the image in-turn; we don't want to
