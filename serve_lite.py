@@ -2370,9 +2370,18 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             if _compressor and getattr(_compressor, "compression_count", 0) > 0:
                 _compressed = True
         if _compressed:
+            # Extract the compaction summary text from the agent's result
+            # messages so the frontend can render it as a reference card.
+            _summary_text = ""
+            _result_msgs = result.get("messages") or []
+            for _rm in _result_msgs:
+                if isinstance(_rm, dict) and _is_context_compression_marker(_rm):
+                    _summary_text = _message_text(_rm.get("content", ""))
+                    break
             put("compressed", {
                 "message": "Context auto-compressed to continue the conversation",
                 "session_id": session_id,
+                "summary": _summary_text,
             })
 
         # Gather usage stats

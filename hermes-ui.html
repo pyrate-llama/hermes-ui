@@ -2158,7 +2158,7 @@
   }
   .message-edit-icon:hover { color: var(--accent); }
 
-  /* Compaction marker */
+  /* Compaction marker (divider line) */
   .compaction-marker {
     display: flex; align-items: center; gap: 12px;
     padding: 12px 20px; margin: 8px 0;
@@ -2174,6 +2174,85 @@
     background: var(--bg-secondary);
     padding: 4px 12px; border-radius: 12px;
     border: 1px solid var(--border);
+  }
+  /* Compaction reference card (collapsible summary — nesquena-aligned) */
+  .compaction-reference-card {
+    margin: 8px 0;
+    border: 1px solid rgba(124,185,255,.18);
+    border-radius: 10px;
+    background: rgba(124,185,255,.04);
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .compaction-reference-card:hover {
+    border-color: rgba(124,185,255,.28);
+  }
+  .compaction-reference-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; cursor: pointer;
+    user-select: none;
+  }
+  .compaction-reference-icon {
+    color: var(--accent); font-size: 13px; flex-shrink: 0;
+  }
+  .compaction-reference-title {
+    font-size: 12px; font-weight: 600;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .compaction-reference-preview {
+    font-size: 11px; color: var(--text-secondary);
+    margin-left: 6px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1; min-width: 0;
+  }
+  .compaction-reference-toggle {
+    color: var(--text-secondary); font-size: 11px;
+    transition: transform 0.2s; flex-shrink: 0;
+  }
+  .compaction-reference-card.open .compaction-reference-toggle {
+    transform: rotate(90deg);
+  }
+  .compaction-reference-body {
+    display: none;
+    padding: 0 14px 12px;
+  }
+  .compaction-reference-card.open .compaction-reference-body {
+    display: block;
+  }
+  .compaction-reference-body pre {
+    font-size: 11px; line-height: 1.5;
+    color: var(--text-secondary);
+    white-space: pre-wrap; word-break: break-word;
+    margin: 0; padding: 10px;
+    background: rgba(0,0,0,.15);
+    border-radius: 6px;
+    max-height: 400px; overflow-y: auto;
+  }
+  /* Compaction running indicator */
+  .compaction-running {
+    margin: 8px 0;
+    border: 1px solid rgba(124,185,255,.24);
+    border-radius: 10px;
+    background: rgba(124,185,255,.04);
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .compaction-running-label {
+    font-size: 12px; color: var(--accent);
+  }
+  .compaction-running-dots span {
+    display: inline-block;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent); opacity: 0.4;
+    margin: 0 2px;
+    animation: compactionPulse 1.05s ease-in-out infinite;
+  }
+  .compaction-running-dots span:nth-child(2) { animation-delay: .14s; }
+  .compaction-running-dots span:nth-child(3) { animation-delay: .28s; }
+  @keyframes compactionPulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.85); }
+    50% { opacity: 1; transform: scale(1.1); }
   }
 
   /* Export button */
@@ -4733,6 +4812,33 @@ function SubagentToolCard({ tool, index, expanded, onToggle, formatResult }) {
           {expanded ? formatResult(tool.result) : ''}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Compaction Reference Card (nesquena-aligned) ──
+ * Renders the context compaction summary as a collapsible card.
+ * Persisted as role='compaction-reference' in the message array
+ * so it survives page refresh.
+ */
+function CompactionReferenceCard({ content, index }) {
+  var _crcOpen = React.useState(false);
+  var isOpen = _crcOpen[0];
+  var setOpen = _crcOpen[1];
+  // Build a short preview from the first two non-empty lines
+  var preview = (content || '').split(/\n+/).filter(Boolean).slice(0, 2).join(' ');
+  if (preview.length > 120) preview = preview.slice(0, 120) + '...';
+  return (
+    <div className={'compaction-reference-card' + (isOpen ? ' open' : '')} data-message-index={index}>
+      <div className="compaction-reference-header" onClick={function() { setOpen(!isOpen); }}>
+        <span className="compaction-reference-icon">{'🔄'}</span>
+        <span className="compaction-reference-title">Context Compaction</span>
+        <span className="compaction-reference-preview">Reference only · {preview}</span>
+        <span className="compaction-reference-toggle">{'▶'}</span>
+      </div>
+      <div className="compaction-reference-body">
+        <pre>{content}</pre>
+      </div>
     </div>
   );
 }
@@ -8704,7 +8810,7 @@ function SearchModal({ open, onClose, conversations, onSelectConversation }) {
         for (var mi = 0; mi < msgs.length; mi++) {
           if (resultCount >= maxResults) break;
           var msg = msgs[mi] || {};
-          if (!msg.role || msg.role === 'compaction') continue;
+          if (!msg.role || msg.role === 'compaction' || msg.role === 'compaction-reference') continue;
           var text = searchMessageText(msg.content);
           if (!text || text.toLowerCase().indexOf(q) === -1) continue;
           var roleLabel = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Hermes' : msg.role;
@@ -9860,6 +9966,16 @@ function App() {
           }
         });
 
+        // Nesquena-aligned: show a running indicator when compression starts
+        source.addEventListener('compressing', function(e) {
+          var d = {};
+          try { d = JSON.parse(e.data); } catch(err) {}
+          var msg = d.message || 'Auto-compressing context...';
+          console.log('[stream] ' + msg);
+          emitStatus({ kind: 'compressed', label: 'Compressing context', detail: msg });
+          if (onThinking) onThinking('[compressing] ' + msg);
+        });
+
         source.addEventListener('tool', function(e) {
           var d = JSON.parse(e.data);
           if (onToolEvent) onToolEvent({ type: 'started', toolName: d.name, label: d.preview || d.name, args: d.args });
@@ -9891,15 +10007,16 @@ function App() {
           // rotated session_id and compacted history. We insert a visible
           // divider into the transcript AND set has_compaction on the
           // conversation so the sidebar 🔄 icon appears. Caller wires the
-          // React setters via opts.onCompressed(msg, newSessionId).
+          // React setters via opts.onCompressed(msg, newSessionId, summary).
           var d = {};
           try { d = JSON.parse(e.data); } catch(err) {}
           var msg = d.message || 'Context auto-compressed to continue the conversation';
+          var summary = d.summary || '';
           console.log('[stream] ' + msg);
           emitStatus({ kind: 'compressed', label: 'Context compressed', detail: msg });
           if (onThinking) onThinking('[compressed] ' + msg);
           if (opts.onCompressed) {
-            try { opts.onCompressed(msg, d.session_id || activeSessionId || null); } catch(err) { console.warn('[compressed] onCompressed threw:', err); }
+            try { opts.onCompressed(msg, d.session_id || activeSessionId || null, summary); } catch(err) { console.warn('[compressed] onCompressed threw:', err); }
           }
         });
 
@@ -11049,7 +11166,7 @@ function App() {
           // Mirrors the reference UI messages.js 481-490: when the backend
           // compacts context mid-stream, insert a visible divider into the
           // transcript and flag the conversation so the sidebar 🔄 icon shows.
-          onCompressed: function(msg, newSessionId) {
+          onCompressed: function(msg, newSessionId, summary) {
             var markerId = 'compaction-' + Date.now();
             updateStreamMessages(sessionId, function(prev) {
               var updated = prev.slice();
@@ -11060,6 +11177,16 @@ function App() {
                 insertAt = insertAt - 1;
               }
               updated.splice(insertAt, 0, { id: markerId, role: 'compaction', content: msg });
+              // If the backend sent the summary text, insert a persistent
+              // compaction-reference message so it survives page refresh
+              // and renders as a collapsible card (nesquena-aligned).
+              if (summary) {
+                updated.splice(insertAt + 1, 0, {
+                  id: 'compaction-ref-' + Date.now(),
+                  role: 'compaction-reference',
+                  content: summary,
+                });
+              }
               return updated;
             });
             setConversations(function(prev) {
@@ -11950,6 +12077,8 @@ function App() {
                         <span className="compaction-label">{'🔄'} {msg.content}</span>
                         <div className="compaction-line" />
                       </div>
+                    ) : msg.role === 'compaction-reference' ? (
+                      <CompactionReferenceCard key={msg.id} content={msg.content} index={idx} />
                     ) : msg.role === 'aside' ? (
                       <AsideBubble key={msg.id} message={msg} index={idx} />
                     ) : editingMessageId === msg.id ? (
