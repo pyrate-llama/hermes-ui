@@ -11818,7 +11818,27 @@ function App() {
   var todoOnlyPanel = showTodosPanel && !showTerminal;
   var rightColumnRenderWidth = todoOnlyPanel ? 340 : rightColumnWidth;
   var firstRenderedMessageIndex = Math.max(0, messages.length - messageRenderLimit);
-  var visibleMessages = messages.slice(firstRenderedMessageIndex);
+  // De-duplicate compaction cards: only keep the LAST compaction reference
+  // and the LAST compaction divider. Earlier ones are stale summaries from
+  // prior compression cycles that would just clutter the transcript.
+  var visibleMessages = (function(msgs) {
+    var lastRefIdx = -1;
+    var lastDividerIdx = -1;
+    for (var i = msgs.length - 1; i >= 0; i--) {
+      var m = msgs[i];
+      if (lastRefIdx === -1 && (m.role === 'compaction-reference' || _isContextCompactionMessage(m))) {
+        lastRefIdx = i;
+      }
+      if (lastDividerIdx === -1 && m.role === 'compaction') {
+        lastDividerIdx = i;
+      }
+    }
+    return msgs.filter(function(m, i) {
+      if (m.role === 'compaction-reference' || _isContextCompactionMessage(m)) return i === lastRefIdx;
+      if (m.role === 'compaction') return i === lastDividerIdx;
+      return true;
+    });
+  })(messages.slice(firstRenderedMessageIndex));
   var hiddenMessageCount = firstRenderedMessageIndex;
   var extraNavActive = ['dashboard','delegation','spaces','terminal','jobs','memory','skills'].indexOf(currentView) !== -1;
   var activeWorkItems = activeConvId ? buildTaskBoardItems(
