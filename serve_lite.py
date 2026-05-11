@@ -1423,6 +1423,14 @@ def _restore_reasoning_metadata(previous_messages, updated_messages):
 STREAMS = {}
 STREAMS_LOCK = threading.Lock()
 CANCEL_FLAGS = {}   # stream_id -> threading.Event
+
+# ── Agent cache (nesquena-aligned) ──
+# Reuse AIAgent instances across turns in the same session. This avoids
+# re-initialising MCP discovery, tool registration, and model resolution
+# on every single message — the primary cause of multi-second startup
+# latency per turn.  Keyed by (session_id, model_signature).
+SESSION_AGENT_CACHE = {}  # (session_id, sig) -> agent instance
+SESSION_AGENT_CACHE_LOCK = threading.Lock()
 AGENT_INSTANCES = {} # stream_id -> agent instance (for cancel/interrupt)
 STREAM_PARTIAL_TEXT = {}  # stream_id -> str, accumulated tokens for cancel-preserve (reference #893)
 STREAM_SESSIONS = {}  # stream_id -> session_id, so cancel_stream can persist partial content
@@ -2018,12 +2026,35 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         import inspect as _inspect
         _agent_params = set(_inspect.signature(AgentClass.__init__).parameters)
 
+        def _agent_status_callback(kind, message):
+            """Bridge Agent lifecycle compression status into SSE (nesquena-aligned)."""
+            _message = str(message or '').strip()
+            _kind = str(kind or '').strip().lower()
+            if not _message:
+                return
+            _lower = _message.lower()
+            _is_compression_start = (
+                _kind == 'lifecycle'
+                and (
+                    'preflight compression' in _lower
+                    or 'compressing' in _lower
+                    or 'compacting context' in _lower
+                    or 'context too large' in _lower
+                )
+            )
+            if not _is_compression_start:
+                return
+            put('compressing', {
+                'session_id': session_id,
+                'message': 'Auto-compressing context to continue...',
+            })
+
         _agent_kwargs = dict(
             model=model,
             provider=provider,
             base_url=base_url,
             api_key=api_key,
-            platform="cli",
+            platform="webui",
             quiet_mode=True,
             enabled_toolsets=toolsets,
             session_id=session_id,
@@ -2042,6 +2073,8 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         # /the reference UI issue #855.
         if 'gateway_session_key' in _agent_params:
             _agent_kwargs['gateway_session_key'] = session_id
+        if 'status_callback' in _agent_params:
+            _agent_kwargs['status_callback'] = _agent_status_callback
 
         _reasoning_config, _reasoning_label = _parse_reasoning_effort(reasoning_effort)
         if _reasoning_config is not None and 'reasoning_config' in _agent_params:
@@ -2054,7 +2087,31 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
                 flush=True,
             )
 
-        agent = AgentClass(**_agent_kwargs)
+        # ── Agent cache: reuse across turns in the same session ──
+        # Mirrors nesquena's SESSION_AGENT_CACHE. Avoids re-initializing MCP
+        # discovery, tool registration, model resolution on every turn.
+        import hashlib as _hashlib
+        _cache_sig = _hashlib.sha256(
+            f"{model}|{provider}|{base_url}|{','.join(toolsets)}".encode()
+        ).hexdigest()[:16]
+        _cache_key = (session_id, _cache_sig)
+        with SESSION_AGENT_CACHE_LOCK:
+            agent = SESSION_AGENT_CACHE.get(_cache_key)
+        if agent is not None:
+            # Update mutable callbacks on the cached agent
+            agent.stream_delta_callback = on_token
+            agent.reasoning_callback = on_reasoning
+            agent.tool_progress_callback = on_tool
+            if hasattr(agent, 'step_callback'):
+                agent.step_callback = on_step
+            if hasattr(agent, 'status_callback'):
+                agent.status_callback = _agent_status_callback
+            print(f"[serve] reusing cached agent for {session_id}", flush=True)
+        else:
+            agent = AgentClass(**_agent_kwargs)
+            with SESSION_AGENT_CACHE_LOCK:
+                SESSION_AGENT_CACHE[_cache_key] = agent
+            print(f"[serve] created new agent for {session_id}", flush=True)
 
         # User-configurable base system prompt from Settings → General.
         # Passed via agent.ephemeral_system_prompt — the library's sanctioned
