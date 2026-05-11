@@ -1328,6 +1328,168 @@ def _remove_contradicted_tool_denials(messages):
     return cleaned
 
 
+# ── Backend-session ⇄ UI-conversation recovery helpers ─────────────────────
+# The UI sidebar list lives in ``ui-conversations.json`` and is *separately*
+# maintained from the canonical session files in ``SESSION_DIR``.  When the
+# UI's local state shrinks for any reason (cleared localStorage, a stale tab
+# racing a load, a refresh that POSTed before GETing) the POST handler used
+# to blindly replace the on-disk list and silently drop chats whose
+# conversation data still existed in the backend session files.
+#
+# These helpers let ``_conversations_load`` self-heal by folding in any
+# backend session files missing from the UI list, and let
+# ``_conversations_save`` defensively preserve any entry whose backend file
+# still exists.  Source-of-truth on read becomes the session files; the UI
+# list is treated as a rich metadata mirror (titles, reasoning trails, token
+# counts) that can be regenerated when needed.
+
+_RECOVERY_SKIP_PREFIXES = (
+    "codex_", "test_", "verify_", "diag", "debug_", "direct_",
+)
+
+
+def _list_backend_session_files():
+    """Yield (session_id, path) for every plausible chat session file."""
+    if not SESSION_DIR or not os.path.isdir(SESSION_DIR):
+        return
+    try:
+        names = os.listdir(SESSION_DIR)
+    except OSError:
+        return
+    for fname in names:
+        if not fname.endswith(".json"):
+            continue
+        sid = fname[:-5]
+        if sid.startswith(_RECOVERY_SKIP_PREFIXES):
+            continue
+        yield sid, os.path.join(SESSION_DIR, fname)
+
+
+def _backend_session_exists(session_id):
+    """True if a backend session file exists for this id."""
+    if not session_id or not SESSION_DIR:
+        return False
+    return os.path.isfile(os.path.join(SESSION_DIR, str(session_id) + ".json"))
+
+
+def _convert_backend_messages_to_ui(backend_msgs):
+    """Backend session messages → UI sidebar messages.
+
+    Backend:  {role: user/assistant/tool, content, tool_calls?, tool_call_id?}
+    UI:       {id, role, content, images, toolCalls, [thinking, streaming]}
+
+    Tool result messages are folded into the assistant turn that issued the
+    call; the UI renders results inline under their parent toolCall.
+    """
+    tool_results = {}
+    for m in (backend_msgs or []):
+        if isinstance(m, dict) and m.get("role") == "tool":
+            tcid = m.get("tool_call_id")
+            if tcid:
+                tool_results[tcid] = _message_text(m.get("content"))
+
+    ui = []
+    base_ts = int(time.time() * 1000)
+    for i, m in enumerate(backend_msgs or []):
+        if not isinstance(m, dict):
+            continue
+        role = m.get("role")
+        if role == "tool":
+            continue
+        msg_id = str(base_ts + i)
+        if role == "user":
+            ui.append({
+                "id": msg_id,
+                "role": "user",
+                "content": _message_text(m.get("content")),
+                "images": [],
+                "toolCalls": [],
+            })
+        elif role == "assistant":
+            tcs = []
+            for tc in (m.get("tool_calls") or []):
+                if not isinstance(tc, dict):
+                    continue
+                fn = tc.get("function") or {}
+                tool_name = fn.get("name") or tc.get("name") or "tool"
+                args = fn.get("arguments")
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except Exception:
+                        args = {"_raw": args}
+                tcs.append({
+                    "toolName": tool_name,
+                    "label": tool_name,
+                    "args": args or {},
+                    "timestamp": "",
+                    "done": True,
+                    "result": tool_results.get(tc.get("id")),
+                })
+            ui.append({
+                "id": "thinking-" + msg_id,
+                "role": "assistant",
+                "content": _message_text(m.get("content")),
+                "thinking": False,
+                "streaming": False,
+                "toolCalls": tcs,
+            })
+    return ui
+
+
+def _backend_session_to_ui_entry(session_id, path):
+    """Build a UI sidebar entry from a backend session file, or None if the
+    session has no user prompts (test runs, malformed files, etc.).
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            backend = json.load(f)
+    except Exception:
+        return None
+    msgs = backend.get("messages") or []
+    if not msgs:
+        return None
+    user_count = sum(1 for m in msgs if isinstance(m, dict) and m.get("role") == "user")
+    if user_count == 0:
+        return None
+    ui_msgs = _convert_backend_messages_to_ui(msgs)
+    first_user = ""
+    for m in ui_msgs:
+        if m.get("role") == "user":
+            first_user = (m.get("content") or "")[:60]
+            break
+    try:
+        mtime = os.path.getmtime(path)
+        ctime = os.path.getctime(path)
+    except OSError:
+        mtime = ctime = time.time()
+    last_active = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(mtime))
+    try:
+        created = time.strftime("%-m/%-d/%Y, %-I:%M:%S %p", time.localtime(ctime))
+    except Exception:
+        created = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ctime))
+    return {
+        "id": session_id,
+        "title": first_user or session_id,
+        "created": created,
+        "last_active_at": last_active,
+        "unread_count": 0,
+        "workspace": backend.get("workspace") or _get_last_workspace() or "",
+        "messages": ui_msgs,
+        "message_count": len(ui_msgs),
+        "user_prompt_count": user_count,
+        "tool_call_count": sum(len(m.get("toolCalls") or []) for m in ui_msgs),
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "has_compaction": any(
+            "context compaction" in (m.get("content") or "").lower()
+            or "context compression" in (m.get("content") or "").lower()
+            for m in ui_msgs
+        ),
+        "_recovered_from_backend": True,
+    }
+
+
 def _load_ui_conversation_messages(session_id):
     try:
         if not os.path.exists(UI_CONVERSATIONS_FILE):
@@ -3257,21 +3419,106 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._json({"ok": False, "error": str(e)}, 500)
 
     # ── UI conversations (local JSON file) ──
+    # The on-disk ``ui-conversations.json`` is a UI-managed mirror of the
+    # sidebar list.  The canonical conversation data lives in the backend
+    # session files under SESSION_DIR.  Both handlers below reconcile the
+    # two stores so a UI-side wipe can't silently drop chats whose
+    # conversation data still exists on disk.  See the helpers near
+    # _load_ui_conversation_messages for the conversion details.
     CONV_PATH = UI_CONVERSATIONS_FILE
 
     def _conversations_load(self):
+        """GET /api/ui-conversations — self-healing.
+
+        Returns the UI sidebar list, folding in any backend session files
+        that aren't already represented.  A UI wipe (cleared localStorage,
+        stale tab, etc.) is therefore recoverable on next page load
+        without manual intervention.
+        """
         try:
             data = json.load(open(self.CONV_PATH)) if os.path.exists(self.CONV_PATH) else []
+            if not isinstance(data, list):
+                data = []
         except Exception:
             data = []
+
+        existing_ids = {c.get("id") for c in data if isinstance(c, dict)}
+        recovered = 0
+        for sid, path in _list_backend_session_files():
+            if sid in existing_ids:
+                continue
+            entry = _backend_session_to_ui_entry(sid, path)
+            if entry is None:
+                continue
+            data.append(entry)
+            recovered += 1
+
+        if recovered:
+            data.sort(
+                key=lambda c: (c.get("last_active_at") or "") if isinstance(c, dict) else "",
+                reverse=True,
+            )
+            print(
+                f"[serve] /api/ui-conversations: recovered {recovered} chats "
+                f"from backend session files",
+                flush=True,
+            )
+
         self._json(data)
 
     def _conversations_save(self):
+        """POST /api/ui-conversations — defensive.
+
+        Replaces the UI list with the incoming payload, but preserves any
+        existing entry whose backend session file still exists on disk.
+        This stops a UI bug or stale-tab race from silently wiping chats
+        whose conversation data is intact.  Real deletions (where the
+        backend session file is gone) flow through normally.
+        """
         body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         try:
-            data = json.loads(body)
-            json.dump(data, open(self.CONV_PATH, "w"), indent=2)
-            self._json({"ok": True})
+            incoming = json.loads(body) if body else []
+            if not isinstance(incoming, list):
+                return self._json({"error": "expected list"}, 400)
+
+            try:
+                existing = json.load(open(self.CONV_PATH)) if os.path.exists(self.CONV_PATH) else []
+                if not isinstance(existing, list):
+                    existing = []
+            except Exception:
+                existing = []
+
+            incoming_ids = {c.get("id") for c in incoming if isinstance(c, dict)}
+            preserved = 0
+            for entry in existing:
+                if not isinstance(entry, dict):
+                    continue
+                sid = entry.get("id")
+                if not sid or sid in incoming_ids:
+                    continue
+                # The UI dropped this entry.  Preserve it only if its
+                # backend session file is still on disk — that means the
+                # drop wasn't an intentional deletion, the UI just lost
+                # track of it (state wipe, race condition).  If the
+                # backend file is also gone, treat the drop as a real
+                # deletion and let it stick.
+                if _backend_session_exists(sid):
+                    incoming.append(entry)
+                    preserved += 1
+
+            if preserved:
+                incoming.sort(
+                    key=lambda c: (c.get("last_active_at") or "") if isinstance(c, dict) else "",
+                    reverse=True,
+                )
+                print(
+                    f"[serve] /api/ui-conversations POST: preserved {preserved} "
+                    f"chats with live backend session files",
+                    flush=True,
+                )
+
+            json.dump(incoming, open(self.CONV_PATH, "w"), indent=2)
+            self._json({"ok": True, "preserved": preserved})
         except Exception as e:
             self._json({"error": str(e)}, 500)
 
