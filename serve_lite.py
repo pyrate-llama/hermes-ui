@@ -2166,9 +2166,28 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         # compaction where Hermes can count old prompts but cannot recall them.
         session = _get_or_create_session(session_id)
         _previous_messages = list(session.get("messages") or [])
+        _session_ctx = _context_messages_for_session(session)
+        # If context_messages was rebuilt from a compaction marker (i.e. it
+        # wasn't saved from a prior run), persist it now so the next turn
+        # doesn't have to rebuild again.
+        _had_ctx = isinstance(session.get("context_messages"), list) and session["context_messages"]
+        if not _had_ctx and _session_ctx != _previous_messages:
+            session["context_messages"] = _session_ctx
+            _save_session(session_id, session)
+            print(
+                f"[serve] {session_id}: rebuilt context_messages from compaction "
+                f"marker ({len(_session_ctx)} msgs, was {len(_previous_messages)})",
+                flush=True,
+            )
         _previous_context_messages = _provider_history_from_transcript(
-            _context_messages_for_session(session),
+            _session_ctx,
             user_msg,
+        )
+        print(
+            f"[serve] {session_id}: context={len(_previous_context_messages)} msgs, "
+            f"display={len(_previous_messages)} msgs, "
+            f"has_ctx={'yes' if _had_ctx else 'rebuilt'}",
+            flush=True,
         )
         _server_user_count = sum(1 for _m in _previous_messages if _m.get("role") == "user")
         _client_user_count = sum(1 for _m in messages if isinstance(_m, dict) and _m.get("role") == "user")
