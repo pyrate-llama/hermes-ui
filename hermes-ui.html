@@ -9624,69 +9624,13 @@ function App() {
           try { opts.onStatusEvent(status || {}); } catch(e) {}
         }
       };
-      // Build messages array for the API
-      var apiMessages = [];
-      if (messageHistory && messageHistory.length > 0) {
-        for (var mi = 0; mi < messageHistory.length; mi++) {
-          var m = messageHistory[mi];
-          if (!m || (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'tool')) continue;
-          if (!m.content && !m.tool_calls && !m.tool_call_id) continue;
-          var apiMsg = { role: m.role };
-          if (m.content != null) apiMsg.content = m.content;
-          if (m.tool_calls) apiMsg.tool_calls = m.tool_calls;
-          if (m.tool_call_id) apiMsg.tool_call_id = m.tool_call_id;
-          if (m.name) apiMsg.name = m.name;
-          if (m.refusal) apiMsg.refusal = m.refusal;
-          apiMessages.push(apiMsg);
-          if ((m.toolCalls || []).length) {
-            apiMessages.push({
-              role: 'assistant',
-              content: '[Hermes UI tool evidence: ' + m.toolCalls.map(function(tc) {
-                var label = tc.label || tc.toolName || 'tool';
-                var status = tc.done ? 'done' : 'running';
-                var result = tc.result ? (' => ' + JSON.stringify(tc.result).slice(0, 400)) : '';
-                return label + ' ' + status + result;
-              }).join('; ') + ']'
-            });
-          }
-        }
-      }
-      if (apiMessages.length === 0 || apiMessages[apiMessages.length - 1].content !== message) {
-        apiMessages.push({ role: 'user', content: message });
-      }
-      // Attach native-multimodal images to the last user message. serve_lite
-      // pulls them off the final user turn and builds OpenAI-style content
-      // blocks for run_conversation. Empty when model isn't vision-capable.
+      // ── Server-side context mode ──
+      // Send just the current user message + config.  The server maintains
+      // the full conversation history in its session store (nesquena-aligned).
+      // This avoids sending the entire transcript on every turn and prevents
+      // stale client-side context from overriding server-managed compaction.
       var _imgs = (opts.images && opts.images.length) ? opts.images : null;
-      if (_imgs && apiMessages.length > 0) {
-        var _lastIdx = apiMessages.length - 1;
-        if (apiMessages[_lastIdx].role === 'user') {
-          apiMessages[_lastIdx] = Object.assign({}, apiMessages[_lastIdx], { images: _imgs });
-        }
-      }
-      // Reference-style safety check: keep the full browser-visible transcript
-      // aligned with the server before each send, while model context can stay
-      // compacted separately.
-      try {
-        const healthResp = await fetch(API_BASE + '/api/session/health', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: sessionId,
-            messages: apiMessages,
-            repair: true,
-          }),
-          signal: signal,
-        });
-        if (healthResp.ok) {
-          const healthData = await healthResp.json();
-          if (healthData && (healthData.repaired || healthData.warning)) {
-            console.log('[session-health]', healthData);
-          }
-        }
-      } catch(e) {
-        console.warn('[session-health] check skipped:', e);
-      }
+
       // Step 1: POST to /api/chat/start to get stream_id
       emitStatus({ kind: 'thinking', label: 'Starting', detail: 'Opening stream' });
       var _streamStart = Date.now();
@@ -9695,7 +9639,8 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId,
-          messages: apiMessages,
+          message: message,
+          images: _imgs || [],
           base_system_prompt: opts.baseSystemPrompt || '',
           apply_behavioral_guidelines: !!opts.applyBehavioralGuidelines,
           profile: normalizePersonality(opts.profile || 'default'),

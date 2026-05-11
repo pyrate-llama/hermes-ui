@@ -2740,6 +2740,19 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                     flush=True,
                 )
 
+        # ── Server-side context mode ──
+        # The client may send just a `message` string (nesquena-style) instead
+        # of the full `messages` array.  When that happens, build a minimal
+        # messages list with just the new user turn — the server-side session
+        # store provides the conversation history via _get_or_create_session().
+        _inline_message = (body.get("message") or "").strip()
+        _inline_images = body.get("images") or []
+        if not messages and _inline_message:
+            _user_turn = {"role": "user", "content": _inline_message}
+            if _inline_images:
+                _user_turn["images"] = _inline_images
+            messages = [_user_turn]
+
         if not messages:
             return self._json({"error": "No messages provided"}, 400)
 
