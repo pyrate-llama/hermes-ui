@@ -9380,6 +9380,7 @@ function App() {
   const sendMessageRef = useRef(null);
   const messagesViewportRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const olderSentinelRef = useRef(null);
   const fileInputRef = useRef(null);
   // abortControllerRef removed — now in streamingMap per-session
   const messagesRef = useRef([]);
@@ -9484,6 +9485,27 @@ function App() {
     });
     return function() { window.cancelAnimationFrame(raf); };
   }, [messages, currentView, searchJumpNonce, messageRenderLimit]);
+
+  // Endless scroll: auto-load older messages when the sentinel scrolls into
+  // view (nesquena-aligned). The sentinel sits at the top of the message list
+  // and triggers when the user scrolls up to it.
+  useEffect(function() {
+    var sentinel = olderSentinelRef.current;
+    if (!sentinel) return;
+    var loading = false;
+    var observer = new IntersectionObserver(function(entries) {
+      if (entries[0].isIntersecting && !loading && hiddenMessageCount > 0) {
+        loading = true;
+        setMessageRenderLimit(function(limit) {
+          return Math.min(messages.length, limit + 220);
+        });
+        // Brief debounce so we don't fire multiple times while React re-renders
+        setTimeout(function() { loading = false; }, 300);
+      }
+    }, { threshold: 0.1 });
+    observer.observe(sentinel);
+    return function() { observer.disconnect(); };
+  }, [messages.length, hiddenMessageCount]);
 
   // Auto-scroll activity log
   useEffect(() => {
@@ -11884,8 +11906,8 @@ function App() {
               ) : (
                 <div className="messages-container">
                   {hiddenMessageCount > 0 && (
-                    <div className="message-window-notice">
-                      <span>Showing the latest {visibleMessages.length} of {messages.length} messages to keep long chats smooth.</span>
+                    <div ref={olderSentinelRef} className="message-window-notice">
+                      <span>Showing the latest {visibleMessages.length} of {messages.length} messages.</span>
                       <button onClick={function(){ setMessageRenderLimit(function(limit) { return Math.min(messages.length, limit + 220); }); }}>Load older</button>
                     </div>
                   )}
