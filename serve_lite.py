@@ -997,15 +997,29 @@ def _messages_have_prefix(messages, prefix):
 
 
 def _is_context_compression_marker(msg):
+    """True only for the structural compaction-summary message the agent
+    injects, not for any message that happens to *mention* compaction.
+
+    The agent emits the marker as a user-role message whose content
+    begins with ``[CONTEXT COMPACTION`` (or the legacy
+    ``[CONTEXT COMPRESSION``).  The previous lenient substring match
+    fired on tool results that happened to contain the phrase "active
+    task list was preserved across context compression" inside their
+    payload, and on assistant explanations of how compaction works —
+    causing the model-facing context to be trimmed from a false-positive
+    deep in the chat.  Symptom: an old explanation of compaction at
+    position 597 became the "most recent marker" and we returned only
+    the last 66 messages, dropping ~400 turns of real conversation.
+    """
     if not isinstance(msg, dict):
         return False
-    text = _message_text(msg.get("content", "")).lower()
-    return (
-        "context compaction" in text
-        or "context compression" in text
-        or "context was auto-compressed" in text
-        or "active task list was preserved across context compression" in text
-    )
+    if msg.get("role") != "user":
+        return False
+    text = _message_text(msg.get("content", "")).lstrip()
+    if not text:
+        return False
+    head = text[:32].lower()
+    return head.startswith("[context compaction") or head.startswith("[context compression")
 
 
 def _messages_have_context_compression_marker(messages):
@@ -1013,57 +1027,63 @@ def _messages_have_context_compression_marker(messages):
 
 
 def _context_messages_for_session(session):
-    """Return model-facing history.
+    """Return model-facing history derived from the visible transcript.
 
-    Mirrors nesquena's ``_session_context_messages`` (read ``context_messages``
-    if present, else fall back to ``messages``) with two hermes-ui-specific
-    safety nets layered on top — both motivated by historical bugs where the
-    server wrote a partial / missing ``context_messages`` (cancelled or
-    aborted runs, schema migrations, the agent's own compaction not flowing
-    back through our save path).
+    Hermes-ui evolution of this function (this is the third revision; see
+    the design notes below before changing it).
 
-    Safety net 1 (stale ``context_messages``): if the saved context has fewer
-    user turns than the visible transcript AND neither side contains a
-    compaction marker, the context is partial-but-not-compressed — trust the
-    visible transcript instead. (This is the heuristic that commit 2cec0c5
-    removed; removing it caused the short-chat "forgot the first message"
-    regression because turn-1 left ``context_messages`` empty and a blind
-    trust-context read fed the agent an empty history on turn 2.)
+    The naive "trust ``context_messages`` if it exists, else fall back to
+    ``messages``" pattern (matching nesquena's ``_session_context_messages``
+    verbatim) DOES NOT work for hermes-ui chats that span multiple agent
+    compactions.  Why: the agent's internal compressor runs once and emits
+    a single compaction marker, and we save that result as
+    ``context_messages``.  When the conversation grows past the agent's
+    context window AGAIN the agent compacts AGAIN — but the save path
+    that produces ``context_messages`` does not reliably carry forward
+    every post-second-compaction turn, while ``messages`` (the display
+    transcript) always does.  Empirically a chat with two compactions
+    can end up with ``messages`` holding both markers + 96 user prompts
+    while ``context_messages`` still only carries the first marker + 34
+    user prompts — and the agent sees the older, lossier view every
+    turn.  Symptom: "I don't have access to list prompts from the
+    transcript … the compaction summary I'm getting is from the very
+    start of the session" on a chat where the user expects the agent to
+    remember an hour of prior work.
 
-    Safety net 2 (rebuild from compaction marker when ``context_messages``
-    is missing entirely): if there's a marker in the transcript, the
-    pre-marker messages were already summarised — return only marker + tail
-    so the model doesn't see both the summary and the originals.
+    Behaviour:
+
+    * Always start from ``messages`` (the canonical visible transcript).
+    * If the transcript contains one or more compaction markers, trim
+      everything before the *most recent* marker — the marker summarises
+      the prior turns so we don't want both the originals and the
+      summary in the prompt.  Older markers are dropped because the
+      latest one already covers what they covered (and earlier).
+    * If the transcript has no markers, return it whole.  The agent's
+      own pre-flight compressor will run on entry if the context is
+      oversized; that's the correct compaction point, not us trying to
+      pre-decide.
+
+    ``context_messages`` is left untouched on the session object — the
+    save path still writes it for backward compatibility with anything
+    that reads it — but it's no longer the authoritative source for the
+    model-facing context.  The save path's value remains: it stores
+    ``_restore_reasoning_metadata`` output so reasoning trails survive a
+    round-trip; we just don't trust it for completeness anymore.
     """
     if not isinstance(session, dict):
         return []
     display_messages = session.get("messages") or []
-    context_messages = session.get("context_messages")
-    if isinstance(context_messages, list) and context_messages:
-        display_users = _count_role_messages(display_messages, "user")
-        context_users = _count_role_messages(context_messages, "user")
-        has_compaction = (
-            _messages_have_context_compression_marker(context_messages)
-            or _messages_have_context_compression_marker(display_messages)
-        )
-        if (
-            display_users
-            and context_users < display_users
-            and not has_compaction
-        ):
-            # Stale / partial context_messages with no legitimate compression
-            # to explain the drift — prefer the full visible transcript.
-            return display_messages
-        return context_messages
+    if not display_messages:
+        return []
 
-    # No context_messages saved at all — fall back to the transcript.
-    # If there's a compaction marker in messages, the pre-compaction messages
-    # were already summarised.  Use only the marker + everything after it
-    # so the model doesn't get the raw originals AND the summary.
+    # Find the most recent compaction marker, if any.  Iterate from the
+    # end so multiple markers resolve to the latest.
     last_compaction_idx = -1
-    for idx, msg in enumerate(display_messages):
-        if _is_context_compression_marker(msg):
+    for idx in range(len(display_messages) - 1, -1, -1):
+        if _is_context_compression_marker(display_messages[idx]):
             last_compaction_idx = idx
+            break
+
     if last_compaction_idx >= 0:
         return display_messages[last_compaction_idx:]
     return display_messages
