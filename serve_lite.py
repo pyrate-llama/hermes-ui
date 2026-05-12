@@ -273,7 +273,7 @@ def _set_last_workspace(path):
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
 # GitHub. Keep in sync with the git tag (e.g. "3.3" corresponds to v3.3).
-__version__ = "3.3.11"
+__version__ = "3.3.12"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
 _HERMES_AGENT_RELEASES_API = "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest"
 
@@ -442,24 +442,103 @@ def _configured_model_options(current_model=None, provider=None):
         or os.environ.get("HERMES_MODELS")
         or ""
     )
+    def clean_model_id(value):
+        value = str(value or "").strip()
+        if value.lower().startswith("gtp-"):
+            value = "gpt-" + value[4:]
+        return value
+
     items = []
+    seen = set()
     for part in raw.replace("\n", ",").split(","):
-        value = part.strip()
-        if value and value not in items:
+        value = clean_model_id(part)
+        key = value.lower()
+        if value and key not in seen:
             items.append(value)
+            seen.add(key)
     # If no explicit config, add curated models for the active provider
     if not items and provider:
         provider_key = str(provider).strip().lower()
         curated = _PROVIDER_MODELS.get(provider_key, [])
         for entry in curated:
             # Support both dict {"id":..., "label":...} and bare string entries
-            m = entry["id"] if isinstance(entry, dict) else entry
-            if m not in items:
+            m = clean_model_id(entry["id"] if isinstance(entry, dict) else entry)
+            key = m.lower()
+            if m and key not in seen:
                 items.append(m)
-    current = str(current_model or "").strip()
-    if current and current not in items:
+                seen.add(key)
+    current = clean_model_id(current_model)
+    if current and current.lower() not in seen:
         items.insert(0, current)
     return items
+
+
+def _skill_summary_from_file(path):
+    """Return lightweight skill metadata from a SKILL.md file."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read(4096)
+    except Exception:
+        return {}
+    meta = {}
+    if text.startswith("---"):
+        end = text.find("\n---", 3)
+        if end != -1:
+            for line in text[3:end].splitlines():
+                if ":" not in line:
+                    continue
+                key, value = line.split(":", 1)
+                key = key.strip().lower()
+                value = value.strip().strip('"').strip("'")
+                if key in ("name", "description") and value:
+                    meta[key] = value
+    if not meta.get("description"):
+        for line in text.splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and line != "---":
+                meta["description"] = line[:220]
+                break
+    return meta
+
+
+def _discover_codex_plugin_skills():
+    """Add Codex/plugin skill entries so slash commands see installed plugin skills."""
+    roots = [
+        os.path.expanduser("~/.codex/plugins/cache"),
+        os.path.expanduser("~/.codex/skills"),
+        os.path.expanduser("~/.agents/skills"),
+    ]
+    skills = []
+    seen = set()
+    for root in roots:
+        if not os.path.isdir(root):
+            continue
+        for dirpath, _, filenames in os.walk(root):
+            if "SKILL.md" not in filenames:
+                continue
+            path = os.path.join(dirpath, "SKILL.md")
+            meta = _skill_summary_from_file(path)
+            name = meta.get("name") or os.path.basename(dirpath)
+            if "/plugins/cache/" in path:
+                parts = path.split(os.sep)
+                try:
+                    cache_idx = parts.index("cache")
+                    plugin = parts[cache_idx + 2] if parts[cache_idx + 1].startswith("openai-") else parts[cache_idx + 1]
+                    if plugin and not str(name).startswith(f"{plugin}:"):
+                        name = f"{plugin}:{name}"
+                except Exception:
+                    pass
+            key = str(name).strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            skills.append({
+                "name": str(name).strip(),
+                "description": meta.get("description", ""),
+                "path": path,
+                "source": "codex-plugin" if "/plugins/cache/" in path else "codex-skill",
+            })
+    return skills
 
 def _infer_model_provider(model_id, fallback_provider=None):
     model = str(model_id or "").strip()
@@ -1858,7 +1937,7 @@ STREAMS = {}
 STREAMS_LOCK = threading.Lock()
 CANCEL_FLAGS = {}   # stream_id -> threading.Event
 
-# ── Agent cache (nesquena-aligned) ──
+# ── Agent cache ──
 # Reuse AIAgent instances across turns in the same session. This avoids
 # re-initialising MCP discovery, tool registration, and model resolution
 # on every single message — the primary cause of multi-second startup
@@ -1871,7 +1950,7 @@ CANCEL_FLAGS = {}   # stream_id -> threading.Event
 import collections as _collections
 SESSION_AGENT_CACHE = _collections.OrderedDict()  # session_id -> (agent, sig)
 SESSION_AGENT_CACHE_LOCK = threading.Lock()
-SESSION_AGENT_CACHE_MAX = 50  # parallels nesquena's SESSION_AGENT_CACHE_MAX
+SESSION_AGENT_CACHE_MAX = 50
 AGENT_INSTANCES = {} # stream_id -> agent instance (for cancel/interrupt)
 STREAM_PARTIAL_TEXT = {}  # stream_id -> str, accumulated tokens for cancel-preserve (reference #893)
 STREAM_SESSIONS = {}  # stream_id -> session_id, so cancel_stream can persist partial content
@@ -2468,7 +2547,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         _agent_params = set(_inspect.signature(AgentClass.__init__).parameters)
 
         def _agent_status_callback(kind, message):
-            """Bridge Agent lifecycle compression status into SSE (nesquena-aligned)."""
+            """Bridge Agent lifecycle compression status into SSE."""
             _message = str(message or '').strip()
             _kind = str(kind or '').strip().lower()
             if not _message:
@@ -2529,7 +2608,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             )
 
         # ── Agent cache: reuse across turns in the same session ──
-        # Mirrors nesquena's SESSION_AGENT_CACHE (api/streaming.py).  Avoids
+        # Reuse the session-scoped Agent instance. Avoids
         # re-initialising MCP discovery, tool registration and model
         # resolution on every turn.  Three correctness details over the
         # naive "dict of agents":
@@ -2542,7 +2621,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         #   3. Reset transient agent state (_interrupted, _api_call_count)
         #      on reuse — without this, an agent that was interrupted on a
         #      prior cancel still believes it is interrupted on the next
-        #      turn.  Same fix nesquena ships in api/streaming.py.
+        #      turn.
         import hashlib as _hashlib
         _cache_sig = _hashlib.sha256(
             f"{model}|{provider}|{base_url}|{','.join(sorted(toolsets or []))}".encode()
@@ -2556,7 +2635,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         if agent is not None:
             # Refresh per-turn callbacks (they close over request-scoped
             # objects: the put queue, cancel_event, on_token capturing this
-            # stream's state).  Mirrors nesquena's reuse branch.
+            # stream's state).
             agent.stream_delta_callback = on_token
             agent.reasoning_callback = on_reasoning
             agent.tool_progress_callback = on_tool
@@ -2565,7 +2644,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             if hasattr(agent, 'status_callback'):
                 agent.status_callback = _agent_status_callback
             # Reset interrupt state so a prior cancel doesn't haunt the
-            # reused agent (nesquena ships the same guard).
+            # reused agent.
             if hasattr(agent, '_interrupted'):
                 agent._interrupted = False
             if hasattr(agent, '_interrupt_message'):
@@ -3314,7 +3393,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                 )
 
         # ── Server-side context mode ──
-        # The client may send just a `message` string (nesquena-style) instead
+        # The client may send just a `message` string instead
         # of the full `messages` array.  When that happens, build a minimal
         # messages list with just the new user turn — the server-side session
         # store provides the conversation history via _get_or_create_session().
@@ -4460,9 +4539,26 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             from tools.skills_tool import skills_list
             raw = skills_list()
             data = json.loads(raw) if isinstance(raw, str) else raw
+            if not isinstance(data, dict):
+                data = {"skills": []}
+            existing = data.get("skills") if isinstance(data.get("skills"), list) else []
+            seen = set()
+            merged = []
+            for skill in existing + _discover_codex_plugin_skills():
+                if not isinstance(skill, dict):
+                    continue
+                name = str(skill.get("name") or "").strip()
+                if not name:
+                    continue
+                key = name.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(skill)
+            data["skills"] = merged
             self._json(data)
         except ImportError:
-            self._json({"skills": []})
+            self._json({"skills": _discover_codex_plugin_skills()})
         except Exception as e:
             self._json({"error": str(e)}, 500)
 

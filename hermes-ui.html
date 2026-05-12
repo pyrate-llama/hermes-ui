@@ -115,6 +115,21 @@
     -webkit-backdrop-filter: none !important;
     background: var(--bg-secondary) !important;
   }
+  html.firefox .app::before,
+  html.firefox .app::after,
+  html.firefox .ambient-glow-3,
+  html.firefox .app-noise,
+  html.firefox .app-filler-bg {
+    display: none !important;
+  }
+  html.firefox *,
+  html.firefox *::before,
+  html.firefox *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
   @media (prefers-reduced-motion: reduce) {
     .app::before, .app::after, .ambient-glow-3 { animation: none !important; }
     *, *::before, *::after {
@@ -1847,6 +1862,11 @@
     border-radius: 999px; padding: 2px 7px;
     white-space: nowrap;
   }
+  .slash-command-chip.skill {
+    background: rgba(68,216,138,0.15);
+    color: var(--success);
+    border-color: rgba(68,216,138,0.3);
+  }
   .slash-command-empty {
     padding: 12px;
     color: var(--text-muted);
@@ -2758,6 +2778,37 @@
   [data-theme="dawn"] .stat-card.tokens { --stat-color: #c89020; }
   [data-theme="dawn"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
   [data-theme="dawn"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.15); }
+  [data-theme="dawn"] .slash-command-menu {
+    background: #f8f6f4;
+    border-color: rgba(80,72,110,0.2);
+    box-shadow: 0 18px 46px rgba(40,36,48,0.18), 0 0 0 1px rgba(255,255,255,0.75) inset;
+  }
+  [data-theme="dawn"] .slash-command-item {
+    color: #403838;
+  }
+  [data-theme="dawn"] .slash-command-item:hover,
+  [data-theme="dawn"] .slash-command-item.active {
+    color: #181414;
+    background: rgba(96,80,176,0.12);
+  }
+  [data-theme="dawn"] .slash-command-name {
+    color: #241f2c;
+  }
+  [data-theme="dawn"] .slash-command-summary,
+  [data-theme="dawn"] .slash-command-usage,
+  [data-theme="dawn"] .slash-command-chip,
+  [data-theme="dawn"] .slash-command-footer {
+    color: #585050;
+  }
+  [data-theme="dawn"] .slash-command-chip {
+    border-color: rgba(0,0,0,0.12);
+    background: rgba(0,0,0,0.035);
+  }
+  [data-theme="dawn"] .slash-command-chip.skill {
+    color: #1f7840;
+    background: rgba(46,142,78,0.12);
+    border-color: rgba(46,142,78,0.28);
+  }
   [data-theme="dawn"] .floating-sidebar-btn {
     background: linear-gradient(135deg, rgba(96,80,176,0.1), rgba(244,242,240,0.85));
     border-color: rgba(0,0,0,0.08);
@@ -3702,6 +3753,29 @@ function modelProviderLabel(item) {
 
 function modelContextLabel(item) {
   return (item && item.context_hint) ? String(item.context_hint) : '';
+}
+
+function normalizeModelId(value) {
+  var model = String(value || '').trim();
+  if (/^gtp-/i.test(model)) model = 'gpt-' + model.slice(4);
+  return model;
+}
+
+function normalizeModelOptions(models) {
+  var out = [];
+  var seen = {};
+  (models || []).forEach(function(item) {
+    var raw = typeof item === 'string' ? { id: item, label: item } : Object.assign({}, item || {});
+    raw.id = normalizeModelId(raw.id || raw.model || raw.name || '');
+    if (!raw.id) return;
+    var key = raw.id.toLowerCase();
+    if (seen[key]) return;
+    seen[key] = true;
+    raw.label = raw.label || (raw.id.indexOf('/') !== -1 ? raw.id.split('/').pop() : raw.id);
+    raw.label = String(raw.label).replace(/^gtp-/i, 'GPT-');
+    out.push(raw);
+  });
+  return out;
 }
 
 function ModelCapabilityPills({ model, provider, capabilities, compact }) {
@@ -8515,7 +8589,7 @@ function StatusBar({ connected, conversations, messages, sessionTokens, versionI
         )}
       </div>
       <div className="status-bar-item status-bar-version" style={{opacity:0.5}}>
-        <span>Hermes UI v3.3.11</span>
+        <span>Hermes UI v3.3.12</span>
       </div>
     </div>
   );
@@ -9070,7 +9144,7 @@ function App() {
   // capable) or route through the Gemini-describe fallback (e.g. MiniMax).
   const [currentModel, setCurrentModel] = useState('');
   const [selectedChatModel, setSelectedChatModel] = useState(function() {
-    try { return localStorage.getItem('hermes-chat-model') || ''; } catch(e) { return ''; }
+    try { return normalizeModelId(localStorage.getItem('hermes-chat-model') || ''); } catch(e) { return ''; }
   });
   const [modelOptions, setModelOptions] = useState([]);
   const [showModelMenu, setShowModelMenu] = useState(false);
@@ -9335,14 +9409,14 @@ function App() {
     fetch(API_BASE + '/api/models')
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        var models = (d && Array.isArray(d.models)) ? d.models : [];
+        var models = normalizeModelOptions((d && Array.isArray(d.models)) ? d.models : []);
         setModelOptions(models);
-        if (!currentModel && d && d.current) setCurrentModel(String(d.current));
+        if (!currentModel && d && d.current) setCurrentModel(normalizeModelId(d.current));
       })
       .catch(function() {});
   }, []);
 
-  // Fetch skills for slash command autocomplete (matches nesquena webui pattern)
+  // Fetch skills for slash command autocomplete.
   useEffect(function() {
     fetch(API_BASE + '/api/skills')
       .then(function(r) { return r.json(); })
@@ -9351,8 +9425,9 @@ function App() {
         var cmds = [];
         var seen = {};
         skills.forEach(function(skill) {
-          var name = String(skill.name || '').trim().toLowerCase()
-            .replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
+          var rawName = String(skill.name || '').trim();
+          var name = rawName.toLowerCase()
+            .replace(/[:/\\]+/g, '-').replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
           if (name && !seen[name]) {
             seen[name] = true;
             cmds.push({
@@ -9360,7 +9435,7 @@ function App() {
               icon: 'sparkles',
               summary: String(skill.description || '').trim().slice(0, 80) || 'Run skill',
               isSkill: true,
-              skillName: skill.name,
+              skillName: rawName,
               sendAsMessage: true,
               run: function() { /* handled by executeSlashCommand sendAsMessage path */ },
             });
@@ -9523,7 +9598,7 @@ function App() {
   }, [messages, currentView, searchJumpNonce, messageRenderLimit]);
 
   // Endless scroll: auto-load older messages when the sentinel scrolls into
-  // view (nesquena-aligned). The sentinel sits at the top of the message list
+  // view. The sentinel sits at the top of the message list
   // and triggers when the user scrolls up to it.
   useEffect(function() {
     var sentinel = olderSentinelRef.current;
@@ -9684,7 +9759,7 @@ function App() {
       };
       // ── Server-side context mode ──
       // Send just the current user message + config.  The server maintains
-      // the full conversation history in its session store (nesquena-aligned).
+      // the full conversation history in its session store.
       // This avoids sending the entire transcript on every turn and prevents
       // stale client-side context from overriding server-managed compaction.
       var _imgs = (opts.images && opts.images.length) ? opts.images : null;
@@ -9773,7 +9848,7 @@ function App() {
                 inReasoning = true;
                 var newReasoning = rawContent.slice(openIdx + _OPEN_TAGS[oi].length);
                 if (newReasoning.trim() && onThinking) {
-                  onThinking('[reasoning] ' + newReasoning.replace(/\n/g, ' ').trim().slice(0, 300));
+                  onThinking('[reasoning] ' + newReasoning.replace(/\n/g, ' ').slice(0, 300));
                 }
                 reasoningBuffer = newReasoning;
               }
@@ -9786,7 +9861,7 @@ function App() {
             if (reasoningBuffer.indexOf(_CLOSE_TAGS[ci]) !== -1) {
               var beforeClose = reasoningBuffer.split(_CLOSE_TAGS[ci])[0];
               if (beforeClose.trim() && onThinking) {
-                onThinking('[reasoning] ' + beforeClose.replace(/\n/g, ' ').trim().slice(0, 300));
+                onThinking('[reasoning] ' + beforeClose.replace(/\n/g, ' ').slice(0, 300));
               }
               inReasoning = false;
               reasoningBuffer = '';
@@ -9794,7 +9869,7 @@ function App() {
             }
           }
           if (inReasoning && delta.trim() && onThinking) {
-            onThinking('[reasoning] ' + delta.replace(/\n/g, ' ').trim().slice(0, 300));
+            onThinking('[reasoning] ' + delta.replace(/\n/g, ' ').slice(0, 300));
           }
         }
         return stripReasoningTags(rawContent);
@@ -9859,7 +9934,7 @@ function App() {
           var d = JSON.parse(e.data);
           if (d.text && onThinking) {
             emitStatus({ kind: 'thinking', label: 'Thinking', detail: d.text });
-            onThinking('[reasoning] ' + d.text.replace(/\n/g, ' ').trim().slice(0, 300));
+            onThinking('[reasoning] ' + d.text.replace(/\n/g, ' ').slice(0, 300));
           }
         });
 
@@ -9890,7 +9965,7 @@ function App() {
 
         source.addEventListener('compressing', function(e) {
           // Context auto-compression is starting. Surface a status indicator
-          // while the summarizer LLM call runs (nesquena-aligned).
+          // while the summarizer LLM call runs.
           var d = {};
           try { d = JSON.parse(e.data); } catch(err) {}
           if (d.session_id && d.session_id !== activeSessionId) return;
@@ -11027,19 +11102,29 @@ function App() {
             // Restore thinking bubble if it was removed by a tool event
             // (matches webui: appendThinking() recreates thinkingRow on each reasoning event)
             if (thinkingText.startsWith('[reasoning] ')) {
-              var reasoningNote = thinkingText.replace(/^\[reasoning\]\s*/, '').trim();
+              var reasoningNote = thinkingText.replace(/^\[reasoning\]\s*/, '').replace(/\n/g, ' ');
               updateStreamMessages(sessionId, function(prev) {
                 var updated = [...prev];
                 var last = updated[updated.length - 1];
                 if (last && last.role === 'assistant' && last.streaming) {
                   var nextReasoning = (last.reasoning || []).slice();
-                  // Concatenate into a single entry instead of one-per-token
-                  if (reasoningNote) {
+                  var appendReasoningText = function(existing, chunk) {
+                    existing = String(existing || '');
+                    chunk = String(chunk || '');
+                    if (!chunk) return existing;
+                    if (!existing) return chunk.trimStart();
+                    var prevChar = existing.charAt(existing.length - 1);
+                    var nextChar = chunk.charAt(0);
+                    var needsSpace = /[A-Za-z0-9)]/.test(prevChar) && /[A-Za-z0-9(]/.test(nextChar);
+                    return existing + (needsSpace ? ' ' : '') + chunk;
+                  };
+                  // Concatenate into a single entry instead of one-per-token.
+                  if (reasoningNote.trim()) {
                     if (nextReasoning.length > 0) {
                       var lastEntry = nextReasoning[nextReasoning.length - 1];
-                      nextReasoning[nextReasoning.length - 1] = { ...lastEntry, text: (lastEntry.text || '') + reasoningNote };
+                      nextReasoning[nextReasoning.length - 1] = { ...lastEntry, text: appendReasoningText(lastEntry.text, reasoningNote) };
                     } else {
-                      nextReasoning.push({ text: reasoningNote, timestamp: new Date().toISOString() });
+                      nextReasoning.push({ text: reasoningNote.trimStart(), timestamp: new Date().toISOString() });
                     }
                   }
                   updated[updated.length - 1] = { ...last, thinking: true, reasoning: nextReasoning.slice(-24) };
@@ -12166,7 +12251,7 @@ function App() {
                                 </span>
                                 <span className="slash-command-summary">{cmd.summary}</span>
                               </span>
-                              {cmd.isSkill && <span className="slash-command-chip" style={{background:'rgba(68,216,138,0.15)',color:'var(--success)',border:'1px solid rgba(68,216,138,0.3)'}}>Skill</span>}
+                              {cmd.isSkill && <span className="slash-command-chip skill">Skill</span>}
                               <span className="slash-command-chip">{cmd.disabled ? 'Unavailable' : (cmd.usage ? 'Tab' : 'Enter')}</span>
                             </button>
                           );
@@ -12245,7 +12330,7 @@ function App() {
                     {agentInstalledVersion && (
                       <span className="status-bar-item status-bar-version">Hermes Agent v{agentInstalledVersion}</span>
                     )}
-                    <span className="status-bar-item status-bar-version">Hermes UI v3.3.11</span>
+                    <span className="status-bar-item status-bar-version">Hermes UI v3.3.12</span>
                     <a className="composer-chip status-icon-btn" href="https://github.com/pyrate-llama/hermes-ui/issues" target="_blank" rel="noopener noreferrer" title="Open Hermes UI issues on GitHub">
                       <Icon name="message-square" size={12}/>
                     </a>
@@ -12284,7 +12369,7 @@ function App() {
                                 >
                                   <span>Auto default</span>
                                 </button>
-                                {modelOptions.concat(selectedChatModel && !modelOptions.some(function(m) { return m.id === selectedChatModel; }) ? [{ id: selectedChatModel, label: selectedChatModel.split('/').pop() }] : []).map(function(item) {
+                                {normalizeModelOptions(modelOptions.concat(selectedChatModel && !modelOptions.some(function(m) { return normalizeModelId(m.id).toLowerCase() === normalizeModelId(selectedChatModel).toLowerCase(); }) ? [{ id: selectedChatModel, label: selectedChatModel.split('/').pop() }] : [])).map(function(item) {
                                   var id = item.id || '';
                                   if (!id) return null;
                                   var active = selectedChatModel === id;
@@ -12320,8 +12405,13 @@ function App() {
                                   onChange={function(e){ setCustomModelDraft(e.target.value); }}
                                   onKeyDown={function(e){
                                     if (e.key === 'Enter') {
-                                      var next = customModelDraft.trim();
-                                      if (next) setSelectedChatModel(next);
+	                                      var next = normalizeModelId(customModelDraft);
+	                                      if (next) {
+	                                        setSelectedChatModel(next);
+	                                        setModelOptions(function(prev) {
+	                                          return normalizeModelOptions(prev.concat([{ id: next, label: next.split('/').pop() }]));
+	                                        });
+	                                      }
                                       setShowModelMenu(false);
                                     }
                                   }}
@@ -12329,13 +12419,13 @@ function App() {
                                 <button
                                   className="composer-chip-option"
                                   onClick={function(){
-                                    var next = customModelDraft.trim();
-                                    if (next) {
-                                      setSelectedChatModel(next);
-                                      setModelOptions(function(prev) {
-                                        return prev.some(function(m) { return m.id === next; }) ? prev : prev.concat([{ id: next, label: next.split('/').pop() }]);
-                                      });
-                                    }
+	                                    var next = normalizeModelId(customModelDraft);
+	                                    if (next) {
+	                                      setSelectedChatModel(next);
+	                                      setModelOptions(function(prev) {
+	                                        return normalizeModelOptions(prev.concat([{ id: next, label: next.split('/').pop() }]));
+	                                      });
+	                                    }
                                     setShowModelMenu(false);
                                   }}
                                 >
