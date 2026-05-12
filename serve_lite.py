@@ -1027,103 +1027,171 @@ def _messages_have_context_compression_marker(messages):
 
 
 def _context_messages_for_session(session):
-    """Return model-facing history.
+    """Return model-facing history with self-healing damage recovery.
 
-    This is the fourth revision; the prior three each fixed a real bug
-    while introducing a new one.  Read this before changing it.
+    This is the fifth revision.  Read carefully before changing.
 
-    Design (hybrid: trust the agent's compacted view, backfill display
-    tail it missed).
+    Lifecycle the function targets:
 
-    The agent's internal compressor runs during ``run_conversation`` and
-    emits a fresh compaction marker + tail.  The save path writes that
-    output to ``context_messages``.  This is the right view to send
-    next turn — small, already summarised, no re-compaction cost.
+      A. Fresh chat (no compaction yet, no context_messages saved):
+         return ``messages`` as-is.  Small chats stay cheap.
 
-    BUT: the save path doesn't always run (cancelled streams, errors
-    mid-turn, race with checkpoint), so ``context_messages`` can fall
-    behind ``messages``.  Naively trusting it caused the "agent forgot
-    the last few turns" symptom (see earlier commits).  Naively
-    distrusting it and re-deriving from ``messages`` every turn caused
-    the agent's pre-flight compressor to fire on every single turn
-    (~58s of dead time per request — the "well it didn't do this
-    before the fix" symptom).
+      B. Healthy mid-chat (one compaction has happened, agent has been
+         appending normally): trust ``context_messages`` (the agent's
+         own compacted view) and backfill any display tail that landed
+         after the last save — this preserves the per-turn perf win
+         AND catches any save-path drift.
 
-    Behaviour:
+      C. Damaged chat (the ``0b3c8d8`` rachet — every turn re-derived
+         context from display, agent recompacted every turn, leaving
+         ``context_messages`` chopped to a tiny fraction of the
+         post-compaction history): return ``display[last_marker:]``
+         instead so the next turn rebuilds.  Agent will compact once
+         (slow recovery turn), produce a clean compacted view, save
+         it; subsequent turns return to the healthy path B.
 
-    1. If ``context_messages`` is empty/missing, return ``messages``
-       trimmed from the most recent compaction marker (if any).  This
-       handles the no-saved-context case without re-running the
-       agent's compressor against the full visible transcript.
+      D. Healthy compacted-twice chat (agent ran compaction a second
+         time mid-life; ``context_messages`` legitimately has a
+         different/newer marker than ``display`` and a smaller user
+         count): trust context.  Avoid forcing a re-compaction.
 
-    2. If ``context_messages`` has content, find its last message in
-       ``messages`` (anchor-match via ``_message_identity`` so workspace
-       prefixes / whitespace differences don't matter).  Append
-       everything in ``messages`` after that anchor.  This gives the
-       agent its previously-compacted view PLUS any turns that landed
-       in ``messages`` but missed the ``context_messages`` save.
+    Damage detection (heuristics, both required to be NOT triggered for
+    context to be trusted):
 
-    3. If the anchor can't be located, trust ``context_messages``
-       as-is rather than risk corrupting the visible transcript.
+      H1. ``context_messages`` contains MORE than one compaction marker.
+          A healthy compacted view holds exactly one — the most recent
+          summary covers everything before it.  Multiple markers are a
+          fingerprint of the rachet (agent compacted N times, each save
+          appended a new marker, none were collapsed).
 
-    Marker detection (``_is_context_compression_marker``) is intentionally
-    strict (role=user, content starts with ``[CONTEXT COMPACTION`` or
-    legacy ``[CONTEXT COMPRESSION``) so tool results that happen to
-    mention compaction can't trigger a false-positive trim.
+      H2. ``context_messages`` has substantially fewer user prompts
+          than ``display[last_marker:]`` AND its only marker matches
+          display's latest marker.  That means no new compaction
+          happened — context should have at least the post-marker user
+          turns from display, but it's been trimmed.
+
+    Either failure → return ``display[last_marker:]`` (the canonical
+    floor) and let the agent re-compact properly next turn.  Otherwise
+    trust ``context_messages`` and backfill its tail from display.
+
+    Strict marker detector (``_is_context_compression_marker``) only
+    matches role=user content starting with ``[CONTEXT COMPACTION`` /
+    legacy ``[CONTEXT COMPRESSION``, so tool results / assistant
+    explanations of compaction don't cause false positives.
     """
     if not isinstance(session, dict):
         return []
-    display_messages = session.get("messages") or []
-    context_messages = session.get("context_messages")
+    display = session.get("messages") or []
+    if not display:
+        ctx0 = session.get("context_messages")
+        return list(ctx0) if isinstance(ctx0, list) else []
+    context = session.get("context_messages")
 
-    # Case 1: no saved context — fall back to display, trimmed from the
-    # latest marker so the agent isn't fed both the originals and the
-    # summary that already covers them.
-    if not isinstance(context_messages, list) or not context_messages:
-        last_marker = -1
-        for idx in range(len(display_messages) - 1, -1, -1):
-            if _is_context_compression_marker(display_messages[idx]):
-                last_marker = idx
-                break
-        if last_marker >= 0:
-            return display_messages[last_marker:]
-        return list(display_messages)
+    # Locate the most recent real compaction marker in display.
+    display_last_marker_idx = -1
+    for i in range(len(display) - 1, -1, -1):
+        if _is_context_compression_marker(display[i]):
+            display_last_marker_idx = i
+            break
+    floor = (
+        display[display_last_marker_idx:]
+        if display_last_marker_idx >= 0
+        else list(display)
+    )
+    floor_user_count = _count_role_messages(floor, "user")
 
-    if not display_messages:
-        return list(context_messages)
+    # Case A: no saved context → return floor.  Small chats: floor is
+    # the whole transcript; agent doesn't have to compact unless real
+    # threshold hit.
+    if not isinstance(context, list) or not context:
+        return list(floor)
 
-    # Case 2: context_messages exists.  Locate its last message in
-    # display to find where the saved context stopped, then append
-    # anything newer.  Scan display from the end for performance and to
-    # resolve duplicates to the most recent occurrence.
+    # Damage detection.  Distinguish two states:
+    #
+    #   (1) "Agent has compacted further" — context contains a marker
+    #       whose content is DIFFERENT from display's most recent
+    #       marker.  This is a fresh agent-generated summary, expected
+    #       to be small.  Trust it.
+    #
+    #   (2) "Context is stale / chopped without a new compaction" —
+    #       context's last marker matches display's last marker (or
+    #       there's no marker on either side) AND context has fewer
+    #       user prompts than the post-marker floor.  This means the
+    #       previous turn(s) lost data without legitimate compression
+    #       to justify it.  Rebuild from floor.
+    #
+    # The earlier "more than one marker → damaged" heuristic was wrong:
+    # the agent legitimately preserves the prior marker in its output
+    # while adding a new larger summary, so a fresh compaction lands as
+    # TWO markers (old + new).  Counting markers can't distinguish that
+    # from rachet damage.  Comparing content does.
+    def _last_marker_content(messages):
+        # Compare the WHOLE marker body, normalised for whitespace.
+        # Truncated comparisons (we tried 300 chars) match on the
+        # boilerplate prefix that every marker shares (`[CONTEXT
+        # COMPACTION — REFERENCE ONLY] Earlier turns were compacted
+        # into the summary below ...`) and miss the actual summary
+        # content where the markers differ.
+        for m in reversed(messages):
+            if _is_context_compression_marker(m):
+                return " ".join(
+                    _message_text(m.get("content") or "").split()
+                )
+        return None
+
+    ctx_last_marker_content = _last_marker_content(context)
+    display_last_marker_content = (
+        _last_marker_content(display) if display_last_marker_idx >= 0 else None
+    )
+    has_new_compaction = (
+        ctx_last_marker_content is not None
+        and ctx_last_marker_content != display_last_marker_content
+    )
+
+    ctx_user_count = _count_role_messages(context, "user")
+
+    if has_new_compaction:
+        # Agent compacted further; small context is legitimate.  Trust
+        # it and backfill any display tail that landed after the save.
+        pass
+    elif (
+        floor_user_count > 0
+        and ctx_user_count + 2 < floor_user_count
+    ):
+        # No new compaction explains why context is smaller than the
+        # post-marker floor — it's been chopped.  Rebuild.
+        print(
+            f"[serve] context_messages rebuild: "
+            f"under-filled without new compaction "
+            f"(ctx {ctx_user_count} users vs floor {floor_user_count}); "
+            f"reverting to display[last_marker:] = {len(floor)} msgs",
+            flush=True,
+        )
+        return list(floor)
+
+    # Context looks healthy.  Hybrid: trust it, backfill display tail
+    # so any post-save in-flight turns aren't lost.
     tail_msg = None
-    for m in reversed(context_messages):
+    for m in reversed(context):
         if isinstance(m, dict):
             tail_msg = m
             break
     if tail_msg is None:
-        return list(context_messages)
+        return list(context)
     tail_key = _message_identity(tail_msg)
     if tail_key is None:
-        return list(context_messages)
-
+        return list(context)
     anchor_idx = None
-    for di in range(len(display_messages) - 1, -1, -1):
-        if _message_identity(display_messages[di]) == tail_key:
+    for di in range(len(display) - 1, -1, -1):
+        if _message_identity(display[di]) == tail_key:
             anchor_idx = di
             break
-
-    # Case 3: anchor missing — trust context as-is.  This can happen
-    # right after a recovery / migration where display was rebuilt and
-    # the exact match was lost; trimming context to "just display" would
-    # discard real history, so we prefer the saved compacted view.
     if anchor_idx is None:
-        return list(context_messages)
-
-    new_tail = display_messages[anchor_idx + 1:]
+        return list(context)
+    new_tail = display[anchor_idx + 1:]
     if not new_tail:
-        return list(context_messages)
-    return list(context_messages) + list(new_tail)
+        return list(context)
+    return list(context) + list(new_tail)
 
 
 def _find_current_user_turn(messages, msg_text):
