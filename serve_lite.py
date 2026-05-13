@@ -273,7 +273,7 @@ def _set_last_workspace(path):
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
 # GitHub. Keep in sync with the git tag (e.g. "3.3" corresponds to v3.3).
-__version__ = "3.3.14"
+__version__ = "3.3.15"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
 _HERMES_AGENT_RELEASES_API = "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest"
 
@@ -850,6 +850,20 @@ _CONTEXT_TOOL_CONTENT_LIMIT = 2400
 _CONTEXT_ASSISTANT_CONTENT_LIMIT = 12000
 
 
+def _is_cancellation_marker_message(msg):
+    if not isinstance(msg, dict) or msg.get("role") != "assistant":
+        return False
+    text = " ".join(str(_message_text(msg.get("content", "")) or "").split()).strip().lower()
+    return text in ("*task cancelled.*", "task cancelled.")
+
+
+def _drop_cancellation_marker_messages(messages):
+    return [
+        msg for msg in (messages or [])
+        if not _is_cancellation_marker_message(msg)
+    ]
+
+
 def _sanitize_messages_for_api(messages):
     """Return a list of messages with only API-safe fields, dropping orphaned tool results.
 
@@ -875,7 +889,7 @@ def _sanitize_messages_for_api(messages):
         # Skip persisted error markers — never send them to the LLM as prior
         # context. Matches reference _sanitize_messages_for_api (closes error-loop
         # feedback where a failed turn would be replayed to the model).
-        if msg.get("_error"):
+        if msg.get("_error") or _is_cancellation_marker_message(msg):
             continue
         if msg.get("role") == "tool":
             tid = msg.get("tool_call_id") or ""
@@ -1018,8 +1032,47 @@ def _should_use_full_transcript_context(messages):
             compacted_size += _message_context_size(msg)
     return (
         user_count <= _FULL_TRANSCRIPT_USER_CONTEXT_LIMIT
-        and compacted_size <= _FULL_TRANSCRIPT_CHAR_LIMIT
+        and compacted_size <= _MODEL_CONTEXT_CHAR_LIMIT
     )
+
+
+def _recent_visible_turns_context(messages, limit=14, max_chars=520):
+    """Compact user/assistant turns that may have fallen outside model context."""
+    turns = []
+    for msg in messages or []:
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get("role")
+        if role not in ("user", "assistant"):
+            continue
+        if role == "assistant" and _is_recovered_ui_tool_receipt(msg):
+            continue
+        text = _strip_workspace_prefix(
+            _message_text(msg.get("content") or ""),
+            include_legacy=True,
+        )
+        text = " ".join((text or "").split())
+        if not text:
+            continue
+        if role == "assistant" and _is_cancellation_marker_message(msg):
+            continue
+        if len(text) > max_chars:
+            head_len = max(120, max_chars // 2)
+            tail_len = max(120, max_chars - head_len)
+            text = (
+                text[:head_len].rstrip()
+                + " ... "
+                + text[-tail_len:].lstrip()
+            )
+        turns.append((role, text))
+    if not turns:
+        return ""
+    selected = turns[-max(1, int(limit or 1)):]
+    lines = [
+        f"{idx}. {role}: {text}"
+        for idx, (role, text) in enumerate(selected, 1)
+    ]
+    return "Recent visible turns:\n" + "\n".join(lines) + "\n"
 
 
 def _message_text(content):
@@ -1381,15 +1434,14 @@ def _trim_model_history(messages):
 def _provider_history_from_transcript(messages, current_user_msg=""):
     """Return provider-safe history without silently compacting the transcript.
 
-    the reference UI passes the saved session context through API sanitization and
-    lets Hermes Agent's own compressor decide when real context compression is
-    needed. Keep the same contract here: drop UI-only/error/noise fields, but do
-    not locally narrow the conversation to a small tail window without emitting
-    a compression event.
+    The visible transcript remains complete in session["messages"]. This
+    projection is only the model-facing payload, so it must stay bounded even
+    when a repaired/compacted session has accumulated very large summaries or
+    tool output.
     """
-    history = _remove_promise_only_tail(_remove_contradicted_tool_denials(messages or []))
-    history = _drop_checkpointed_current_user_from_context(history, current_user_msg)
-    return _sanitize_messages_for_api(history)
+    if _should_use_full_transcript_context(messages or []):
+        return _full_transcript_context(messages or [], current_user_msg)
+    return _trim_model_history(_full_transcript_context(messages or [], current_user_msg))
 
 
 def _messages_have_tool_evidence(messages):
@@ -1597,6 +1649,8 @@ def _convert_backend_messages_to_ui(backend_msgs):
     base_ts = int(time.time() * 1000)
     for i, m in enumerate(backend_msgs or []):
         if not isinstance(m, dict):
+            continue
+        if m.get("_error") or _is_cancellation_marker_message(m):
             continue
         role = m.get("role")
         if role == "tool":
@@ -1925,13 +1979,24 @@ def _merge_browser_repair_messages(server_messages, client_messages):
         return client_clean
 
     merged = list(server_clean)
-    seen = {_message_identity(msg) for msg in merged}
+    represented = {}
+    for msg in merged:
+        ident = _message_identity(msg)
+        if ident is not None:
+            represented[ident] = represented.get(ident, 0) + 1
+    consumed = {}
     for msg in client_clean:
         ident = _message_identity(msg)
-        if ident is None or ident in seen:
+        if ident is None:
+            continue
+        used = consumed.get(ident, 0)
+        already = represented.get(ident, 0)
+        if used < already:
+            consumed[ident] = used + 1
             continue
         merged.append(msg)
-        seen.add(ident)
+        represented[ident] = already + 1
+        consumed[ident] = used + 1
     return _sanitize_messages_for_api(merged)
 
 
@@ -2843,6 +2908,11 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             "the model-facing context has been compacted. If the user asks how "
             "many prompts/messages are in this chat, use the Visible transcript "
             "counts instead of counting only the compact context you can see.\n"
+            "The prefix may also include Recent visible turns from the UI transcript. "
+            "Treat those turns as real conversation state. If they show that you "
+            "offered to do a concrete action and the user accepted, continue with "
+            "that action instead of saying you do not recall it or asking the user "
+            "to confirm again.\n"
             "Do not claim new local file/process work is complete unless you actually "
             "used a tool in this turn and observed the result. If the prior transcript "
             "says earlier work was completed but tool metadata is missing, do not "
@@ -2860,7 +2930,31 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         # conversation to a small tail window; that creates invisible fake
         # compaction where Hermes can count old prompts but cannot recall them.
         session = _get_or_create_session(session_id)
-        _previous_messages = list(session.get("messages") or [])
+        _raw_previous_messages = list(session.get("messages") or [])
+        _previous_messages = _drop_cancellation_marker_messages(_raw_previous_messages)
+        if len(_previous_messages) != len(_raw_previous_messages):
+            session["messages"] = _previous_messages
+            session["context_messages"] = _provider_history_from_transcript(_previous_messages, user_msg)
+            session["recovered_at"] = _utc_now_iso()
+            _save_session(session_id, session)
+        _browser_messages = _load_ui_conversation_messages(session_id)
+        _browser_clean = _sanitize_messages_for_api(
+            _enrich_messages_with_ui_tool_evidence(_browser_messages)
+        ) if _browser_messages else []
+        _server_user_count = sum(1 for _m in _previous_messages if _m.get("role") == "user")
+        _browser_user_count = _count_role_messages(_browser_clean, "user") if _browser_clean else 0
+        if _browser_clean and _browser_user_count > _server_user_count:
+            print(
+                f"[serve] /api/chat/start browser transcript ahead for {session_id}: "
+                f"browser_users={_browser_user_count} server_users={_server_user_count}; "
+                "repairing before send",
+                flush=True,
+            )
+            _previous_messages = _merge_browser_repair_messages(_previous_messages, _browser_clean)
+            session["messages"] = _previous_messages
+            session["context_messages"] = _provider_history_from_transcript(_previous_messages, user_msg)
+            session["recovered_at"] = _utc_now_iso()
+            _save_session(session_id, session)
         # Read-only: never mutate session state at read time.  The post-run
         # save block below is the only legitimate writer of context_messages.
         _session_ctx = _context_messages_for_session(session)
@@ -2871,6 +2965,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         _had_ctx = isinstance(session.get("context_messages"), list) and session["context_messages"]
         print(
             f"[serve] {session_id}: context={len(_previous_context_messages)} msgs, "
+            f"context_chars={_context_char_size(_previous_context_messages)}, "
             f"display={len(_previous_messages)} msgs, "
             f"has_ctx={'yes' if _had_ctx else 'fallback'}",
             flush=True,
@@ -2919,11 +3014,13 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         _visible_user_prompts = sum(1 for _m in _pending_msgs if isinstance(_m, dict) and _m.get("role") == "user")
         _visible_assistant_replies = sum(1 for _m in _pending_msgs if isinstance(_m, dict) and _m.get("role") == "assistant")
         _visible_tool_results = sum(1 for _m in _pending_msgs if isinstance(_m, dict) and _m.get("role") == "tool")
+        _recent_turns_ctx = _recent_visible_turns_context(_pending_msgs)
         transcript_ctx = (
             f"[Visible transcript: {_visible_user_prompts} user prompts, "
             f"{len(_pending_msgs)} total messages, "
             f"{_visible_assistant_replies} assistant replies, "
             f"{_visible_tool_results} tool results]\n"
+            f"{_recent_turns_ctx}"
         )
         turn_ctx = workspace_ctx + transcript_ctx
         session["messages"] = _pending_msgs
@@ -3189,15 +3286,16 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
 def cancel_stream(stream_id):
     """Signal an in-flight stream to cancel. Returns True if the stream existed.
 
-    Also preserves any partial streamed content as a `_partial: True` message on
-    the session, followed by a `*Task cancelled.*` `_error: True` marker — so
-    users can see what the agent had generated before they hit Stop, rather
-    than losing the whole turn. Ported from the reference UI #893.
+    Preserve any partial streamed content as a `_partial: True` message on the
+    session so users can see what the agent had generated before they hit Stop.
+    Cancellation itself is a control event, not assistant conversation content.
     """
     with STREAMS_LOCK:
         if stream_id not in STREAMS:
             return False
         flag = CANCEL_FLAGS.get(stream_id)
+        if flag and flag.is_set():
+            return True
         if flag:
             flag.set()
         agent = AGENT_INSTANCES.get(stream_id)
@@ -3235,12 +3333,6 @@ def cancel_stream(stream_id):
                         '_partial': True,
                         'timestamp': int(time.time()),
                     })
-                    sess['messages'].append({
-                        'role': 'assistant',
-                        'content': '*Task cancelled.*',
-                        '_error': True,
-                        'timestamp': int(time.time()),
-                    })
                 _save_session(_cancel_session_id, sess)
     except Exception as _e:
         print(f"[serve] WARNING: cancel-preserve failed for {stream_id}: {_e}", flush=True)
@@ -3256,8 +3348,8 @@ def cancel_stream(stream_id):
     )
 
     # Push the cancel event last, bundling the updated session so the
-    # frontend can render the preserved _partial + _error messages without
-    # a separate re-fetch (reference #882 cancel-message ordering fix).
+    # frontend can render the preserved _partial message without a separate
+    # re-fetch.
     _session_payload = None
     if _cancel_session_id:
         try:

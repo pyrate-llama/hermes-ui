@@ -3898,6 +3898,13 @@ function sortConversationsByActivity(list) {
   return dedupeConversations(list).slice().sort(compareConversationsByActivity);
 }
 
+function mergeConversationSources(localConvs, serverConvs) {
+  var merged = [];
+  if (Array.isArray(localConvs)) merged = merged.concat(localConvs);
+  if (Array.isArray(serverConvs)) merged = merged.concat(serverConvs);
+  return sortConversationsByActivity(merged);
+}
+
 function formatConversationActivity(conv) {
   var ts = getConversationActivityTime(conv);
   if (!ts) return (conv && conv.created) || '';
@@ -3913,6 +3920,22 @@ function formatConversationActivity(conv) {
 function conversationIsRecent(conv) {
   var ts = getConversationActivityTime(conv);
   return !!(ts && (Date.now() - ts) < 30 * 60000);
+}
+
+function isCancellationMarkerMessage(message) {
+  if (!message || message.role !== 'assistant') return false;
+  var text = String(message.content || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return text === '*task cancelled.*' || text === 'task cancelled.';
+}
+
+function cleanLoadedConversationMessages(messages) {
+  return (messages || []).map(function(m) {
+    if (!m) return null;
+    if (isCancellationMarkerMessage(m)) return null;
+    if (!m.streaming && !m.thinking) return m;
+    if (m.thinking && !m.content && !(m.toolCalls || []).length) return null;
+    return Object.assign({}, m, { streaming: false, thinking: false });
+  }).filter(Boolean);
 }
 
 function compactAgentStateDetail(text, maxLen) {
@@ -4510,6 +4533,17 @@ function shouldKeepTaskBoardItem(column, updated, active) {
   return active || ageMs <= TASK_NEEDS_YOU_RETENTION_MS;
 }
 
+function isResolvedTaskBoardItem(item) {
+  var status = String((item && item.status) || '').toLowerCase();
+  var column = String((item && item.column) || '').toLowerCase();
+  return column === 'done'
+    || status === 'done'
+    || status === 'complete'
+    || status === 'completed'
+    || status === 'cancelled'
+    || status === 'canceled';
+}
+
 function serverWorkItemsToTaskItems(serverWorkItems, conversationById, activeConvId) {
   var source = Array.isArray(serverWorkItems) ? serverWorkItems : [];
   return source.filter(function(item) {
@@ -4548,6 +4582,7 @@ function serverWorkItemsToTaskItems(serverWorkItems, conversationById, activeCon
 
 function isComposerWorkBannerItem(item) {
   if (!item) return false;
+  if (isResolvedTaskBoardItem(item)) return false;
   var column = String(item.column || '');
   var kind = String(item.kind || '');
   if (column === 'blocked') return true;
@@ -8642,7 +8677,7 @@ function StatusBar({ connected, conversations, messages, sessionTokens, versionI
         )}
       </div>
       <div className="status-bar-item status-bar-version" style={{opacity:0.5}}>
-        <span>Hermes UI v3.3.14</span>
+        <span>Hermes UI v3.3.15</span>
       </div>
     </div>
   );
@@ -9972,8 +10007,9 @@ function App() {
         if (signal) {
           signal.addEventListener('abort', function() {
             source.close();
-            // Also tell backend to cancel
-            fetch(API_BASE + '/api/chat/cancel?stream_id=' + encodeURIComponent(streamId)).catch(function(){});
+            if (!signal._hermesCancelSent) {
+              fetch(API_BASE + '/api/chat/cancel?stream_id=' + encodeURIComponent(streamId)).catch(function(){});
+            }
             wrappedOnDone(fullContent);
             resolve({ content: fullContent, usage: streamUsage, session: { session_id: activeSessionId } });
           });
@@ -10565,20 +10601,17 @@ function App() {
         if (res.ok) serverConvs = await res.json();
       } catch(e) {}
 
-      // Prefer server if it has data (survives browser data wipe)
-      const convs = serverConvs.length >= localConvs.length ? serverConvs : localConvs;
+      // Merge server and browser caches. The server survives browser wipes,
+      // while localStorage can have fresher in-tab metadata; choosing by list
+      // length can let a larger stale browser cache hide newer server activity.
+      const convs = mergeConversationSources(localConvs, serverConvs);
 
       // Clean up any messages that were saved mid-stream (streaming/thinking stuck true).
       // This happens when Hermes hangs and the user refreshes — without this, the UI
       // loads right back into a permanently-stuck streaming state.
       const cleanConvs = convs.map(function(c) {
         if (!c.messages || !c.messages.length) return c;
-        var cleaned = c.messages.map(function(m) {
-          if (!m.streaming && !m.thinking) return m;
-          // Drop empty thinking-only messages; convert partial streaming ones to complete
-          if (m.thinking && !m.content) return null;
-          return { ...m, streaming: false, thinking: false };
-        }).filter(Boolean);
+        var cleaned = cleanLoadedConversationMessages(c.messages);
         // Recalculate message counts from actual data
         var totalMsgs = cleaned.length;
         var userMsgs = cleaned.filter(function(m) { return m.role === 'user'; }).length;
@@ -11490,6 +11523,10 @@ function App() {
       var last = prev[prev.length - 1];
       if (last && last.role === 'assistant' && (last.streaming || last.thinking)) {
         var updated = prev.slice();
+        if (!String(last.content || '').trim() && !(last.toolCalls || []).length && !(last.reasoning || []).length) {
+          updated.pop();
+          return updated;
+        }
         updated[updated.length - 1] = Object.assign({}, last, { streaming: false, thinking: false });
         return updated;
       }
@@ -11509,6 +11546,8 @@ function App() {
     // without this, pause only aborts the client fetch while the agent
     // keeps running tools/LLM calls until done.
     if (entry && entry.streamId) {
+      entry.abortController._hermesCancelSent = true;
+      entry.abortController.signal._hermesCancelSent = true;
       fetch(API_BASE + '/api/chat/cancel?stream_id=' + encodeURIComponent(entry.streamId))
         .catch(function(){});
     }
@@ -11530,6 +11569,8 @@ function App() {
     // already closed (e.g. agent was mid-tool), the listener never fired and
     // the agent kept running to completion.
     if (entry && entry.streamId) {
+      entry.abortController._hermesCancelSent = true;
+      entry.abortController.signal._hermesCancelSent = true;
       fetch(API_BASE + '/api/chat/cancel?stream_id=' + encodeURIComponent(entry.streamId))
         .catch(function(){});
     }
@@ -11841,7 +11882,9 @@ function App() {
     serverWorkItems,
     dismissedTaskItems,
     doneTaskItems
-  ).filter(function(item) { return item.column === 'active' || item.column === 'blocked'; }).slice(0, 3) : [];
+  ).filter(function(item) {
+    return !isResolvedTaskBoardItem(item) && (item.column === 'active' || item.column === 'blocked');
+  }).slice(0, 3) : [];
   var composerWorkItems = activeWorkItems.filter(isComposerWorkBannerItem).slice(0, 3);
   var workStatusHasTaskAction = composerWorkItems.length > 0;
   var showWorkStatusPill = currentView === 'chat' && workStatusHasTaskAction;
@@ -12388,7 +12431,7 @@ function App() {
                     {agentInstalledVersion && (
                       <span className="status-bar-item status-bar-version">Hermes Agent v{agentInstalledVersion}</span>
                     )}
-                    <span className="status-bar-item status-bar-version">Hermes UI v3.3.14</span>
+                    <span className="status-bar-item status-bar-version">Hermes UI v3.3.15</span>
                     <a className="composer-chip status-icon-btn" href="https://github.com/pyrate-llama/hermes-ui/issues" target="_blank" rel="noopener noreferrer" title="Open Hermes UI issues on GitHub">
                       <Icon name="message-square" size={12}/>
                     </a>
