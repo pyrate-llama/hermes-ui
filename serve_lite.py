@@ -419,7 +419,7 @@ def _set_last_workspace(path):
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
 # GitHub. Keep in sync with the git tag (e.g. "3.3" corresponds to v3.3).
-__version__ = "3.3.19"
+__version__ = "3.3.20"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
 _HERMES_AGENT_RELEASES_API = "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest"
 
@@ -2384,6 +2384,7 @@ SESSION_AGENT_CACHE_MAX = 50
 AGENT_INSTANCES = {} # stream_id -> agent instance (for cancel/interrupt)
 STREAM_PARTIAL_TEXT = {}  # stream_id -> str, accumulated tokens for cancel-preserve (reference #893)
 STREAM_SESSIONS = {}  # stream_id -> session_id, so cancel_stream can persist partial content
+STREAM_STATUS = {}  # stream_id -> recoverable stream state for SSE reconnect/status probes
 SESSION_ACTIVE_STREAMS = {}  # session_id -> active stream_id for /steer lookups
 STREAM_PENDING_STEERS = {}  # stream_id -> [text] accepted before agent construction finishes
 STREAM_STEER_STATE = {}  # stream_id -> {"next_id": int, "pending": [steer_record, ...]}
@@ -2403,6 +2404,50 @@ WORK_ITEMS_FILE = os.path.join(HERMES_HOME, "hermes-ui", "work-items.json")
 UI_CONVERSATIONS_FILE = os.path.join(HERMES_HOME, "ui-conversations.json")
 WORK_ITEM_DONE_RETENTION_SEC = 2 * 60 * 60
 WORK_ITEM_BLOCKED_RETENTION_SEC = 12 * 60 * 60
+STREAM_STATUS_RETENTION_SEC = 10 * 60
+
+_STREAM_TERMINAL_EVENTS = {"done", "error", "apperror", "cancel"}
+
+def _prune_stream_status(now=None):
+    now = now or time.time()
+    stale = []
+    for sid, status in list(STREAM_STATUS.items()):
+        updated = float(status.get("updated_at") or status.get("started_at") or now)
+        active = bool(status.get("active"))
+        if not active and now - updated > STREAM_STATUS_RETENTION_SEC:
+            stale.append(sid)
+    for sid in stale:
+        STREAM_STATUS.pop(sid, None)
+
+def _record_stream_status(stream_id, event=None, data=None, *, active=None, session_id=None):
+    now = time.time()
+    with STREAMS_LOCK:
+        _prune_stream_status(now)
+        status = STREAM_STATUS.setdefault(stream_id, {
+            "stream_id": stream_id,
+            "started_at": now,
+            "updated_at": now,
+            "active": True,
+            "session_id": session_id or STREAM_SESSIONS.get(stream_id, ""),
+            "partial": "",
+            "last_event": "",
+            "terminal_event": "",
+            "terminal_data": None,
+        })
+        status["updated_at"] = now
+        if session_id:
+            status["session_id"] = session_id
+        if active is not None:
+            status["active"] = bool(active)
+        if stream_id in STREAM_PARTIAL_TEXT:
+            status["partial"] = STREAM_PARTIAL_TEXT.get(stream_id, "")
+        if event:
+            status["last_event"] = event
+            if event in _STREAM_TERMINAL_EVENTS:
+                status["active"] = False
+                status["terminal_event"] = event
+                status["terminal_data"] = data
+    return STREAM_STATUS.get(stream_id, {})
 
 
 def _work_item_retention_seconds(item):
@@ -2759,10 +2804,12 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
         STREAM_PARTIAL_TEXT[stream_id] = ''
         STREAM_SESSIONS[stream_id] = session_id
         _ensure_stream_steer_state(stream_id)
+    _record_stream_status(stream_id, "started", {"session_id": session_id}, active=True, session_id=session_id)
 
     def put(event, data):
         if cancel_event.is_set() and event not in ("cancel", "error"):
             return
+        _record_stream_status(stream_id, event, data, session_id=session_id)
         try:
             q.put_nowait((event, data))
         except Exception:
@@ -2878,6 +2925,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
                 with STREAMS_LOCK:
                     if stream_id in STREAM_PARTIAL_TEXT:
                         STREAM_PARTIAL_TEXT[stream_id] += str(text)
+                _record_stream_status(stream_id, "token", {"text": text}, session_id=session_id)
             except Exception:
                 pass
             put("token", {"text": text})
@@ -3591,6 +3639,7 @@ def _run_agent_streaming(session_id, messages, stream_id, base_system_prompt="",
             if old_hermes_home is None: os.environ.pop("HERMES_HOME", None)
             else: os.environ["HERMES_HOME"] = old_hermes_home
         _clear_thread_env()
+        _record_stream_status(stream_id, active=False, session_id=session_id)
         with STREAMS_LOCK:
             STREAMS.pop(stream_id, None)
             CANCEL_FLAGS.pop(stream_id, None)
@@ -3956,7 +4005,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         stream_id = parse_qs(parsed.query).get("stream_id", [""])[0]
         q = STREAMS.get(stream_id)
-        if q is None:
+        status = STREAM_STATUS.get(stream_id) or {}
+        if q is None and not status.get("terminal_event"):
             return self._json({"error": "stream not found"}, 404)
 
         self.send_response(200)
@@ -3968,9 +4018,14 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
         try:
+            if q is None and status.get("terminal_event"):
+                self._sse_event(status.get("terminal_event"), status.get("terminal_data") or {})
+                return
+            self.wfile.write(b": connected\n\n")
+            self.wfile.flush()
             while True:
                 try:
-                    event, data = q.get(timeout=30)
+                    event, data = q.get(timeout=5)
                 except queue.Empty:
                     self.wfile.write(b": heartbeat\n\n")
                     self.wfile.flush()
@@ -3989,7 +4044,21 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         from urllib.parse import urlparse, parse_qs
         parsed = urlparse(self.path)
         stream_id = parse_qs(parsed.query).get("stream_id", [""])[0]
-        self._json({"active": stream_id in STREAMS, "stream_id": stream_id})
+        with STREAMS_LOCK:
+            _prune_stream_status()
+            status = dict(STREAM_STATUS.get(stream_id) or {})
+            active = stream_id in STREAMS
+            partial = STREAM_PARTIAL_TEXT.get(stream_id, status.get("partial") or "")
+        self._json({
+            "active": active,
+            "stream_id": stream_id,
+            "session_id": status.get("session_id") or STREAM_SESSIONS.get(stream_id, ""),
+            "last_event": status.get("last_event") or "",
+            "terminal_event": status.get("terminal_event") or "",
+            "terminal_data": status.get("terminal_data"),
+            "partial": partial,
+            "updated_at": status.get("updated_at"),
+        })
 
     def _handle_work_items(self):
         """Return recent server-backed live/background work for the Tasks tab."""

@@ -10319,6 +10319,54 @@ function App() {
               return r.json();
             })
             .then(function(st) {
+              if (st && st.terminal_event) {
+                var terminal = st.terminal_event;
+                var td = st.terminal_data || {};
+                if (terminal === 'done') {
+                  if (td.usage) streamUsage = td.usage;
+                  if (td.session && td.session.messages && td.session.messages.length) {
+                    var recoveredAssistant = null;
+                    for (var ri = td.session.messages.length - 1; ri >= 0; ri--) {
+                      if (td.session.messages[ri].role === 'assistant') {
+                        var rc = td.session.messages[ri].content || '';
+                        if (typeof rc === 'string') recoveredAssistant = rc;
+                        else if (Array.isArray(rc)) recoveredAssistant = rc.filter(function(p){return p&&p.type==='text';}).map(function(p){return p.text||'';}).join('\n');
+                        break;
+                      }
+                    }
+                    if (recoveredAssistant && recoveredAssistant.trim()) fullContent = recoveredAssistant;
+                  } else if (!fullContent && st.partial) {
+                    fullContent = st.partial;
+                    onChunk(fullContent);
+                  }
+                  emitStatus({ kind: 'finished', label: 'Finished', detail: 'Reply complete' });
+                  wrappedOnDone(fullContent);
+                  if (!td.session) td.session = { session_id: activeSessionId };
+                  else if (!td.session.session_id) td.session.session_id = activeSessionId;
+                  resolve({ content: fullContent, usage: streamUsage, session: td.session });
+                  return;
+                }
+                if (terminal === 'apperror' || terminal === 'error') {
+                  var terminalMsg = td.message || td.error || 'Stream ended with an error';
+                  fullContent = fullContent || st.partial || ('**Error:** ' + terminalMsg);
+                  if (fullContent === st.partial) onChunk(fullContent);
+                  else onChunk(fullContent);
+                  emitStatus({ kind: 'error', label: terminal === 'apperror' ? 'Agent error' : 'Stream error', detail: terminalMsg });
+                  wrappedOnDone(fullContent);
+                  resolve({ content: fullContent, usage: streamUsage, session: { session_id: activeSessionId } });
+                  return;
+                }
+                if (terminal === 'cancel') {
+                  if (!fullContent && st.partial) {
+                    fullContent = st.partial;
+                    onChunk(fullContent);
+                  }
+                  emitStatus({ kind: 'paused', label: 'Paused', detail: 'Stopped the running turn' });
+                  wrappedOnDone(fullContent);
+                  resolve({ content: fullContent, usage: streamUsage, session: td.session || { session_id: activeSessionId }, cancelled: true });
+                  return;
+                }
+              }
               if (st.active) {
                 console.log('[stream] Stream still active, reconnecting...');
                 emitStatus({ kind: 'reconnecting', label: 'Reconnecting', detail: 'Stream is still active' });
@@ -10338,6 +10386,23 @@ function App() {
                 source2.addEventListener('token', function(e2) {
                   var d2 = JSON.parse(e2.data);
                   if (d2.text) { fullContent = processReasoningDelta(d2.text); emitStatus({ kind: 'writing', label: 'Writing', detail: 'Streaming reply' }); onChunk(fullContent); }
+                });
+                source2.addEventListener('apperror', function(e2) {
+                  source2.close();
+                  var d2 = {};
+                  try { d2 = JSON.parse(e2.data || '{}'); } catch(err) {}
+                  var msg2 = d2.message || 'Agent error';
+                  fullContent = fullContent || ('**Error:** ' + msg2);
+                  onChunk(fullContent);
+                  emitStatus({ kind: 'error', label: 'Agent error', detail: msg2 });
+                  wrappedOnDone(fullContent);
+                  resolve({ content: fullContent, usage: streamUsage, session: { session_id: activeSessionId } });
+                });
+                source2.addEventListener('cancel', function(e2) {
+                  source2.close();
+                  emitStatus({ kind: 'paused', label: 'Paused', detail: 'Stopped the running turn' });
+                  wrappedOnDone(fullContent);
+                  resolve({ content: fullContent, usage: streamUsage, session: { session_id: activeSessionId }, cancelled: true });
                 });
                 source2.addEventListener('steer_applied', function(e2) {
                   var d2 = {};
