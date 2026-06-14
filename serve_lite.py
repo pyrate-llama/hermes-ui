@@ -419,8 +419,10 @@ def _set_last_workspace(path):
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
 # GitHub. Keep in sync with the git tag (e.g. "3.3" corresponds to v3.3).
-__version__ = "3.3.21"
+__version__ = "3.3.22"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
+_GITHUB_TAGS_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/tags?per_page=30"
+_GITHUB_TAG_URL = "https://github.com/pyrate-llama/hermes-ui/releases/tag/{tag}"
 _HERMES_AGENT_RELEASES_API = "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest"
 
 # Cache for the latest-release lookup so we don't hammer GitHub. Stores
@@ -5117,7 +5119,8 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             result = self._collect_toolsets()
             self._json(result)
         except Exception as e:
-            self._json({"error": str(e)}, 500)
+            print(f"[serve] Toolset discovery unavailable: {e}", flush=True)
+            self._json([])
 
     def _handle_web_extract_status(self):
         """GET /api/tools/web-extract — detect Hermes web extraction support."""
@@ -5392,10 +5395,10 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
     def _handle_version_info(self):
         """GET /api/version — return {current, latest, update_available, html_url}.
 
-        Hits GitHub's releases/latest endpoint but caches the result for an
-        hour so we're not rate-limited. Designed to fail soft: if the network
-        call fails we still return the current version so the UI doesn't
-        break, and `update_available` is False / latest is None.
+        Checks both GitHub's latest published Release and repository tags,
+        then uses the newest semantic version. The tag fallback prevents stale
+        update information when a maintainer pushes a tag before publishing
+        its matching Release. Results are cached for an hour.
         """
         import time as _time
         import urllib.request as _ur
@@ -5409,28 +5412,58 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         agent_html_url = None
         error = None
 
+        def _ver_tuple(v):
+            match = re.match(r"^v?(\d+(?:\.\d+)*)$", str(v or "").strip())
+            return tuple(int(x) for x in match.group(1).split(".")) if match else ()
+
         try:
             now = _time.time()
             cache = _latest_release_cache
             if cache["data"] and (now - cache["ts"]) < 3600:
-                payload = cache["data"]
+                release_data = cache["data"]
             else:
-                req = _ur.Request(
-                    _GITHUB_RELEASES_API,
-                    headers={
-                        "User-Agent": f"hermes-ui/{current}",
-                        "Accept": "application/vnd.github+json",
-                    },
-                )
-                with _ur.urlopen(req, timeout=5) as resp:
-                    payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+                headers = {
+                    "User-Agent": f"hermes-ui/{current}",
+                    "Accept": "application/vnd.github+json",
+                }
+                release_payload = {}
+                tag_payload = []
+                lookup_errors = []
+                for url, key in ((_GITHUB_RELEASES_API, "release"), (_GITHUB_TAGS_API, "tags")):
+                    try:
+                        req = _ur.Request(url, headers=headers)
+                        with _ur.urlopen(req, timeout=5) as resp:
+                            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+                        if key == "release":
+                            release_payload = payload if isinstance(payload, dict) else {}
+                        else:
+                            tag_payload = payload if isinstance(payload, list) else []
+                    except Exception as lookup_error:
+                        lookup_errors.append(f"{key}: {lookup_error}")
+                if not release_payload and not tag_payload:
+                    raise RuntimeError("; ".join(lookup_errors) or "GitHub version lookup failed")
+                release_data = {
+                    "release": release_payload,
+                    "tags": tag_payload,
+                    "errors": lookup_errors,
+                }
                 cache["ts"] = now
-                cache["data"] = payload
+                cache["data"] = release_data
 
-            # tag_name is like "v3.1" — strip the leading "v" for comparison.
-            tag = (payload or {}).get("tag_name") or ""
-            latest = tag.lstrip("v") or None
-            html_url = (payload or {}).get("html_url") or None
+            release_payload = (release_data or {}).get("release") or {}
+            tag_payload = (release_data or {}).get("tags") or []
+            release_tag = release_payload.get("tag_name") or ""
+            candidates = [release_tag]
+            candidates.extend(item.get("name") or "" for item in tag_payload if isinstance(item, dict))
+            newest_tag = max((tag for tag in candidates if _ver_tuple(tag)), key=_ver_tuple, default="")
+            latest = newest_tag.lstrip("v") or None
+            if newest_tag and newest_tag == release_tag:
+                html_url = release_payload.get("html_url") or None
+            elif newest_tag:
+                html_url = _GITHUB_TAG_URL.format(tag=newest_tag)
+            cached_errors = (release_data or {}).get("errors") or []
+            if cached_errors:
+                error = "; ".join(cached_errors)
         except Exception as e:
             error = str(e)
 
@@ -5456,12 +5489,6 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             agent_html_url = (payload or {}).get("html_url") or None
         except Exception:
             pass
-
-        def _ver_tuple(v):
-            try:
-                return tuple(int(x) for x in str(v).split("."))
-            except Exception:
-                return ()
 
         update_available = False
         if latest:

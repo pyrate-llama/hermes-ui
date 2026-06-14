@@ -6,7 +6,7 @@ The command center for [Hermes Agent](https://github.com/pyrate-llama/hermes-age
 
 Built as a single-file HTML application with React 18, Hermes UI provides a full-featured chat interface, real-time log streaming, file browsing, memory inspection, and more — all through a lightweight Python proxy server.
 
-![v3.3.18](https://img.shields.io/badge/version-3.3.18-ef4444?style=for-the-badge)
+![Latest release](https://img.shields.io/github/v/release/pyrate-llama/hermes-ui?style=for-the-badge&color=ef4444)
 ![Single file HTML](https://img.shields.io/badge/architecture-single_file-44d88a?style=for-the-badge)
 ![React 18](https://img.shields.io/badge/react-18.2-61dafb?style=for-the-badge)
 
@@ -36,6 +36,14 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 ![Built-in terminal area with Hermes and Claude Code tabs](screenshots/terminal.png)
 
 ---
+
+## What's new in v3.3.22
+
+**Release reliability**
+- **Truthful update checks** — `/api/version` compares published Releases with repository tags, so a delayed Release cannot leave the UI reporting an older version
+- **One version source in the UI** — desktop and composer footers now display the backend version instead of stale hardcoded text
+- **Automated releases** — pushing a `v*` tag publishes generated GitHub release notes
+- **CI safety net** — Python checks, release consistency, sensitive-data scanning, and a real Chromium startup smoke test run on pushes and pull requests
 
 ## What's new in v3.3.18
 

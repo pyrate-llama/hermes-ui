@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile Python
+        run: python -m py_compile serve.py serve_lite.py scripts/*.py tests/*.py
+
+      - name: Check release consistency
+        run: python scripts/check_release_consistency.py
+
+      - name: Check for sensitive data
+        run: python scripts/check_sensitive_data.py
+
+      - name: Install browser smoke dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Run browser smoke
+        run: python tests/browser_smoke.py
