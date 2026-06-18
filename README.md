@@ -37,6 +37,14 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 
 ---
 
+## What's new in v3.3.24
+
+**Workspace and updater polish**
+- **Spaces is no longer a dead end** — non-chat screens now show a clear Chat return button in the header
+- **Versions stay visible outside chat** — Spaces and other tool screens show compact Hermes Agent and Hermes UI version chips
+- **Agent updates handle release checkouts** — Update & Full Restart can advance a detached Hermes Agent release tag and refresh the editable install metadata
+- **Update failures are visible** — failed repo updates now stop before restart and show the underlying pull/install output in Settings
+
 ## What's new in v3.3.23
 
 **Agent workspace clarity**

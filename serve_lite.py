@@ -419,7 +419,7 @@ def _set_last_workspace(path):
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
 # GitHub. Keep in sync with the git tag (e.g. "3.3" corresponds to v3.3).
-__version__ = "3.3.23"
+__version__ = "3.3.24"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
 _GITHUB_TAGS_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/tags?per_page=30"
 _GITHUB_TAG_URL = "https://github.com/pyrate-llama/hermes-ui/releases/tag/{tag}"
@@ -708,16 +708,16 @@ def _model_context_hint(model_id):
 
 def _get_installed_agent_version():
     try:
-        import importlib.metadata as _md
-        return _md.version("hermes-agent")
-    except Exception:
-        pass
-    try:
         import tomllib
         pyproject = pathlib.Path(AGENT_DIR) / "pyproject.toml"
         if pyproject.exists():
             data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
             return str((data.get("project") or {}).get("version") or "")
+    except Exception:
+        pass
+    try:
+        import importlib.metadata as _md
+        return _md.version("hermes-agent")
     except Exception:
         pass
     return ""
@@ -5754,26 +5754,102 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         except Exception:
             return {}
 
+    def _run_git(self, cwd, args, timeout=60):
+        try:
+            result = subprocess.run(
+                ["git", "-C", cwd] + list(args),
+                capture_output=True, text=True, timeout=timeout,
+            )
+            out = ((result.stdout or "") + (result.stderr or "")).strip() or "ok"
+            return result.returncode == 0, out
+        except Exception as e:
+            return False, str(e)
+
+    def _latest_agent_release_tag(self, agent_dir):
+        ok, out = self._run_git(
+            agent_dir,
+            ["tag", "--list", "v[0-9]*", "--sort=-version:refname"],
+            timeout=20,
+        )
+        if not ok:
+            return ""
+        for line in out.splitlines():
+            tag = line.strip()
+            if re.match(r"^v\d{4}\.\d+\.\d+(?:\.\d+)?$", tag):
+                return tag
+        return ""
+
+    def _update_agent_repo(self, agent_dir):
+        if not os.path.isdir(os.path.join(agent_dir, ".git")):
+            return False, f"error: {agent_dir} is not a git checkout"
+
+        steps = []
+        ok, out = self._run_git(agent_dir, ["fetch", "--tags", "origin"], timeout=90)
+        steps.append(f"fetch tags: {out}")
+        if not ok:
+            return False, "\n".join(steps)
+
+        on_branch, branch = self._run_git(agent_dir, ["symbolic-ref", "-q", "--short", "HEAD"], timeout=10)
+        branch = branch.strip() if on_branch else ""
+        if branch:
+            ok, out = self._run_git(agent_dir, ["pull", "--rebase", "--autostash"], timeout=90)
+            steps.append(f"pull {branch}: {out}")
+            if not ok:
+                return False, "\n".join(steps)
+            ok, out = self._refresh_agent_install(agent_dir)
+            steps.append(f"refresh editable install: {out}")
+            return ok, "\n".join(steps)
+
+        latest_tag = self._latest_agent_release_tag(agent_dir)
+        if not latest_tag:
+            steps.append("error: no release tag found after fetch")
+            return False, "\n".join(steps)
+
+        _, current_tag = self._run_git(agent_dir, ["describe", "--tags", "--exact-match"], timeout=10)
+        current_tag = current_tag.strip()
+        if current_tag == latest_tag:
+            steps.append(f"already on latest release tag {latest_tag}")
+            ok, out = self._refresh_agent_install(agent_dir)
+            steps.append(f"refresh editable install: {out}")
+            return ok, "\n".join(steps)
+
+        ok, out = self._run_git(agent_dir, ["checkout", latest_tag], timeout=60)
+        steps.append(f"checkout {latest_tag}: {out}")
+        if not ok:
+            return False, "\n".join(steps)
+        ok, out = self._refresh_agent_install(agent_dir)
+        steps.append(f"refresh editable install: {out}")
+        return ok, "\n".join(steps)
+
+    def _refresh_agent_install(self, agent_dir):
+        python_bin = os.path.join(agent_dir, "venv", "bin", "python")
+        if not os.path.exists(python_bin):
+            python_bin = sys.executable
+        try:
+            result = subprocess.run(
+                [python_bin, "-m", "pip", "install", "-e", agent_dir],
+                capture_output=True, text=True, timeout=300,
+            )
+            out = ((result.stdout or "") + (result.stderr or "")).strip() or "ok"
+            return result.returncode == 0, out
+        except Exception as e:
+            return False, str(e)
+
     def _run_update_pulls(self):
         ui_dir = os.path.dirname(os.path.abspath(__file__))
         agent_dir = os.path.expanduser("~/.hermes/hermes-agent")
         outputs = []
-        for name, d, args in [
-            ("hermes-ui", ui_dir, ["pull", "--ff-only"]),
-            ("hermes-agent", agent_dir, ["pull", "--rebase", "--autostash"]),
-        ]:
-            try:
-                result = subprocess.run(
-                    ["git", "-C", d] + args,
-                    capture_output=True, text=True, timeout=60,
-                )
-                out = ((result.stdout or "") + (result.stderr or "")).strip() or "ok"
-                if result.returncode != 0:
-                    out = f"error (rc={result.returncode}): {out}"
-                outputs.append(f"{name}: {out}")
-            except Exception as e:
-                outputs.append(f"{name}: error: {e}")
-        return "\n\n".join(outputs)
+        all_ok = True
+
+        ok, out = self._run_git(ui_dir, ["pull", "--ff-only"], timeout=60)
+        all_ok = all_ok and ok
+        outputs.append(f"hermes-ui: {out if ok else 'error: ' + out}")
+
+        ok, out = self._update_agent_repo(agent_dir)
+        all_ok = all_ok and ok
+        outputs.append(f"hermes-agent: {out if ok else 'error: ' + out}")
+
+        return all_ok, "\n\n".join(outputs)
 
     def _launch_full_restart(self):
         port = str(getattr(self.server, "server_port", PORT) or PORT)
@@ -5878,7 +5954,13 @@ done
                 "ok": False,
                 "error": "Update and restart requires confirmation from the Settings UI.",
             }, 400)
-        pull_output = self._run_update_pulls()
+        pull_ok, pull_output = self._run_update_pulls()
+        if not pull_ok:
+            return self._json({
+                "ok": False,
+                "error": "Update failed. Restart was not started.",
+                "pull": pull_output,
+            }, 500)
         self._json({"ok": True, "pull": pull_output, "message": "Restarting..."})
         def _do_restart():
             time.sleep(0.5)
@@ -5905,7 +5987,13 @@ done
                 "ok": False,
                 "error": "Update and full restart requires confirmation from the Settings UI.",
             }, 400)
-        pull_output = self._run_update_pulls()
+        pull_ok, pull_output = self._run_update_pulls()
+        if not pull_ok:
+            return self._json({
+                "ok": False,
+                "error": "Update failed. Full restart was not started.",
+                "pull": pull_output,
+            }, 500)
         self._json({"ok": True, "pull": pull_output, "message": "Full restart starting..."})
         def _do_restart():
             _flush_all_sessions()

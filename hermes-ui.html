@@ -488,6 +488,24 @@
     min-width: 0; flex: 1 1 auto;
     font-feature-settings: 'ss01' 1;
   }
+  .view-title-group {
+    display: inline-flex; align-items: center; gap: 10px;
+    min-width: 0; flex: 1 1 auto;
+  }
+  .view-title-group .header-title { flex: 0 1 auto; }
+  .view-back-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 30px; padding: 0 10px;
+    border: 1px solid var(--glass-border); border-radius: 8px;
+    background: rgba(255,255,255,0.035); color: var(--text-secondary);
+    font: inherit; font-size: 12px; font-weight: 650; cursor: pointer;
+    flex: 0 0 auto;
+  }
+  .view-back-btn:hover {
+    color: var(--text-primary);
+    background: var(--glass-hover);
+    border-color: rgba(255,255,255,0.16);
+  }
   .header-status {
     font-size: 12px; color: var(--text-muted);
     display: flex; align-items: center; gap: 6px;
@@ -554,6 +572,18 @@
 
   .header-controls {
     display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0;
+  }
+  .header-version-cluster {
+    display: inline-flex; align-items: center; gap: 6px;
+    min-width: 0; color: var(--text-muted);
+    font-family: 'JetBrains Mono', 'Monaco', monospace;
+    font-size: 10.5px;
+  }
+  .header-version-chip {
+    display: inline-flex; align-items: center; white-space: nowrap;
+    height: 24px; padding: 0 8px; border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.025);
   }
   /* Segmented pill groups header action buttons (Linear-style) */
   .toolbar-pill {
@@ -3441,6 +3471,7 @@ function Icon({ name, size, className, strokeWidth }) {
     case 'menu': return (<svg {...common}><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>);
     case 'x': return (<svg {...common}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>);
     case 'send': return (<svg {...common}><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>);
+    case 'arrow-left': return (<svg {...common}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>);
     case 'arrow-down': return (<svg {...common}><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>);
     case 'sparkles': return (<svg {...common}><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z"/></svg>);
     case 'plus': return (<svg {...common}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>);
@@ -5368,7 +5399,10 @@ function SettingsModal({ config, onSave, onClose, mcpToolCount, hideBgImage, set
         body: JSON.stringify({ confirm: 'update-full-restart' })
       });
       var data = await r.json().catch(function(){ return {}; });
-      if (!r.ok || data.ok === false) throw new Error(data.error || 'Update request failed');
+      if (!r.ok || data.ok === false) {
+        var detail = data.pull ? ((data.error || 'Update request failed') + '\n\n' + data.pull) : (data.error || 'Update request failed');
+        throw new Error(detail);
+      }
       pullText = data.pull || 'done';
     } catch(e) {
       setServerStatus('Update failed: ' + (e && e.message ? e.message : 'unknown error'));
@@ -12904,10 +12938,20 @@ function App() {
         ) : (
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
-              <div className="header-title">
-                {currentView === 'dashboard' ? 'Dashboard' : currentView === 'tasks' ? 'Tasks' : currentView === 'health' ? 'Health' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
+              <div className="view-title-group">
+                <button className="view-back-btn" onClick={function(){ setCurrentView('chat'); }} title="Back to chat" aria-label="Back to chat">
+                  <Icon name="arrow-left" size={14}/>
+                  <span>Chat</span>
+                </button>
+                <div className="header-title">
+                  {currentView === 'dashboard' ? 'Dashboard' : currentView === 'tasks' ? 'Tasks' : currentView === 'health' ? 'Health' : currentView === 'files' ? 'Files' : currentView === 'spaces' ? 'Spaces' : currentView === 'terminal' ? 'Terminal' : currentView === 'jobs' ? 'Cron Jobs' : currentView === 'memory' ? 'Memory' : currentView === 'delegation' ? ('Ask ' + (delegationInfo.label || 'Delegation Model')) : 'Skills'}
+                </div>
               </div>
               <div className="header-controls">
+                <div className="header-version-cluster hide-mobile">
+                  <span className="header-version-chip">Agent v{agentInstalledVersion || '...'}</span>
+                  <span className="header-version-chip">UI v{(versionInfo && versionInfo.current) || '...'}</span>
+                </div>
                 <ThemeMenu currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} />
                 <div className="toolbar-pill">
                   <button className={"header-btn " + (showSearchModal ? 'active' : '')} onClick={openSearchModal} title="Search (⌘K)"><Icon name="search"/></button>
