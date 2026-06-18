@@ -312,17 +312,32 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .space-chip {
-    display: inline-flex; align-items: center; gap: 7px; max-width: 260px;
+    display: inline-flex; align-items: center; gap: 7px; max-width: 360px;
     border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px;
     background: rgba(255,255,255,0.035); color: var(--text-secondary);
-    font-size: 12px; min-width: 0; cursor: pointer;
+    font-size: 12px; min-width: 0;
   }
   .space-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .space-chip-label {
+    color: var(--text-muted); font-size: 10px; font-weight: 760;
+    text-transform: uppercase; letter-spacing: 0; flex: 0 0 auto;
+  }
+  .space-chip-path {
+    max-width: 140px; color: var(--text-primary);
+    font-family: 'JetBrains Mono', 'Monaco', monospace; font-size: 11px;
+  }
   .space-chip-select {
-    max-width: 190px; border: 0; background: transparent; color: var(--text-secondary);
+    max-width: 120px; border: 0; background: transparent; color: var(--text-secondary);
     font: inherit; font-size: 12px; outline: none; cursor: pointer; appearance: none;
     padding: 0 16px 0 0; min-width: 84px;
   }
+  .space-chip-manage {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px; background: rgba(255,255,255,0.04);
+    color: var(--text-muted); cursor: pointer; padding: 0; flex: 0 0 auto;
+  }
+  .space-chip-manage:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
   .profile-chip { max-width: 220px; }
   .profile-chip.warn { border-color: rgba(245,185,77,0.38); color: #f5d18a; }
   .profile-chip-select {
@@ -3377,7 +3392,9 @@ function shortWorkspacePath(path) {
   if (linuxHome) return '~' + (linuxHome[2] || '');
   var windowsHome = value.match(/^([A-Za-z]:[\\/]Users[\\/][^\\/]+)([\\\/].*)?$/);
   if (windowsHome) return '~' + (windowsHome[2] || '').replace(/\\/g, '/');
-  return value;
+  var parts = normalized.split('/').filter(Boolean);
+  if (parts.length > 3) return parts[0] + '/.../' + parts.slice(-2).join('/');
+  return normalized || 'Server default';
 }
 
 function normalizeImageHelperMode(value) {
@@ -12332,10 +12349,13 @@ function App() {
           <React.Fragment>
             <div className={"header " + (sidebarCollapsed ? 'sidebar-collapsed' : '')}>
               <div className="header-title">{activeConvId ? (conversations.find(c => c.id === activeConvId)?.title || 'Hermes') : 'Hermes'}</div>
-              <div className="space-chip hide-mobile" title="Active space for new chats and files">
+              <div className="space-chip hide-mobile" title={(activeWorkspace && activeWorkspace.path) ? ('Agent workspace: ' + activeWorkspace.path) : 'Agent workspace for new chats and files'}>
                 <Icon name="folder" size={13}/>
+                <span className="space-chip-label">Agent Workspace</span>
+                <span className="space-chip-path">{activeWorkspace && activeWorkspace.path ? shortWorkspacePath(activeWorkspace.path) : 'Server default'}</span>
                 <select
                   className="space-chip-select"
+                  aria-label="Switch agent workspace"
                   value={activeWorkspace.path || ''}
                   onChange={function(e) { switchWorkspace(e.target.value); }}
                 >
@@ -12343,6 +12363,15 @@ function App() {
                     return <option key={space.path || 'default'} value={space.path || ''}>{space.name || workspaceNameFromPath(space.path) || 'Default'}</option>;
                   })}
                 </select>
+                <button
+                  className="space-chip-manage"
+                  type="button"
+                  onClick={function(e) { e.stopPropagation(); setCurrentView('spaces'); }}
+                  title="Manage agent workspaces"
+                  aria-label="Manage agent workspaces"
+                >
+                  <Icon name="settings" size={12}/>
+                </button>
               </div>
               <div className={"space-chip profile-chip hide-mobile " + (hermesProfileError ? 'warn' : '')} title={hermesProfileError || 'Hermes runtime profile'}>
                 <Icon name="key-round" size={13}/>

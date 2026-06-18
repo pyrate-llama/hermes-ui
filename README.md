@@ -37,6 +37,13 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 
 ---
 
+## What's new in v3.3.23
+
+**Agent workspace clarity**
+- **Top-bar workspace renamed** — the folder chip now clearly reads as the active Agent Workspace instead of looking like the WebUI runtime directory
+- **Useful path display** — the chip shows a shortened workspace path alongside the saved Space selector
+- **Manage shortcut** — the chip includes a direct manage action into Spaces so users can add or change workspace folders intentionally
+
 ## What's new in v3.3.22
 
 **Release reliability**
