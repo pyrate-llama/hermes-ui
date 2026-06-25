@@ -43,6 +43,7 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 - **Sidebar history stays compact** — the browser stores chat metadata instead of full transcripts, avoiding localStorage and tab-memory blowups on large histories
 - **Chats hydrate on demand** — opening a chat loads its full transcript from the local server so refreshes do not pull every conversation into the browser at once
 - **Refresh races are guarded** — compact or partial browser saves can no longer overwrite full server-side chat mirrors during startup
+- **Update button handles release checkouts** — Update & Full Restart can now advance Hermes UI itself when the local install is checked out at an older release tag
 - **Stress coverage added** — browser tests now cover refreshing with large chat lists and switching into an inactive compact chat
 
 ## What's new in v3.3.24

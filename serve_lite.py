@@ -5902,12 +5902,58 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                 return tag
         return ""
 
+    def _latest_ui_release_tag(self, ui_dir):
+        ok, out = self._run_git(
+            ui_dir,
+            ["tag", "--list", "v[0-9]*", "--sort=-version:refname"],
+            timeout=20,
+        )
+        if not ok:
+            return ""
+        for line in out.splitlines():
+            tag = line.strip()
+            if re.match(r"^v\d+(?:\.\d+){1,3}$", tag):
+                return tag
+        return ""
+
+    def _update_ui_repo(self, ui_dir):
+        if not os.path.isdir(os.path.join(ui_dir, ".git")):
+            return False, f"error: {ui_dir} is not a git checkout"
+
+        steps = []
+        ok, out = self._run_git(ui_dir, ["fetch", "--tags", "--force", "origin"], timeout=90)
+        steps.append(f"fetch tags: {out}")
+        if not ok:
+            return False, "\n".join(steps)
+
+        on_branch, branch = self._run_git(ui_dir, ["symbolic-ref", "-q", "--short", "HEAD"], timeout=10)
+        branch = branch.strip() if on_branch else ""
+        if branch:
+            ok, out = self._run_git(ui_dir, ["pull", "--ff-only"], timeout=90)
+            steps.append(f"pull {branch}: {out}")
+            return ok, "\n".join(steps)
+
+        latest_tag = self._latest_ui_release_tag(ui_dir)
+        if not latest_tag:
+            steps.append("error: no release tag found after fetch")
+            return False, "\n".join(steps)
+
+        _, current_tag = self._run_git(ui_dir, ["describe", "--tags", "--exact-match"], timeout=10)
+        current_tag = current_tag.strip()
+        if current_tag == latest_tag:
+            steps.append(f"already on latest release tag {latest_tag}")
+            return True, "\n".join(steps)
+
+        ok, out = self._run_git(ui_dir, ["checkout", latest_tag], timeout=60)
+        steps.append(f"checkout {latest_tag}: {out}")
+        return ok, "\n".join(steps)
+
     def _update_agent_repo(self, agent_dir):
         if not os.path.isdir(os.path.join(agent_dir, ".git")):
             return False, f"error: {agent_dir} is not a git checkout"
 
         steps = []
-        ok, out = self._run_git(agent_dir, ["fetch", "--tags", "origin"], timeout=90)
+        ok, out = self._run_git(agent_dir, ["fetch", "--tags", "--force", "origin"], timeout=90)
         steps.append(f"fetch tags: {out}")
         if not ok:
             return False, "\n".join(steps)
@@ -5964,7 +6010,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         outputs = []
         all_ok = True
 
-        ok, out = self._run_git(ui_dir, ["pull", "--ff-only"], timeout=60)
+        ok, out = self._update_ui_repo(ui_dir)
         all_ok = all_ok and ok
         outputs.append(f"hermes-ui: {out if ok else 'error: ' + out}")
 
