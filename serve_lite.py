@@ -419,7 +419,7 @@ def _set_last_workspace(path):
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
 # GitHub. Keep in sync with the git tag (e.g. "3.3" corresponds to v3.3).
-__version__ = "3.3.24"
+__version__ = "3.3.25"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
 _GITHUB_TAGS_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/tags?per_page=30"
 _GITHUB_TAG_URL = "https://github.com/pyrate-llama/hermes-ui/releases/tag/{tag}"
