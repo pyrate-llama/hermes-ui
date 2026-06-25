@@ -419,7 +419,7 @@ def _set_last_workspace(path):
 # Current hermes-ui release version. Bump on every tagged release so the
 # /api/version endpoint can tell the UI when a newer release is available on
 # GitHub. Keep in sync with the git tag (e.g. "3.3" corresponds to v3.3).
-__version__ = "3.3.24"
+__version__ = "3.3.25"
 _GITHUB_RELEASES_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/releases/latest"
 _GITHUB_TAGS_API = "https://api.github.com/repos/pyrate-llama/hermes-ui/tags?per_page=30"
 _GITHUB_TAG_URL = "https://github.com/pyrate-llama/hermes-ui/releases/tag/{tag}"
@@ -2134,6 +2134,53 @@ def _ui_conversation_message_stats(messages):
     }
 
 
+def _compact_ui_conversation_entry(entry):
+    """Return sidebar metadata without the full message body.
+
+    The browser only needs counts/title/activity for the conversation list.
+    Full message arrays can be multi-megabyte and are loaded on demand when a
+    chat is opened.
+    """
+    if not isinstance(entry, dict):
+        return entry
+    messages = entry.get("messages") if isinstance(entry.get("messages"), list) else []
+    out = {
+        k: v for k, v in entry.items()
+        if k not in ("messages", "toolCalls", "reasoning", "activityLog")
+    }
+    stats = _ui_conversation_message_stats(messages)
+    for key, value in stats.items():
+        if out.get(key) is None or stats[key] > int(out.get(key) or 0):
+            out[key] = value
+    out["messages"] = []
+    out["_messages_compact"] = bool(messages)
+    return out
+
+
+def _merge_compact_ui_entry_with_existing(incoming, existing):
+    """Preserve existing full messages when browser posts compact metadata."""
+    if not isinstance(incoming, dict) or not isinstance(existing, dict):
+        return incoming
+    incoming_msgs = incoming.get("messages") if isinstance(incoming.get("messages"), list) else []
+    existing_msgs = existing.get("messages") if isinstance(existing.get("messages"), list) else []
+    looks_compact = bool(
+        incoming.get("_messages_compact")
+        or int(incoming.get("message_count") or 0) > 0
+        or int(incoming.get("user_prompt_count") or 0) > 0
+    )
+    if incoming_msgs or not existing_msgs or not looks_compact:
+        return incoming
+    out = dict(existing)
+    for key, value in incoming.items():
+        if key in ("messages", "_messages_compact"):
+            continue
+        out[key] = value
+    out["messages"] = existing_msgs
+    out["_messages_compact"] = False
+    out.update(_ui_conversation_message_stats(existing_msgs))
+    return out
+
+
 def _better_ui_conversation_entry(a, b):
     """Merge two sidebar entries with the same id, preferring fuller content."""
     if not isinstance(a, dict):
@@ -2404,6 +2451,7 @@ os.makedirs(SESSION_DIR, exist_ok=True)
 SESSION_ALIASES_FILE = os.path.join(HERMES_HOME, "hermes-ui", "session-aliases.json")
 WORK_ITEMS_FILE = os.path.join(HERMES_HOME, "hermes-ui", "work-items.json")
 UI_CONVERSATIONS_FILE = os.path.join(HERMES_HOME, "ui-conversations.json")
+UI_CONVERSATIONS_LOCK = threading.RLock()
 WORK_ITEM_DONE_RETENTION_SEC = 2 * 60 * 60
 WORK_ITEM_BLOCKED_RETENTION_SEC = 12 * 60 * 60
 STREAM_STATUS_RETENTION_SEC = 10 * 60
@@ -4399,6 +4447,9 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         stale tab, etc.) is therefore recoverable on next page load
         without manual intervention.
         """
+        qs = urllib.parse.urlparse(self.path).query
+        params = urllib.parse.parse_qs(qs)
+        compact = str((params.get("compact") or [""])[0]).lower() in ("1", "true", "yes")
         try:
             data = json.load(open(self.CONV_PATH)) if os.path.exists(self.CONV_PATH) else []
             if not isinstance(data, list):
@@ -4459,7 +4510,44 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[serve] /api/ui-conversations dedupe persist failed: {e}", flush=True)
 
+        if compact:
+            return self._json([_compact_ui_conversation_entry(entry) for entry in data])
         self._json(data)
+
+    def _conversation_load_one(self):
+        """GET /api/ui-conversation?id=... — full messages for one chat."""
+        qs = urllib.parse.urlparse(self.path).query
+        params = urllib.parse.parse_qs(qs)
+        session_id = (params.get("id") or params.get("session_id") or [""])[0]
+        session_id = str(session_id or "").strip()
+        if not session_id:
+            return self._json({"error": "missing id"}, 400)
+
+        entry = None
+        try:
+            data = json.load(open(self.CONV_PATH)) if os.path.exists(self.CONV_PATH) else []
+            if isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict) and str(item.get("id") or "") == session_id:
+                        entry = item
+                        break
+        except Exception:
+            entry = None
+
+        backend_path = os.path.join(SESSION_DIR, session_id + ".json") if SESSION_DIR else None
+        if backend_path and os.path.isfile(backend_path):
+            if entry:
+                entry = _reconcile_ui_entry_with_backend(entry, backend_path)
+            else:
+                entry = _backend_session_to_ui_entry(session_id, backend_path)
+
+        if not entry:
+            return self._json({"error": "conversation not found"}, 404)
+
+        stats = _ui_conversation_message_stats(entry.get("messages") or [])
+        out = dict(entry)
+        out.update(stats)
+        return self._json(out)
 
     def _conversations_save(self):
         """POST /api/ui-conversations — defensive.
@@ -4471,6 +4559,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         backend session file is gone) flow through normally.
         """
         body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        UI_CONVERSATIONS_LOCK.acquire()
         try:
             incoming = json.loads(body) if body else []
             if not isinstance(incoming, list):
@@ -4486,6 +4575,28 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             incoming = _dedupe_ui_conversations(incoming)
             incoming_deduped = incoming_before_dedupe - len(incoming)
             existing = _dedupe_ui_conversations(existing)
+            existing_by_id = {
+                str(entry.get("id")): entry
+                for entry in existing
+                if isinstance(entry, dict) and entry.get("id")
+            }
+            suspicious_partial_write = bool(
+                len(existing) >= 10
+                and len(incoming) < max(5, int(len(existing) * 0.75))
+            )
+
+            # Browser localStorage intentionally posts compact rows to avoid
+            # quota/OOM failures.  Never let those compact rows overwrite the
+            # server's full UI mirror for chats that do not have a backend
+            # session file to rebuild from.
+            compact_preserved = 0
+            for i, entry in enumerate(incoming):
+                if not isinstance(entry, dict):
+                    continue
+                merged = _merge_compact_ui_entry_with_existing(entry, existing_by_id.get(str(entry.get("id"))))
+                if merged is not entry:
+                    incoming[i] = merged
+                    compact_preserved += 1
 
             # Pass A: backfill any incoming entry whose backend file has
             # newer turns than the UI sent.  Same drift that the GET
@@ -4517,28 +4628,38 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                 sid = entry.get("id")
                 if not sid or sid in incoming_ids:
                     continue
-                if _backend_session_exists(sid):
+                if _backend_session_exists(sid) or suspicious_partial_write:
                     incoming.append(entry)
                     preserved += 1
 
             if preserved:
                 incoming = _dedupe_ui_conversations(incoming)
 
-            if preserved or backfilled or incoming_deduped:
+            if preserved or backfilled or incoming_deduped or compact_preserved:
                 incoming.sort(
                     key=lambda c: (c.get("last_active_at") or "") if isinstance(c, dict) else "",
                     reverse=True,
                 )
                 print(
                     f"[serve] /api/ui-conversations POST: preserved={preserved} "
-                    f"backfilled={backfilled} deduped={incoming_deduped}",
+                    f"backfilled={backfilled} deduped={incoming_deduped} "
+                    f"compact_preserved={compact_preserved} "
+                    f"suspicious_partial_write={suspicious_partial_write}",
                     flush=True,
                 )
 
             json.dump(incoming, open(self.CONV_PATH, "w"), indent=2)
-            self._json({"ok": True, "preserved": preserved, "backfilled": backfilled, "deduped": incoming_deduped})
+            self._json({
+                "ok": True,
+                "preserved": preserved,
+                "backfilled": backfilled,
+                "deduped": incoming_deduped,
+                "compact_preserved": compact_preserved,
+            })
         except Exception as e:
             self._json({"error": str(e)}, 500)
+        finally:
+            UI_CONVERSATIONS_LOCK.release()
 
     # ── Spaces / workspaces ──
     def _workspaces_load(self):
@@ -5608,8 +5729,10 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
             self._handle_chat_stream()
         elif self.path.startswith("/api/chat/cancel"):
             self._handle_cancel()
-        elif self.path == "/api/ui-conversations":
+        elif self.path == "/api/ui-conversations" or self.path.startswith("/api/ui-conversations?"):
             self._conversations_load()
+        elif self.path.startswith("/api/ui-conversation"):
+            self._conversation_load_one()
         elif self.path == "/api/workspaces":
             self._workspaces_load()
         elif self.path.startswith("/api/workspaces/browse"):
@@ -5779,12 +5902,58 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
                 return tag
         return ""
 
+    def _latest_ui_release_tag(self, ui_dir):
+        ok, out = self._run_git(
+            ui_dir,
+            ["tag", "--list", "v[0-9]*", "--sort=-version:refname"],
+            timeout=20,
+        )
+        if not ok:
+            return ""
+        for line in out.splitlines():
+            tag = line.strip()
+            if re.match(r"^v\d+(?:\.\d+){1,3}$", tag):
+                return tag
+        return ""
+
+    def _update_ui_repo(self, ui_dir):
+        if not os.path.isdir(os.path.join(ui_dir, ".git")):
+            return False, f"error: {ui_dir} is not a git checkout"
+
+        steps = []
+        ok, out = self._run_git(ui_dir, ["fetch", "--tags", "--force", "origin"], timeout=90)
+        steps.append(f"fetch tags: {out}")
+        if not ok:
+            return False, "\n".join(steps)
+
+        on_branch, branch = self._run_git(ui_dir, ["symbolic-ref", "-q", "--short", "HEAD"], timeout=10)
+        branch = branch.strip() if on_branch else ""
+        if branch:
+            ok, out = self._run_git(ui_dir, ["pull", "--ff-only"], timeout=90)
+            steps.append(f"pull {branch}: {out}")
+            return ok, "\n".join(steps)
+
+        latest_tag = self._latest_ui_release_tag(ui_dir)
+        if not latest_tag:
+            steps.append("error: no release tag found after fetch")
+            return False, "\n".join(steps)
+
+        _, current_tag = self._run_git(ui_dir, ["describe", "--tags", "--exact-match"], timeout=10)
+        current_tag = current_tag.strip()
+        if current_tag == latest_tag:
+            steps.append(f"already on latest release tag {latest_tag}")
+            return True, "\n".join(steps)
+
+        ok, out = self._run_git(ui_dir, ["checkout", latest_tag], timeout=60)
+        steps.append(f"checkout {latest_tag}: {out}")
+        return ok, "\n".join(steps)
+
     def _update_agent_repo(self, agent_dir):
         if not os.path.isdir(os.path.join(agent_dir, ".git")):
             return False, f"error: {agent_dir} is not a git checkout"
 
         steps = []
-        ok, out = self._run_git(agent_dir, ["fetch", "--tags", "origin"], timeout=90)
+        ok, out = self._run_git(agent_dir, ["fetch", "--tags", "--force", "origin"], timeout=90)
         steps.append(f"fetch tags: {out}")
         if not ok:
             return False, "\n".join(steps)
@@ -5841,7 +6010,7 @@ class HermesDirectServer(http.server.SimpleHTTPRequestHandler):
         outputs = []
         all_ok = True
 
-        ok, out = self._run_git(ui_dir, ["pull", "--ff-only"], timeout=60)
+        ok, out = self._update_ui_repo(ui_dir)
         all_ok = all_ok and ok
         outputs.append(f"hermes-ui: {out if ok else 'error: ' + out}")
 

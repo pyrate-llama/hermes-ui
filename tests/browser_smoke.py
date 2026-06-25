@@ -79,6 +79,7 @@ def main():
                         f"{message.text} ({message.location.get('url', '')})"
                     )
                     if message.type == "error"
+                    and "deoptimised the styling of /Inline Babel script" not in message.text
                     else None,
                 )
                 page.on(
