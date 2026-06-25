@@ -3906,8 +3906,15 @@ function compareConversationsByActivity(a, b) {
   return String(b && b.id || '').localeCompare(String(a && a.id || ''));
 }
 
-function conversationMessageStats(messages) {
+function conversationMessageStats(messages, fallback) {
   var list = Array.isArray(messages) ? messages : [];
+  if (!list.length && fallback) {
+    return {
+      message_count: Number(fallback.message_count || 0),
+      user_prompt_count: Number(fallback.user_prompt_count || 0),
+      tool_call_count: Number(fallback.tool_call_count || 0),
+    };
+  }
   return {
     message_count: list.length,
     user_prompt_count: list.filter(function(m) { return m && m.role === 'user'; }).length,
@@ -3920,8 +3927,8 @@ function mergeDuplicateConversation(a, b) {
   if (!b) return a;
   var aMsgs = Array.isArray(a.messages) ? a.messages : [];
   var bMsgs = Array.isArray(b.messages) ? b.messages : [];
-  var aStats = conversationMessageStats(aMsgs);
-  var bStats = conversationMessageStats(bMsgs);
+  var aStats = conversationMessageStats(aMsgs, a);
+  var bStats = conversationMessageStats(bMsgs, b);
   var bBetter = bStats.user_prompt_count > aStats.user_prompt_count
     || (bStats.user_prompt_count === aStats.user_prompt_count && bStats.message_count > aStats.message_count)
     || (bStats.user_prompt_count === aStats.user_prompt_count && bStats.message_count === aStats.message_count && getConversationActivityTime(b) > getConversationActivityTime(a));
@@ -3939,7 +3946,7 @@ function mergeDuplicateConversation(a, b) {
   if (getConversationActivityTime(secondary) > getConversationActivityTime(primary)) {
     primary.last_active_at = secondary.last_active_at || secondary.updated_at || primary.last_active_at;
   }
-  return Object.assign(primary, conversationMessageStats(primary.messages || []));
+  return Object.assign(primary, conversationMessageStats(primary.messages || [], primary));
 }
 
 function dedupeConversations(list) {
@@ -4039,6 +4046,22 @@ function cleanLoadedConversationMessages(messages) {
     return Object.assign({}, m, { streaming: false, thinking: false });
   }).filter(Boolean);
   return mergeToolOnlyAssistantRows(cleaned);
+}
+
+function compactConversationForBrowserCache(conv) {
+  if (!conv || typeof conv !== 'object') return conv;
+  var messages = Array.isArray(conv.messages) ? conv.messages : [];
+  var out = { ...conv };
+  out.message_count = Number.isFinite(out.message_count) ? out.message_count : messages.length;
+  out.user_prompt_count = Number.isFinite(out.user_prompt_count)
+    ? out.user_prompt_count
+    : messages.filter(function(m) { return m && m.role === 'user'; }).length;
+  out.tool_call_count = Number.isFinite(out.tool_call_count)
+    ? out.tool_call_count
+    : messages.reduce(function(sum, m) { return sum + ((m && m.toolCalls) ? m.toolCalls.length : 0); }, 0);
+  out.messages = [];
+  out._messages_compact = messages.length > 0 || !!conv._messages_compact;
+  return out;
 }
 
 function messagesForServerRepair(messages) {
@@ -9179,6 +9202,58 @@ function App() {
     }
   };
 
+  const loadConversationMessages = async function(convId, options) {
+    var opts = options || {};
+    if (!convId) return null;
+    var existing = (conversationsRef.current || []).find(function(c) { return c.id === convId; });
+    if (!opts.force && existing && Array.isArray(existing.messages) && existing.messages.length && !existing._messages_compact) {
+      return existing;
+    }
+    try {
+      var res = await fetch(API_BASE + '/api/ui-conversation?id=' + encodeURIComponent(convId), { cache: 'no-store' });
+      if (!res.ok) return existing || null;
+      var loaded = await res.json();
+      if (!loaded || !Array.isArray(loaded.messages)) return existing || null;
+      loaded.messages = cleanLoadedConversationMessages(loaded.messages);
+      loaded._messages_compact = false;
+      setConversations(function(prev) {
+        var found = false;
+        var next = prev.map(function(c) {
+          if (c.id !== convId) return c;
+          found = true;
+          return Object.assign({}, c, loaded);
+        });
+        return found ? next : [loaded].concat(prev);
+      });
+      return Object.assign({}, existing || {}, loaded);
+    } catch(e) {
+      console.warn('[hermes-ui] Failed to load conversation messages:', e);
+      return existing || null;
+    }
+  };
+
+  useEffect(function() {
+    if (!activeConvId) return;
+    if ((messagesRef.current || []).length > 0) return;
+    var conv = (conversationsRef.current || []).find(function(c) { return c.id === activeConvId; });
+    if (!conv) return;
+    var needsHydration = !!(
+      conv._messages_compact
+      || Number(conv.message_count || 0) > 0
+      || Number(conv.user_prompt_count || 0) > 0
+    );
+    if (!needsHydration) return;
+    var cancelled = false;
+    loadConversationMessages(activeConvId).then(function(loaded) {
+      if (cancelled) return;
+      if (activeConvRef.current !== activeConvId) return;
+      if (loaded && Array.isArray(loaded.messages) && loaded.messages.length && (messagesRef.current || []).length === 0) {
+        setMessages(loaded.messages);
+      }
+    });
+    return function() { cancelled = true; };
+  }, [activeConvId, conversations.length]);
+
   // Helper: update messages for a specific session, even if the user has switched away.
   // If the session is still active, updates messages state (fast, visible immediately).
   // If the user switched to a different chat, writes to the conversations array instead
@@ -10790,7 +10865,7 @@ function App() {
     }
   };
 
-  const selectConversation = (convId, options) => {
+  const selectConversation = async (convId, options) => {
     var searchJump = options && Number.isInteger(options.messageIndex)
       ? { messageIndex: options.messageIndex }
       : null;
@@ -10818,10 +10893,20 @@ function App() {
         })
       );
     }
-    // 2. Load target conversation's messages from the ref (always fresh)
-    const targetConv = conversationsRef.current.find(c => c.id === convId);
-    setMessages((targetConv && targetConv.messages) || []);
     setActiveConvId(convId);
+    // 2. Load target conversation's messages on demand. The sidebar list is
+    // compact so refreshes do not hydrate every transcript into browser RAM.
+    // Mark the target active first, then force-load exactly that transcript so
+    // compact rows cannot render as an empty chat after a fast sidebar switch.
+    const targetMeta = (conversationsRef.current || []).find(function(c) { return c.id === convId; });
+    if (!targetMeta || targetMeta._messages_compact || !(targetMeta.messages || []).length) {
+      setMessages([]);
+    } else {
+      setMessages(targetMeta.messages || []);
+    }
+    const targetConv = await loadConversationMessages(convId, { force: true });
+    if (activeConvRef.current !== convId) return;
+    setMessages((targetConv && targetConv.messages) || []);
     if (targetConv && targetConv.workspace) switchWorkspace(targetConv.workspace, { skipConversationUpdate: true });
     setConversations(prev => prev.map(c => c.id === convId ? Object.assign({}, c, { unread_count: 0 }) : c));
     setInput('');
@@ -10888,10 +10973,11 @@ function App() {
         if (saved) localConvs = JSON.parse(saved);
       } catch(e) {}
 
-      // Always fetch from server — use whichever has more conversations
+      // Always fetch compact server metadata. Full message bodies are loaded
+      // only for the active/selected chat to avoid browser OOM on refresh.
       var serverConvs = [];
       try {
-        const res = await fetch('/api/ui-conversations', { cache: 'no-store' });
+        const res = await fetch('/api/ui-conversations?compact=1', { cache: 'no-store' });
         if (res.ok) serverConvs = await res.json();
       } catch(e) {}
 
@@ -10922,7 +11008,14 @@ function App() {
           if (conv) {
             _setActiveConvId(savedId);
             activeConvRef.current = savedId;
-            setMessages(conv.messages || []);
+            if (conv.messages && conv.messages.length && !conv._messages_compact) {
+              setMessages(conv.messages || []);
+            } else {
+              setMessages([]);
+              loadConversationMessages(savedId).then(function(loaded) {
+                if (activeConvRef.current === savedId && loaded) setMessages(loaded.messages || []);
+              });
+            }
             if (conv.workspace) switchWorkspace(conv.workspace, { skipConversationUpdate: true });
           }
         }
@@ -10935,11 +11028,15 @@ function App() {
   useEffect(() => {
     if (conversations.length === 0) return;
     const toSave = sortConversationsByActivity(conversations).slice(0, 50);
-    // Save to localStorage
+    const browserCache = toSave.map(compactConversationForBrowserCache);
+    // Save compact metadata to localStorage. Full transcripts can exceed
+    // browser quota and crash the tab; the server remains the durable store.
     try {
-      localStorage.setItem('hermes-conversations', JSON.stringify(toSave));
-    } catch(e) {}
-    // Save to server (disk) so it survives browser data wipe
+      localStorage.setItem('hermes-conversations', JSON.stringify(browserCache));
+    } catch(e) {
+      console.warn('[hermes-ui] Compact conversation cache write failed:', e);
+    }
+    // Save full conversations to server (disk) so they survive browser data wipe
     try {
       fetch('/api/ui-conversations', {
         method: 'POST',
