@@ -37,6 +37,14 @@ Built as a single-file HTML application with React 18, Hermes UI provides a full
 
 ---
 
+## What's new in v3.3.26
+
+**Reasoning Notes memory safety**
+- **Reasoning streams stop ballooning** — cumulative reasoning snapshots are normalized into deltas before they reach the visible Reasoning Notes panel
+- **Live notes stay bounded** — long reasoning output is capped to the latest notes for display and storage, preventing unbounded browser RAM growth
+- **Streaming saves are lighter** — live reasoning notes no longer force full conversation mirror writes on every reasoning event; final transcript sync still preserves the completed turn
+- **Regression coverage added** — tests now cover cumulative reasoning snapshots so they do not append repeated full copies
+
 ## What's new in v3.3.25
 
 **Large chat recovery and browser memory**
