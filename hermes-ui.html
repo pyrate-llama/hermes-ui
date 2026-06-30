@@ -4868,6 +4868,51 @@ function buildTaskBoardItems(conversations, streamingSessionIds, agentStateBySes
   });
 }
 
+const MAX_REASONING_STORED_CHARS = 16000;
+const MAX_REASONING_RENDER_CHARS = 12000;
+
+function appendReasoningText(existing, chunk, maxChars) {
+  existing = String(existing || '');
+  chunk = String(chunk || '');
+  if (!chunk.trim()) return existing;
+  var addition = chunk;
+
+  // Some providers emit the full reasoning snapshot on every event rather
+  // than a delta. Treat prefix/overlap repeats as deltas so Reasoning Notes
+  // do not grow quadratically while streaming.
+  if (existing && chunk.indexOf(existing) === 0) {
+    addition = chunk.slice(existing.length);
+  } else if (existing && existing.endsWith(chunk)) {
+    addition = '';
+  } else if (existing && chunk) {
+    var maxOverlap = Math.min(existing.length, chunk.length, 4000);
+    for (var size = maxOverlap; size > 0; size--) {
+      if (existing.slice(existing.length - size) === chunk.slice(0, size)) {
+        addition = chunk.slice(size);
+        break;
+      }
+    }
+  }
+
+  if (!addition.trim()) return existing;
+  if (!existing) {
+    var first = addition.trimStart();
+    return first.length > maxChars ? first.slice(first.length - maxChars) : first;
+  }
+  var prevChar = existing.charAt(existing.length - 1);
+  var nextChar = addition.charAt(0);
+  var needsSpace = /[A-Za-z0-9)]/.test(prevChar) && /[A-Za-z0-9(]/.test(nextChar);
+  var combined = existing + (needsSpace ? ' ' : '') + addition;
+  return combined.length > maxChars ? combined.slice(combined.length - maxChars) : combined;
+}
+
+function formatReasoningTextForRender(text) {
+  text = String(text || '');
+  if (text.length <= MAX_REASONING_RENDER_CHARS) return text;
+  return '[showing latest reasoning notes; earlier notes were compacted]\n\n'
+    + text.slice(text.length - MAX_REASONING_RENDER_CHARS);
+}
+
 function TasksView({ conversations, streamingSessionIds, agentStateBySession, activeConvId, serverWorkItems, dismissedTaskItems, doneTaskItems, onOpenConversation, onDismissTask, onMarkTaskDone }) {
   var [filter, setFilter] = useState('');
   var items = useMemo(function() {
@@ -5091,9 +5136,10 @@ function MessageBubble({ message, onImageClick, onEdit, onRetry, index, highligh
     return !isTodoTool(tool);
   });
   var reasoningItems = Array.isArray(message.reasoning) ? message.reasoning : [];
-  var reasoningText = reasoningItems.map(function(item) {
+  var reasoningRawText = reasoningItems.map(function(item) {
     return typeof item === 'string' ? item : (item && item.text) || '';
   }).filter(Boolean).join('\n\n');
+  var reasoningText = formatReasoningTextForRender(reasoningRawText);
   var stoppedBeforeFollowup = messageNeedsFollowupAfterStopping(message);
   var showToollessWorkWarning = messageClaimsLocalWorkWithoutTools(message) || stoppedBeforeFollowup;
 
@@ -9258,13 +9304,15 @@ function App() {
   // If the session is still active, updates messages state (fast, visible immediately).
   // If the user switched to a different chat, writes to the conversations array instead
   // so the data is preserved and visible when they switch back.
-	  const updateStreamMessages = (sessionId, updater) => {
+	  const updateStreamMessages = (sessionId, updater, options) => {
+	    var opts = options || {};
 	    var isActiveSession = activeConvRef.current === sessionId;
 	    var nowIso = new Date().toISOString();
     if (activeConvRef.current === sessionId) {
       // Still viewing this conversation — update messages state normally
       setMessages(updater);
     }
+    if (opts.skipConversationUpdate) return;
     // Always persist to conversations array so switching back loads the latest
     setConversations(prev =>
       prev.map(c => {
@@ -11593,29 +11641,19 @@ function App() {
                 var last = updated[updated.length - 1];
                 if (last && last.role === 'assistant' && last.streaming) {
                   var nextReasoning = (last.reasoning || []).slice();
-                  var appendReasoningText = function(existing, chunk) {
-                    existing = String(existing || '');
-                    chunk = String(chunk || '');
-                    if (!chunk) return existing;
-                    if (!existing) return chunk.trimStart();
-                    var prevChar = existing.charAt(existing.length - 1);
-                    var nextChar = chunk.charAt(0);
-                    var needsSpace = /[A-Za-z0-9)]/.test(prevChar) && /[A-Za-z0-9(]/.test(nextChar);
-                    return existing + (needsSpace ? ' ' : '') + chunk;
-                  };
                   // Concatenate into a single entry instead of one-per-token.
                   if (reasoningNote.trim()) {
                     if (nextReasoning.length > 0) {
                       var lastEntry = nextReasoning[nextReasoning.length - 1];
-                      nextReasoning[nextReasoning.length - 1] = { ...lastEntry, text: appendReasoningText(lastEntry.text, reasoningNote) };
+                      nextReasoning[nextReasoning.length - 1] = { ...lastEntry, text: appendReasoningText(lastEntry.text, reasoningNote, MAX_REASONING_STORED_CHARS) };
                     } else {
-                      nextReasoning.push({ text: reasoningNote.trimStart(), timestamp: new Date().toISOString() });
+                      nextReasoning.push({ text: appendReasoningText('', reasoningNote, MAX_REASONING_STORED_CHARS), timestamp: new Date().toISOString() });
                     }
                   }
                   updated[updated.length - 1] = { ...last, thinking: true, reasoning: nextReasoning.slice(-24) };
                 }
                 return updated;
-              });
+              }, { skipConversationUpdate: true });
             }
           }
         },
